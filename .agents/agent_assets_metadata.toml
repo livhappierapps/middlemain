@@ -1,0 +1,14 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "V7jn8BjHY7kI9cUbTSm0R"
+uri = "file://artifacts/middlemain/assets/images/icon.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "P85WfjNrf3Pq_hvKJhGIO"
+uri = "file://artifacts/middlemain/assets/images/splash.png"
+type = "image"
+title = "generated_image"

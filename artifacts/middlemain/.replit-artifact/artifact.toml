@@ -1,0 +1,27 @@
+kind = "mobile"
+previewPath = "/middlemain/"
+title = "Middlemain"
+version = "1.0.0"
+id = "artifacts/middlemain"
+router = "expo-domain"
+
+[[integratedSkills]]
+name = "expo"
+version = "1.0.0"
+
+[[services]]
+ensurePreviewReachable = "/status"
+name = "expo"
+paths = [ "/middlemain/" ]
+localPort = 18745
+
+[services.development]
+run = "pnpm --filter @workspace/middlemain run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/middlemain", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/middlemain", "run", "serve" ]
+
+[services.env]
+PORT = "18745"
+BASE_PATH = "/middlemain/"

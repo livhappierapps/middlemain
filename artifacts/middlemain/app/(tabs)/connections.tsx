@@ -180,7 +180,7 @@ function ConnectionForm({
 
 export default function ConnectionsScreen() {
   const { theme } = useTheme();
-  const { connections, addConnection, updateConnection, deleteConnection, testConnection } = useAI();
+  const { connections, addConnection, updateConnection, deleteConnection, testConnection, serverGrokAvailable, addServerGrokConnection } = useAI();
   const insets = useSafeAreaInsets();
   const [showForm, setShowForm] = useState(false);
   const [editTarget, setEditTarget] = useState<AIConnection | null>(null);
@@ -260,6 +260,46 @@ export default function ConnectionsScreen() {
             <Feather name="plus" size={20} color={theme.primary} />
           </TouchableOpacity>
         </View>
+
+        {/* Server Grok quick-setup */}
+        {serverGrokAvailable && !connections.some((c) => c.provider === 'server') && (
+          <TouchableOpacity
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              addServerGrokConnection();
+            }}
+            style={{
+              marginHorizontal: 16,
+              marginBottom: 14,
+              backgroundColor: theme.secondary + '18',
+              borderWidth: 1.5,
+              borderColor: theme.secondary,
+              borderRadius: theme.radius,
+              padding: 14,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 12,
+              shadowColor: theme.secondary,
+              shadowOffset: { width: 0, height: 0 },
+              shadowRadius: 10,
+              shadowOpacity: 0.4,
+              elevation: 5,
+            }}
+          >
+            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.secondary + '30', alignItems: 'center', justifyContent: 'center' }}>
+              <Feather name="zap" size={20} color={theme.secondary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: theme.secondary, fontSize: 14, fontFamily: 'Inter_600SemiBold', textShadowColor: theme.secondary, textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 6 }}>
+                Quick Connect — Dev's Grok
+              </Text>
+              <Text style={{ color: theme.textMuted, fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 3 }}>
+                Server API key detected · Tap to add instantly
+              </Text>
+            </View>
+            <Feather name="plus-circle" size={22} color={theme.secondary} />
+          </TouchableOpacity>
+        )}
 
         {connections.length === 0 ? (
           <View style={{ alignItems: 'center', paddingVertical: 60, paddingHorizontal: 32 }}>

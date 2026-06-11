@@ -16,8 +16,8 @@ import { AdBanner } from '@/components/AdBanner';
 import { NeonCard } from '@/components/NeonCard';
 import { NeonText } from '@/components/NeonText';
 import { useAI } from '@/context/AIContext';
-import { useTheme } from '@/context/ThemeContext';
 import { usePurchase } from '@/context/PurchaseContext';
+import { useTheme } from '@/context/ThemeContext';
 
 const STATUS_COLORS: Record<string, string> = {
   ok: '#00ff88',
@@ -54,9 +54,10 @@ function PulseView({ color, size = 10 }: { color: string; size?: number }) {
 
 export default function HomeScreen() {
   const { theme } = useTheme();
-  const { connections } = useAI();
+  const { connections, serverGrokAvailable, addServerGrokConnection } = useAI();
   const { tier } = usePurchase();
   const insets = useSafeAreaInsets();
+  const hasServerConn = connections.some((c) => c.provider === 'server');
 
   const glitch = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -117,6 +118,35 @@ export default function HomeScreen() {
             UNIVERSAL AI DEVELOPMENT BRIDGE
           </Text>
         </View>
+
+        {/* Quick-setup banner — server Grok detected */}
+        {serverGrokAvailable && !hasServerConn && (
+          <TouchableOpacity
+            onPress={() => { addServerGrokConnection(); }}
+            style={{
+              backgroundColor: theme.secondary + '18',
+              borderWidth: 1,
+              borderColor: theme.secondary,
+              borderRadius: theme.radius,
+              padding: 12,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 10,
+              marginBottom: 14,
+            }}
+          >
+            <Feather name="zap" size={18} color={theme.secondary} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: theme.secondary, fontSize: 13, fontFamily: 'Inter_600SemiBold', textShadowColor: theme.secondary, textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 6 }}>
+                Dev's Grok is ready
+              </Text>
+              <Text style={{ color: theme.textMuted, fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 2 }}>
+                Server key detected — tap to connect instantly
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={16} color={theme.secondary} />
+          </TouchableOpacity>
+        )}
 
         {/* Stats row */}
         <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20, marginTop: 10 }}>

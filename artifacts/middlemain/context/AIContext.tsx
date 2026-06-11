@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { fetch } from 'expo/fetch';
 
-export type AIProvider = 'xai' | 'openai' | 'anthropic' | 'custom';
+export type AIProvider = 'xai' | 'openai' | 'anthropic' | 'custom' | 'server';
 
 export interface AIConnection {
   id: string;
@@ -18,19 +18,29 @@ export interface AIConnection {
 }
 
 export const PROVIDER_DEFAULTS: Record<AIProvider, { baseUrl: string; model: string; label: string }> = {
-  xai: { baseUrl: 'https://api.x.ai/v1', model: 'grok-3', label: 'Grok (xAI)' },
-  openai: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o', label: 'OpenAI' },
-  anthropic: { baseUrl: 'https://api.anthropic.com/v1', model: 'claude-3-5-sonnet-20241022', label: 'Anthropic' },
-  custom: { baseUrl: '', model: '', label: 'Custom API' },
+  xai:    { baseUrl: 'https://api.x.ai/v1',            model: 'grok-3',                        label: 'Grok (xAI)' },
+  openai: { baseUrl: 'https://api.openai.com/v1',      model: 'gpt-4o',                        label: 'OpenAI' },
+  anthropic: { baseUrl: 'https://api.anthropic.com/v1', model: 'claude-3-5-sonnet-20241022',   label: 'Anthropic' },
+  custom: { baseUrl: '',                                model: '',                              label: 'Custom API' },
+  server: { baseUrl: '',                                model: 'grok-3',                        label: 'Dev Server (Grok)' },
 };
+
+/** Derive the Middlemain API server base URL from Expo public env vars. */
+function getServerBase(): string {
+  const domain = process.env.EXPO_PUBLIC_DOMAIN;
+  if (domain) return `https://${domain}/api`;
+  return '/api';
+}
 
 interface AIContextValue {
   connections: AIConnection[];
   activeConnection: AIConnection | null;
+  serverGrokAvailable: boolean;
   addConnection: (conn: Omit<AIConnection, 'id'>) => string;
   updateConnection: (id: string, updates: Partial<AIConnection>) => void;
   deleteConnection: (id: string) => void;
   setActiveConnection: (id: string) => void;
+  addServerGrokConnection: () => string;
   testConnection: (id: string) => Promise<boolean>;
   sendMessage: (
     connectionId: string,
@@ -46,10 +56,12 @@ const STORAGE_KEY = '@middlemain_connections';
 const AIContext = createContext<AIContextValue>({
   connections: [],
   activeConnection: null,
+  serverGrokAvailable: false,
   addConnection: () => '',
   updateConnection: () => {},
   deleteConnection: () => {},
   setActiveConnection: () => {},
+  addServerGrokConnection: () => '',
   testConnection: async () => false,
   sendMessage: async () => {},
 });
@@ -58,30 +70,12 @@ function genId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
 
-async function callAI(
+async function callOpenAICompat(
   conn: AIConnection,
   messages: { role: string; content: string }[],
   stream: boolean,
 ): Promise<Response> {
   const baseUrl = conn.baseUrl || PROVIDER_DEFAULTS[conn.provider].baseUrl;
-
-  if (conn.provider === 'anthropic') {
-    return fetch(`${baseUrl}/messages`, {
-      method: 'POST',
-      headers: {
-        'x-api-key': conn.apiKey,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: conn.model,
-        max_tokens: 1024,
-        stream,
-        messages,
-      }),
-    });
-  }
-
   return fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
     headers: {
@@ -99,17 +93,66 @@ async function callAI(
   });
 }
 
+async function callAnthropic(
+  conn: AIConnection,
+  messages: { role: string; content: string }[],
+  stream: boolean,
+): Promise<Response> {
+  const baseUrl = conn.baseUrl || PROVIDER_DEFAULTS.anthropic.baseUrl;
+  return fetch(`${baseUrl}/messages`, {
+    method: 'POST',
+    headers: {
+      'x-api-key': conn.apiKey,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ model: conn.model, max_tokens: 1024, stream, messages }),
+  });
+}
+
+async function callServerProxy(
+  conn: AIConnection,
+  messages: { role: string; content: string }[],
+  stream: boolean,
+): Promise<Response> {
+  const base = conn.baseUrl || getServerBase();
+  return fetch(`${base}/grok/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: conn.model || 'grok-3',
+      messages,
+      stream,
+      systemPrompt: conn.systemPrompt,
+    }),
+  });
+}
+
+async function callAI(
+  conn: AIConnection,
+  messages: { role: string; content: string }[],
+  stream: boolean,
+): Promise<Response> {
+  if (conn.provider === 'anthropic') return callAnthropic(conn, messages, stream);
+  if (conn.provider === 'server') return callServerProxy(conn, messages, stream);
+  return callOpenAICompat(conn, messages, stream);
+}
+
 export function AIProvider({ children }: { children: React.ReactNode }) {
   const [connections, setConnections] = useState<AIConnection[]>([]);
+  const [serverGrokAvailable, setServerGrokAvailable] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((data) => {
       if (data) {
-        try {
-          setConnections(JSON.parse(data));
-        } catch {}
+        try { setConnections(JSON.parse(data)); } catch {}
       }
     });
+    // Check if server-side Grok proxy is live
+    fetch(`${getServerBase()}/grok/status`)
+      .then((r) => r.json())
+      .then((json: any) => setServerGrokAvailable(json?.configured === true))
+      .catch(() => setServerGrokAvailable(false));
   }, []);
 
   const persist = useCallback((conns: AIConnection[]) => {
@@ -134,18 +177,36 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
   );
 
   const deleteConnection = useCallback(
-    (id: string) => {
-      persist(connections.filter((c) => c.id !== id));
-    },
+    (id: string) => { persist(connections.filter((c) => c.id !== id)); },
     [connections, persist],
   );
 
   const setActiveConnection = useCallback(
-    (id: string) => {
-      persist(connections.map((c) => ({ ...c, isActive: c.id === id })));
-    },
+    (id: string) => { persist(connections.map((c) => ({ ...c, isActive: c.id === id }))); },
     [connections, persist],
   );
+
+  const addServerGrokConnection = useCallback((): string => {
+    const existing = connections.find((c) => c.provider === 'server');
+    if (existing) {
+      persist(connections.map((c) => ({ ...c, isActive: c.id === existing.id })));
+      return existing.id;
+    }
+    const id = genId();
+    const newConn: AIConnection = {
+      id,
+      name: "Dev's Grok (Server)",
+      provider: 'server',
+      apiKey: '',
+      model: 'grok-3',
+      baseUrl: getServerBase(),
+      systemPrompt: 'You are a helpful AI development assistant.',
+      isActive: true,
+      testStatus: 'untested',
+    };
+    persist([...connections.map((c) => ({ ...c, isActive: false })), newConn]);
+    return id;
+  }, [connections, persist]);
 
   const testConnection = useCallback(
     async (id: string): Promise<boolean> => {
@@ -173,10 +234,7 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
       onError: (err: string) => void,
     ) => {
       const conn = connections.find((c) => c.id === connectionId);
-      if (!conn) {
-        onError('Connection not found');
-        return;
-      }
+      if (!conn) { onError('Connection not found'); return; }
       try {
         const resp = await callAI(conn, messages, true);
         if (!resp.ok) {
@@ -185,10 +243,7 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
           return;
         }
         const reader = resp.body?.getReader();
-        if (!reader) {
-          onError('Streaming not supported');
-          return;
-        }
+        if (!reader) { onError('Streaming not supported'); return; }
         const decoder = new TextDecoder();
         let buffer = '';
         while (true) {
@@ -204,10 +259,7 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
             if (raw === '[DONE]') continue;
             try {
               const json = JSON.parse(raw);
-              const content =
-                json.choices?.[0]?.delta?.content ||
-                json.delta?.text ||
-                '';
+              const content = json.choices?.[0]?.delta?.content || json.delta?.text || '';
               if (content) onChunk(content);
             } catch {}
           }
@@ -223,18 +275,12 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
   const activeConnection = connections.find((c) => c.isActive) ?? connections[0] ?? null;
 
   return (
-    <AIContext.Provider
-      value={{
-        connections,
-        activeConnection,
-        addConnection,
-        updateConnection,
-        deleteConnection,
-        setActiveConnection,
-        testConnection,
-        sendMessage,
-      }}
-    >
+    <AIContext.Provider value={{
+      connections, activeConnection, serverGrokAvailable,
+      addConnection, updateConnection, deleteConnection,
+      setActiveConnection, addServerGrokConnection,
+      testConnection, sendMessage,
+    }}>
       {children}
     </AIContext.Provider>
   );

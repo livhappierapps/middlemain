@@ -1,0 +1,1 @@
+- [Middlemain project](middlemain.md) — Native Expo dev tool; key architecture decisions, theme system, AI proxy, and vision integration notes.

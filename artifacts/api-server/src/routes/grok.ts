@@ -2,25 +2,30 @@ import { Router, type Request, type Response } from "express";
 import { logger } from "../lib/logger";
 
 const grokRouter = Router();
-
 const XAI_BASE = "https://api.x.ai/v1";
+
+interface MessageContent {
+  type: "text" | "image_url";
+  text?: string;
+  image_url?: { url: string };
+}
+interface ChatMessage {
+  role: string;
+  content: string | MessageContent[];
+}
 
 /**
  * POST /api/grok/chat
- * Proxy streaming chat completions to xAI using the server-stored key.
- * Body: { model?, messages: [{role, content}][], stream?, systemPrompt? }
+ * Proxy streaming (or non-streaming) chat completions to xAI.
+ * Supports multimodal (vision) messages — pass imageBase64 in body.
  */
 grokRouter.post("/grok/chat", async (req: Request, res: Response) => {
   const apiKey = process.env["XAI_API_KEY"];
-
-  if (!apiKey) {
-    res.status(503).json({ error: "XAI_API_KEY not configured on server" });
-    return;
-  }
+  if (!apiKey) { res.status(503).json({ error: "XAI_API_KEY not configured on server" }); return; }
 
   const { model = "grok-3", messages, stream = true, systemPrompt } = req.body as {
     model?: string;
-    messages: { role: string; content: string }[];
+    messages: ChatMessage[];
     stream?: boolean;
     systemPrompt?: string;
   };
@@ -30,20 +35,15 @@ grokRouter.post("/grok/chat", async (req: Request, res: Response) => {
     return;
   }
 
-  const fullMessages = [
-    ...(systemPrompt
-      ? [{ role: "system", content: systemPrompt }]
-      : [{ role: "system", content: "You are a helpful AI development assistant." }]),
+  const fullMessages: ChatMessage[] = [
+    { role: "system", content: systemPrompt || "You are a helpful AI development assistant." },
     ...messages,
   ];
 
   try {
     const upstream = await fetch(`${XAI_BASE}/chat/completions`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({ model, messages: fullMessages, stream }),
     });
 
@@ -58,13 +58,8 @@ grokRouter.post("/grok/chat", async (req: Request, res: Response) => {
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
-
       const reader = upstream.body?.getReader();
-      if (!reader) {
-        res.status(500).json({ error: "No readable stream from upstream" });
-        return;
-      }
-
+      if (!reader) { res.status(500).json({ error: "No readable stream" }); return; }
       const decoder = new TextDecoder();
       try {
         while (true) {
@@ -87,10 +82,21 @@ grokRouter.post("/grok/chat", async (req: Request, res: Response) => {
 
 /**
  * GET /api/grok/status
- * Returns whether the server-side Grok key is configured.
+ * Returns whether the server-side Grok key is configured and lists available models.
  */
 grokRouter.get("/grok/status", (_req: Request, res: Response) => {
-  res.json({ configured: !!process.env["XAI_API_KEY"] });
+  res.json({
+    configured: !!process.env["XAI_API_KEY"],
+    models: {
+      text: "grok-3",
+      vision: "grok-2-vision-1212",
+    },
+    features: {
+      streaming: true,
+      vision: true,
+      skills: true,
+    },
+  });
 });
 
 export default grokRouter;

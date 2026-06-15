@@ -32,9 +32,7 @@
   "submit": {
     "production": {
       "ios": {
-        "appleId": "oblivionhappier@icloud.com",
-        "ascAppId": "",
-        "appleTeamId": ""
+        "appleId": "oblivionhappier@icloud.com"
       },
       "android": {
         "serviceAccountKeyPath": "./google-services-account.json"

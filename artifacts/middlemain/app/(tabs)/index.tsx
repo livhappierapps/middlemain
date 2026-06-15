@@ -1,6 +1,7 @@
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import React, { useEffect, useRef } from 'react';
 import {
   Animated,
@@ -268,6 +269,18 @@ export default function HomeScreen() {
             ))}
           </View>
         )}
+        {/* Footer */}
+        <TouchableOpacity
+          onPress={() => WebBrowser.openBrowserAsync('https://livhappierapps.com/apps/middlemain')}
+          style={{ marginTop: 28, marginBottom: 8, alignItems: 'center', paddingVertical: 8 }}
+        >
+          <Text style={{ color: theme.textMuted, fontSize: 11, fontFamily: 'Inter_400Regular', letterSpacing: 0.5 }}>
+            livhappierapps.com/apps/middlemain
+          </Text>
+          <Text style={{ color: theme.textMuted, fontSize: 10, fontFamily: 'Inter_400Regular', marginTop: 2, opacity: 0.6 }}>
+            by LivHappier Apps · Beta v0.1
+          </Text>
+        </TouchableOpacity>
       </ScrollView>
       <AdBanner onUpgradePress={() => router.push('/(tabs)/settings')} />
     </View>

@@ -1,5 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import React, { useState } from 'react';
 import { Platform, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -223,6 +224,25 @@ export default function LegalScreen() {
         contentContainerStyle={{ padding: 20, paddingBottom: Platform.OS === 'web' ? 54 : 30 }}
         showsVerticalScrollIndicator={false}
       >
+        {/* View on web button */}
+        <TouchableOpacity
+          onPress={() => WebBrowser.openBrowserAsync(
+            activeTab === 'privacy'
+              ? 'https://livhappierapps.com/apps/middlemain/privacy'
+              : 'https://livhappierapps.com/apps/middlemain/terms'
+          )}
+          style={{
+            flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+            gap: 6, borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius,
+            paddingVertical: 8, paddingHorizontal: 14, marginBottom: 20,
+          }}
+        >
+          <Feather name="external-link" size={13} color={theme.textMuted} />
+          <Text style={{ color: theme.textMuted, fontSize: 12, fontFamily: 'Inter_500Medium' }}>
+            View on livhappierapps.com
+          </Text>
+        </TouchableOpacity>
+
         <Text style={{ color: theme.text, fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 22 }}>
           {content}
         </Text>

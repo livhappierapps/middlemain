@@ -1,6 +1,7 @@
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import React, { useState } from 'react';
 import {
   Alert,
@@ -300,8 +301,9 @@ export default function SettingsScreen() {
         {/* Legal & Info */}
         <SectionHeader title="LEGAL & INFO" />
         <View style={{ backgroundColor: theme.surface, marginHorizontal: 16, borderRadius: theme.radius, overflow: 'hidden', borderWidth: 1, borderColor: theme.border }}>
-          <SettingRow icon="shield" label="Privacy Policy" onPress={() => router.push({ pathname: '/legal', params: { tab: 'privacy' } })} accent={theme.primary} />
-          <SettingRow icon="file-text" label="Terms & Conditions" onPress={() => router.push({ pathname: '/legal', params: { tab: 'terms' } })} accent={theme.primary} />
+          <SettingRow icon="globe" label="Middlemain on the Web" onPress={() => WebBrowser.openBrowserAsync('https://livhappierapps.com/apps/middlemain')} accent={theme.accent} />
+          <SettingRow icon="shield" label="Privacy Policy" onPress={() => WebBrowser.openBrowserAsync('https://livhappierapps.com/apps/middlemain/privacy')} accent={theme.primary} />
+          <SettingRow icon="file-text" label="Terms & Conditions" onPress={() => WebBrowser.openBrowserAsync('https://livhappierapps.com/apps/middlemain/terms')} accent={theme.primary} />
           <SettingRow icon="info" label="App Version" value={APP_VERSION} />
           <SettingRow icon="code" label="Open Source" value="MIT License" />
         </View>

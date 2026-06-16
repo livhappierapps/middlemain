@@ -15,7 +15,7 @@ export function NeonCard({ children, onPress, style, accentColor, noBorder }: Ne
   const color = accentColor ?? theme.primary;
 
   const cardStyle: ViewStyle = {
-    backgroundColor: theme.card,
+    backgroundColor: theme.card + 'E6',
     borderRadius: theme.radius,
     borderWidth: noBorder ? 0 : 1,
     borderColor: color,

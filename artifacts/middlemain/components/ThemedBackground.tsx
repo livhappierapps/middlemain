@@ -26,7 +26,7 @@ export function ThemedBackground({ children, style }: ThemedBackgroundProps) {
       style={[styles.container, style]}
       resizeMode="cover"
     >
-      <View style={[styles.overlay, { backgroundColor: theme.background + 'AA' }]}>
+      <View style={[styles.overlay, { backgroundColor: theme.background + '55' }]}>
         {children}
       </View>
     </ImageBackground>

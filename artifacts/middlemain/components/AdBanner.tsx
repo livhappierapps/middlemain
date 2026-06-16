@@ -19,7 +19,7 @@ export function AdBanner({ onUpgradePress }: AdBannerProps) {
   return (
     <View
       style={{
-        backgroundColor: theme.surface,
+        backgroundColor: theme.surface + 'E6',
         borderTopWidth: 1,
         borderTopColor: theme.border,
         paddingBottom: insets.bottom > 0 ? insets.bottom : 8,

@@ -46,7 +46,7 @@ function ConnectionForm({
   const [systemPrompt, setSystemPrompt] = useState(initial?.systemPrompt ?? 'You are a helpful AI development assistant.');
 
   const inputStyle = {
-    backgroundColor: theme.surface,
+    backgroundColor: theme.surface + 'E6',
     borderWidth: 1,
     borderColor: theme.border,
     borderRadius: theme.radius,

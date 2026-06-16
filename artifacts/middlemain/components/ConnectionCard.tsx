@@ -28,7 +28,7 @@ export function ConnectionCard({ connection, onEdit, onTest, testing }: Connecti
   return (
     <View
       style={{
-        backgroundColor: theme.card,
+        backgroundColor: theme.card + 'E6',
         borderRadius: theme.radius,
         borderWidth: 1,
         borderColor: connection.isActive ? theme.primary : theme.border,

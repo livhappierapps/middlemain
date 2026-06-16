@@ -72,7 +72,7 @@ function PricingCard({
       onPress={onPress}
       style={{
         flex: 1,
-        backgroundColor: theme.card,
+        backgroundColor: theme.card + 'E6',
         borderRadius: theme.radius,
         borderWidth: active ? 2 : 1,
         borderColor: active ? color : theme.border,
@@ -211,7 +211,7 @@ export default function SettingsScreen() {
           {!hasRemovedAds && (
             <TouchableOpacity
               onPress={handleAdRemoval}
-              style={{ backgroundColor: theme.card, borderRadius: theme.radius, borderWidth: 1, borderColor: theme.border, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 }}
+              style={{ backgroundColor: theme.card + 'E6', borderRadius: theme.radius, borderWidth: 1, borderColor: theme.border, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 }}
             >
               <Feather name="x-circle" size={20} color={theme.accent} />
               <View style={{ flex: 1 }}>
@@ -268,7 +268,7 @@ export default function SettingsScreen() {
 
           <TextInput
             style={{
-              backgroundColor: theme.surface,
+              backgroundColor: theme.surface + 'E6',
               borderWidth: 1,
               borderColor: reportText.length > 900 ? theme.destructive : theme.border,
               borderRadius: theme.radius,
@@ -302,7 +302,7 @@ export default function SettingsScreen() {
 
         {/* Legal & Info */}
         <SectionHeader title="LEGAL & INFO" />
-        <View style={{ backgroundColor: theme.surface, marginHorizontal: 16, borderRadius: theme.radius, overflow: 'hidden', borderWidth: 1, borderColor: theme.border }}>
+        <View style={{ backgroundColor: theme.surface + 'E6', marginHorizontal: 16, borderRadius: theme.radius, overflow: 'hidden', borderWidth: 1, borderColor: theme.border }}>
           <SettingRow icon="globe" label="Middlemain on the Web" onPress={() => WebBrowser.openBrowserAsync('https://livhappierapps.com/apps/middlemain')} accent={theme.accent} />
           <SettingRow icon="shield" label="Privacy Policy" onPress={() => WebBrowser.openBrowserAsync('https://livhappierapps.com/apps/middlemain/privacy')} accent={theme.primary} />
           <SettingRow icon="file-text" label="Terms & Conditions" onPress={() => WebBrowser.openBrowserAsync('https://livhappierapps.com/apps/middlemain/terms')} accent={theme.primary} />

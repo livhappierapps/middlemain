@@ -194,7 +194,7 @@ export default function TerminalScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       {/* Header */}
-      <View style={{ paddingTop: topInset + 10, paddingHorizontal: 16, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: theme.border, backgroundColor: theme.surface }}>
+      <View style={{ paddingTop: topInset + 10, paddingHorizontal: 16, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: theme.border, backgroundColor: theme.surface + 'E6' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
           <NeonText size={15} weight="700" letterSpacing={3}>BRIDGE TERMINAL</NeonText>
           <View style={{ flexDirection: 'row', gap: 6 }}>
@@ -342,7 +342,7 @@ export default function TerminalScreen() {
 
       {/* Attached image preview strip */}
       {attachedImage && (
-        <View style={{ backgroundColor: theme.surface, paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: 1, borderTopColor: theme.accent + '66', flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <View style={{ backgroundColor: theme.surface + 'E6', paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: 1, borderTopColor: theme.accent + '66', flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           <Image source={{ uri: attachedImage.uri }} style={{ width: 48, height: 48, borderRadius: 6, borderWidth: 1, borderColor: theme.accent }} />
           <View style={{ flex: 1 }}>
             <Text style={{ color: theme.accent, fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>Image ready for analysis</Text>
@@ -356,7 +356,7 @@ export default function TerminalScreen() {
 
       {/* Input bar */}
       <View style={{
-        borderTopWidth: 1, borderTopColor: theme.border, backgroundColor: theme.surface,
+        borderTopWidth: 1, borderTopColor: theme.border, backgroundColor: theme.surface + 'E6',
         paddingBottom: Platform.OS === 'web' ? 34 : (insets.bottom > 0 ? insets.bottom : 10),
         paddingTop: 10, paddingHorizontal: 12,
       }}>

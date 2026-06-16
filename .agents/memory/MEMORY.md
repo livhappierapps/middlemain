@@ -1,1 +1,4 @@
 - [Middlemain project](middlemain.md) — Native Expo dev tool; key architecture decisions, theme system, AI proxy, and vision integration notes.
+- [pnpm lockfile overrides sync](pnpm-overrides-sync.md) — Root package.json must have pnpm.overrides matching pnpm-lock.yaml or EAS build frozen install fails.
+- [EAS Xcode version](eas-xcode.md) — iOS production builds require `"image": "latest"` in eas.json to get Xcode 26+; omitting it causes build failure.
+- [Expo E2E testing skip](expo-e2e-skip.md) — Playwright-based runTest() cannot reach the Expo mobile build via browser proxy; skip with documented reason.

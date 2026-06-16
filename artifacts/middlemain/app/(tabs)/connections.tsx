@@ -19,7 +19,6 @@ import { NeonButton } from '@/components/NeonButton';
 import { NeonText } from '@/components/NeonText';
 import { AIConnection, AIProvider, PROVIDER_DEFAULTS, useAI } from '@/context/AIContext';
 import { useTheme } from '@/context/ThemeContext';
-import { router } from 'expo-router';
 
 const PROVIDERS: { key: AIProvider; label: string }[] = [
   { key: 'xai', label: 'Grok (xAI)' },

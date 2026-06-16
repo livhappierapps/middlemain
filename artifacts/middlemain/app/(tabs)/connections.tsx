@@ -19,6 +19,7 @@ import { NeonButton } from '@/components/NeonButton';
 import { NeonText } from '@/components/NeonText';
 import { AIConnection, AIProvider, PROVIDER_DEFAULTS, useAI } from '@/context/AIContext';
 import { useTheme } from '@/context/ThemeContext';
+import { ThemedBackground } from '@/components/ThemedBackground';
 
 const PROVIDERS: { key: AIProvider; label: string }[] = [
   { key: 'xai', label: 'Grok (xAI)' },
@@ -220,8 +221,9 @@ export default function ConnectionsScreen() {
 
   if (showForm) {
     return (
+      <ThemedBackground>
       <KeyboardAvoidingView
-        style={{ flex: 1, backgroundColor: theme.background }}
+        style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <View style={{ flex: 1, padding: 16, paddingTop: topInset + 10 }}>
@@ -240,11 +242,12 @@ export default function ConnectionsScreen() {
           />
         </View>
       </KeyboardAvoidingView>
+      </ThemedBackground>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <ThemedBackground>
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingTop: topInset + 16, paddingBottom: Platform.OS === 'web' ? 34 : 20 }}
@@ -331,6 +334,6 @@ export default function ConnectionsScreen() {
         </View>
       </ScrollView>
       <AdBanner onUpgradePress={() => router.push('/(tabs)/settings')} />
-    </View>
+    </ThemedBackground>
   );
 }

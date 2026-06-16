@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AdBanner } from '@/components/AdBanner';
 import { NeonCard } from '@/components/NeonCard';
 import { NeonText } from '@/components/NeonText';
+import { ThemedBackground } from '@/components/ThemedBackground';
 import { useAI } from '@/context/AIContext';
 import { usePurchase } from '@/context/PurchaseContext';
 import { useTheme } from '@/context/ThemeContext';
@@ -84,9 +85,9 @@ export default function HomeScreen() {
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <ThemedBackground>
       <LinearGradient
-        colors={[theme.primary + '18', theme.background, theme.background]}
+        colors={[theme.primary + '18', 'transparent', 'transparent']}
         style={StyleSheet.absoluteFill}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 0.4 }}
@@ -283,6 +284,6 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </ScrollView>
       <AdBanner onUpgradePress={() => router.push('/(tabs)/settings')} />
-    </View>
+    </ThemedBackground>
   );
 }

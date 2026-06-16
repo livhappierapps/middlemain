@@ -17,6 +17,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AdBanner } from '@/components/AdBanner';
 import { NeonText } from '@/components/NeonText';
+import { ThemedBackground } from '@/components/ThemedBackground';
 import { ChatMessage, useAI } from '@/context/AIContext';
 import { useSkills } from '@/context/SkillsContext';
 import { useTheme } from '@/context/ThemeContext';
@@ -187,8 +188,9 @@ export default function TerminalScreen() {
   const displaySkills = attachedImage ? skills : textSkills;
 
   return (
+    <ThemedBackground>
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: theme.background }}
+      style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       {/* Header */}
@@ -425,5 +427,6 @@ export default function TerminalScreen() {
 
       <AdBanner onUpgradePress={() => router.push('/(tabs)/settings')} />
     </KeyboardAvoidingView>
+    </ThemedBackground>
   );
 }

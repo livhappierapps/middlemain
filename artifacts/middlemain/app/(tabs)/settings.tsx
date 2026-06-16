@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NeonButton } from '@/components/NeonButton';
 import { NeonCard } from '@/components/NeonCard';
 import { NeonText } from '@/components/NeonText';
+import { ThemedBackground } from '@/components/ThemedBackground';
 import { ThemeSelector } from '@/components/ThemeSelector';
 import { usePurchase } from '@/context/PurchaseContext';
 import { useTheme } from '@/context/ThemeContext';
@@ -164,7 +165,8 @@ export default function SettingsScreen() {
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: theme.background }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <ThemedBackground>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingTop: topInset + 16, paddingBottom: Platform.OS === 'web' ? 34 : 20 }}
@@ -317,5 +319,6 @@ export default function SettingsScreen() {
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
+    </ThemedBackground>
   );
 }

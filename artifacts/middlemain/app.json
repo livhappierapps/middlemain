@@ -2,6 +2,7 @@
   "expo": {
     "name": "Middlemain",
     "slug": "middlemain",
+    "owner": "livhappier",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -45,12 +46,7 @@
       "favicon": "./assets/images/icon.png"
     },
     "plugins": [
-      [
-        "expo-router",
-        {
-          "origin": "https://replit.com/"
-        }
-      ],
+      "expo-router",
       "expo-font",
       "expo-web-browser",
       [
@@ -68,7 +64,7 @@
     },
     "extra": {
       "eas": {
-        "projectId": "a72a78ff-35a8-41f1-8e9a-897a88b03eb8"
+        "projectId": "fb03b720-f301-4187-b046-2a190e808c9b"
       }
     }
   }

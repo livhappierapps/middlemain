@@ -97,5 +97,8 @@
       "@expo/ngrok-bin>@expo/ngrok-bin-win32-ia32": "-",
       "@expo/ngrok-bin>@expo/ngrok-bin-win32-x64": "-"
     }
+  },
+  "dependencies": {
+    "eas-cli": "^20.1.0"
   }
 }

@@ -1,5 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
   Alert,
@@ -14,6 +15,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AdBanner } from '@/components/AdBanner';
+import { AisAndEarsBridgeCard } from '@/components/AisAndEarsBridgeCard';
 import { ConnectionCard } from '@/components/ConnectionCard';
 import { NeonButton } from '@/components/NeonButton';
 import { NeonText } from '@/components/NeonText';
@@ -262,6 +264,20 @@ export default function ConnectionsScreen() {
             <Feather name="plus" size={20} color={theme.primary} />
           </TouchableOpacity>
         </View>
+
+        {/* AIs & Ears Bridge */}
+        <View style={{ paddingTop: 4 }}>
+          <Text style={{ color: theme.textMuted, fontSize: 10, fontFamily: 'Inter_600SemiBold', letterSpacing: 1.5, paddingHorizontal: 16, marginBottom: 10 }}>
+            SENSORY BRIDGE
+          </Text>
+          <AisAndEarsBridgeCard />
+        </View>
+
+        {/* Divider */}
+        <View style={{ marginHorizontal: 16, marginBottom: 16, borderTopWidth: 1, borderTopColor: theme.border }} />
+        <Text style={{ color: theme.textMuted, fontSize: 10, fontFamily: 'Inter_600SemiBold', letterSpacing: 1.5, paddingHorizontal: 16, marginBottom: 10 }}>
+          AI CONNECTIONS
+        </Text>
 
         {/* Server Grok quick-setup */}
         {serverGrokAvailable && !connections.some((c) => c.provider === 'server') && (

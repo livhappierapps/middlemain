@@ -2,8 +2,9 @@ import { Feather } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { router } from 'expo-router';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Image,
   KeyboardAvoidingView,
@@ -14,31 +15,44 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { captureRef } from 'react-native-view-shot';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AdBanner } from '@/components/AdBanner';
 import { NeonText } from '@/components/NeonText';
 import { ThemedBackground } from '@/components/ThemedBackground';
 import { ChatMessage, useAI } from '@/context/AIContext';
+import { useAisAndEars } from '@/context/AisAndEarsContext';
 import { useSkills } from '@/context/SkillsContext';
 import { useTheme } from '@/context/ThemeContext';
 
 interface TerminalLine {
   id: string;
-  type: 'input' | 'output' | 'system' | 'error' | 'image';
+  type: 'input' | 'output' | 'system' | 'error' | 'image' | 'vision' | 'transcript';
   content: string;
   timestamp: string;
   imageUri?: string;
+  source?: 'camera' | 'screen';
 }
 
 function genId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
+const VISION_INTERVAL_MS = 3000;
+
 export default function TerminalScreen() {
   const { theme } = useTheme();
   const { connections, activeConnection, sendMessage } = useAI();
   const { skills } = useSkills();
+  const {
+    status: bridgeStatus,
+    hearingOn, cameraOn, screenOn,
+    toggleHearing, toggleCamera, toggleScreen,
+    sendVisionFrame, subscribe,
+    session,
+  } = useAisAndEars();
   const insets = useSafeAreaInsets();
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
   const [input, setInput] = useState('');
   const [lines, setLines] = useState<TerminalLine[]>([
@@ -53,7 +67,13 @@ export default function TerminalScreen() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingLine, setStreamingLine] = useState('');
   const [attachedImage, setAttachedImage] = useState<{ uri: string; base64: string } | null>(null);
+
   const scrollRef = useRef<ScrollView>(null);
+  const cameraRef = useRef<CameraView>(null);
+  const screenCaptureRef = useRef<View>(null);
+  const cameraIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const screenIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
 
   const selectedConn = connections.find((c) => c.id === selectedConnId) ?? activeConnection ?? null;
@@ -63,6 +83,85 @@ export default function TerminalScreen() {
     setLines((prev) => [...prev, { ...line, id: genId(), timestamp: new Date().toLocaleTimeString() }]);
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
   };
+
+  // Subscribe to AIs & Ears bridge messages
+  useEffect(() => {
+    const unsub = subscribe((msg) => {
+      if (msg.type === 'vision_response') {
+        appendLine({ type: 'vision', content: `[Leo sees ${msg.source}] ${msg.content}`, source: msg.source });
+      } else if (msg.type === 'transcript') {
+        appendLine({ type: 'transcript', content: `[Leo hears] ${msg.content}` });
+      } else if (msg.type === 'bridge_status') {
+        appendLine({ type: 'system', content: msg.content });
+      } else if (msg.type === 'bridge_error') {
+        appendLine({ type: 'error', content: msg.content });
+      }
+    });
+    return unsub;
+  }, [subscribe]);
+
+  // Camera capture interval
+  useEffect(() => {
+    if (cameraOn && session) {
+      if (!cameraPermission?.granted) {
+        requestCameraPermission().then((result) => {
+          if (!result.granted) {
+            appendLine({ type: 'error', content: 'Camera permission denied. Enable in Settings.' });
+          }
+        });
+      }
+      cameraIntervalRef.current = setInterval(async () => {
+        if (!cameraRef.current) return;
+        try {
+          const photo = await cameraRef.current.takePictureAsync({ base64: true, quality: 0.4 });
+          if (photo?.base64) {
+            await sendVisionFrame(`data:image/jpeg;base64,${photo.base64}`, 'camera');
+          }
+        } catch {}
+      }, VISION_INTERVAL_MS);
+    } else {
+      if (cameraIntervalRef.current) {
+        clearInterval(cameraIntervalRef.current);
+        cameraIntervalRef.current = null;
+      }
+    }
+    return () => {
+      if (cameraIntervalRef.current) {
+        clearInterval(cameraIntervalRef.current);
+        cameraIntervalRef.current = null;
+      }
+    };
+  }, [cameraOn, session, cameraPermission]);
+
+  // Screen capture interval
+  useEffect(() => {
+    if (screenOn && session) {
+      screenIntervalRef.current = setInterval(async () => {
+        if (!screenCaptureRef.current) return;
+        try {
+          const base64 = await captureRef(screenCaptureRef, {
+            format: 'jpg',
+            quality: 0.5,
+            result: 'base64',
+          });
+          if (base64) {
+            await sendVisionFrame(`data:image/jpeg;base64,${base64}`, 'screen');
+          }
+        } catch {}
+      }, VISION_INTERVAL_MS);
+    } else {
+      if (screenIntervalRef.current) {
+        clearInterval(screenIntervalRef.current);
+        screenIntervalRef.current = null;
+      }
+    }
+    return () => {
+      if (screenIntervalRef.current) {
+        clearInterval(screenIntervalRef.current);
+        screenIntervalRef.current = null;
+      }
+    };
+  }, [screenOn, session]);
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -76,10 +175,7 @@ export default function TerminalScreen() {
       if (asset.base64) {
         setAttachedImage({ uri: asset.uri, base64: asset.base64 });
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        // Auto-select a vision skill if current one doesn't support vision
-        if (!selectedSkill?.supportsVision) {
-          setSelectedSkillId('vision_ui');
-        }
+        if (!selectedSkill?.supportsVision) setSelectedSkillId('vision_ui');
       }
     }
   };
@@ -100,9 +196,7 @@ export default function TerminalScreen() {
       if (asset.base64) {
         setAttachedImage({ uri: asset.uri, base64: asset.base64 });
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        if (!selectedSkill?.supportsVision) {
-          setSelectedSkillId('vision_debug');
-        }
+        if (!selectedSkill?.supportsVision) setSelectedSkillId('vision_debug');
       }
     }
   };
@@ -136,7 +230,6 @@ export default function TerminalScreen() {
     const messages: ChatMessage[] = [{ role: 'user', content: fullText }];
     let accumulated = '';
 
-    // Override system prompt from skill
     const connWithSkill = skill
       ? { ...selectedConn, systemPrompt: skill.systemPrompt }
       : selectedConn;
@@ -179,13 +272,48 @@ export default function TerminalScreen() {
   };
 
   const lineColor: Record<TerminalLine['type'], string> = {
-    input: theme.secondary, output: theme.text, system: theme.textMuted,
-    error: theme.destructive, image: theme.accent,
+    input: theme.secondary,
+    output: theme.text,
+    system: theme.textMuted,
+    error: theme.destructive,
+    image: theme.accent,
+    vision: '#00ff88',
+    transcript: '#aa88ff',
   };
 
   const visionSkills = skills.filter((s) => s.supportsVision);
   const textSkills = skills.filter((s) => !s.supportsVision);
   const displaySkills = attachedImage ? skills : textSkills;
+
+  const bridgeConnected = bridgeStatus === 'connected';
+  const anySenseOn = hearingOn || cameraOn || screenOn;
+
+  const handleToggleCamera = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (!bridgeConnected) {
+      appendLine({ type: 'error', content: 'Connect AIs & Ears bridge in the Connect tab first.' });
+      return;
+    }
+    toggleCamera();
+  };
+
+  const handleToggleHearing = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (!bridgeConnected) {
+      appendLine({ type: 'error', content: 'Connect AIs & Ears bridge in the Connect tab first.' });
+      return;
+    }
+    toggleHearing();
+  };
+
+  const handleToggleScreen = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (!bridgeConnected) {
+      appendLine({ type: 'error', content: 'Connect AIs & Ears bridge in the Connect tab first.' });
+      return;
+    }
+    toggleScreen();
+  };
 
   return (
     <ThemedBackground>
@@ -205,6 +333,69 @@ export default function TerminalScreen() {
               <Feather name="trash-2" size={17} color={theme.textMuted} />
             </TouchableOpacity>
           </View>
+        </View>
+
+        {/* Leo's Senses Toggle Strip */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+          <Text style={{ color: theme.textMuted, fontSize: 9, fontFamily: 'Inter_600SemiBold', letterSpacing: 1, marginRight: 2 }}>
+            LEO'S SENSES
+          </Text>
+
+          {/* Hearing */}
+          <TouchableOpacity
+            onPress={handleToggleHearing}
+            style={{
+              flexDirection: 'row', alignItems: 'center', gap: 4,
+              paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12,
+              borderWidth: 1,
+              borderColor: hearingOn ? '#aa88ff' : theme.border,
+              backgroundColor: hearingOn ? '#aa88ff22' : 'transparent',
+            }}
+          >
+            <Feather name="mic" size={11} color={hearingOn ? '#aa88ff' : theme.textMuted} />
+            <Text style={{ color: hearingOn ? '#aa88ff' : theme.textMuted, fontSize: 10, fontFamily: 'Inter_600SemiBold' }}>HEAR</Text>
+            {hearingOn && <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: '#aa88ff' }} />}
+          </TouchableOpacity>
+
+          {/* Camera */}
+          <TouchableOpacity
+            onPress={handleToggleCamera}
+            style={{
+              flexDirection: 'row', alignItems: 'center', gap: 4,
+              paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12,
+              borderWidth: 1,
+              borderColor: cameraOn ? '#00ff88' : theme.border,
+              backgroundColor: cameraOn ? '#00ff8822' : 'transparent',
+            }}
+          >
+            <Feather name="video" size={11} color={cameraOn ? '#00ff88' : theme.textMuted} />
+            <Text style={{ color: cameraOn ? '#00ff88' : theme.textMuted, fontSize: 10, fontFamily: 'Inter_600SemiBold' }}>CAM</Text>
+            {cameraOn && <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: '#00ff88' }} />}
+          </TouchableOpacity>
+
+          {/* Screen */}
+          <TouchableOpacity
+            onPress={handleToggleScreen}
+            style={{
+              flexDirection: 'row', alignItems: 'center', gap: 4,
+              paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12,
+              borderWidth: 1,
+              borderColor: screenOn ? theme.accent : theme.border,
+              backgroundColor: screenOn ? theme.accent + '22' : 'transparent',
+            }}
+          >
+            <Feather name="monitor" size={11} color={screenOn ? theme.accent : theme.textMuted} />
+            <Text style={{ color: screenOn ? theme.accent : theme.textMuted, fontSize: 10, fontFamily: 'Inter_600SemiBold' }}>SCREEN</Text>
+            {screenOn && <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: theme.accent }} />}
+          </TouchableOpacity>
+
+          {/* Bridge status dot */}
+          {bridgeConnected && (
+            <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#00ff88' }} />
+              <Text style={{ color: '#00ff88', fontSize: 9, fontFamily: 'Inter_600SemiBold', letterSpacing: 0.5 }}>BRIDGED</Text>
+            </View>
+          )}
         </View>
 
         {/* AI selector */}
@@ -287,58 +478,69 @@ export default function TerminalScreen() {
         )}
       </View>
 
-      {/* Terminal output */}
-      <ScrollView
-        ref={scrollRef}
-        style={{ flex: 1, padding: 12 }}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        {lines.map((line) => (
-          <View key={line.id} style={{ marginBottom: 12 }}>
-            <Text style={{ color: theme.textMuted, fontSize: 9, fontFamily: 'Inter_400Regular', marginBottom: 2 }}>
-              {line.timestamp}
-            </Text>
-            {line.type === 'image' && line.imageUri ? (
-              <View>
-                <Image
-                  source={{ uri: line.imageUri }}
-                  style={{ width: 160, height: 120, borderRadius: 8, borderWidth: 1, borderColor: theme.accent }}
-                  resizeMode="cover"
-                />
-                <Text style={{ color: theme.accent, fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 4 }}>
-                  [image attached for analysis]
-                </Text>
-              </View>
-            ) : (
-              <Text
-                style={{
-                  color: lineColor[line.type],
-                  fontSize: 13,
-                  fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-                  lineHeight: 20,
-                }}
-                selectable
-              >
-                {line.type === 'input' ? '> ' : line.type === 'system' ? '' : line.type === 'error' ? '! ' : ''}{line.content}
-              </Text>
-            )}
-          </View>
-        ))}
+      {/* Hidden CameraView for frame capture (1×1 when active) */}
+      {cameraOn && cameraPermission?.granted && (
+        <CameraView
+          ref={cameraRef}
+          facing="front"
+          style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }}
+        />
+      )}
 
-        {isStreaming && (
-          <View style={{ marginBottom: 12 }}>
-            <Text style={{ color: theme.textMuted, fontSize: 9, fontFamily: 'Inter_400Regular', marginBottom: 2 }}>
-              {new Date().toLocaleTimeString()}
-            </Text>
-            <Text style={{ color: theme.text, fontSize: 13, fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace', lineHeight: 20 }}>
-              {streamingLine || ''}
-              <Text style={{ color: theme.primary }}>█</Text>
-            </Text>
-          </View>
-        )}
-        <View style={{ height: 20 }} />
-      </ScrollView>
+      {/* Terminal output — wrapped for screen capture */}
+      <View ref={screenCaptureRef} style={{ flex: 1 }}>
+        <ScrollView
+          ref={scrollRef}
+          style={{ flex: 1, padding: 12 }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {lines.map((line) => (
+            <View key={line.id} style={{ marginBottom: 12 }}>
+              <Text style={{ color: theme.textMuted, fontSize: 9, fontFamily: 'Inter_400Regular', marginBottom: 2 }}>
+                {line.timestamp}
+              </Text>
+              {line.type === 'image' && line.imageUri ? (
+                <View>
+                  <Image
+                    source={{ uri: line.imageUri }}
+                    style={{ width: 160, height: 120, borderRadius: 8, borderWidth: 1, borderColor: theme.accent }}
+                    resizeMode="cover"
+                  />
+                  <Text style={{ color: theme.accent, fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 4 }}>
+                    [image attached for analysis]
+                  </Text>
+                </View>
+              ) : (
+                <Text
+                  style={{
+                    color: lineColor[line.type],
+                    fontSize: 13,
+                    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+                    lineHeight: 20,
+                  }}
+                  selectable
+                >
+                  {line.type === 'input' ? '> ' : line.type === 'system' ? '' : line.type === 'error' ? '! ' : ''}{line.content}
+                </Text>
+              )}
+            </View>
+          ))}
+
+          {isStreaming && (
+            <View style={{ marginBottom: 12 }}>
+              <Text style={{ color: theme.textMuted, fontSize: 9, fontFamily: 'Inter_400Regular', marginBottom: 2 }}>
+                {new Date().toLocaleTimeString()}
+              </Text>
+              <Text style={{ color: theme.text, fontSize: 13, fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace', lineHeight: 20 }}>
+                {streamingLine || ''}
+                <Text style={{ color: theme.primary }}>█</Text>
+              </Text>
+            </View>
+          )}
+          <View style={{ height: 20 }} />
+        </ScrollView>
+      </View>
 
       {/* Attached image preview strip */}
       {attachedImage && (

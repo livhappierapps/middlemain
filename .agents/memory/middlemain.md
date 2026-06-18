@@ -42,6 +42,11 @@ When `imageBase64` is passed to `sendMessage()`, the model auto-switches to `con
 - Ad removal: $1.99 one-time
 Purchase state is simulated (AsyncStorage). Production: wire up RevenueCat.
 
+## EAS build — always use EAS_SKIP_AUTO_FINGERPRINT=1
+Add `EAS_SKIP_AUTO_FINGERPRINT=1` to the env -i command when running `eas build` from Replit. Without it, EAS tries a git write after fingerprinting and Replit's sandbox blocks it with an index.lock error.
+
+**How to apply:** `env -i ... EAS_SKIP_AUTO_FINGERPRINT=1 ... eas build --platform android --profile preview --non-interactive --no-wait`
+
 ## User context
 - Single mom, no computer access, uses iPhone 13 (iOS dev beta) + Samsung A17
 - Has paid Apple and Google Play dev accounts

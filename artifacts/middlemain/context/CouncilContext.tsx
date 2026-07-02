@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import React, {
@@ -12,6 +13,23 @@ import { AIProvider, AIConnection, ChatMessage, PROVIDER_DEFAULTS } from '@/cont
 import { useAI } from '@/context/AIContext';
 import { useAisAndEars } from '@/context/AisAndEarsContext';
 import { fetch } from 'expo/fetch';
+
+// ─── Storage keys ────────────────────────────────────────────────────────────
+const STORAGE_MESSAGES_KEY = 'council_messages_v1';
+const STORAGE_MANUAL_PARTICIPANTS_KEY = 'council_manual_participants_v1';
+
+// Shape stored for each manual participant (no transient session/sense state)
+interface PersistedParticipant {
+  id: string;
+  connectionId?: string;
+  displayName: string;
+  provider: AIProvider;
+  apiKey: string;
+  model: string;
+  baseUrl?: string;
+  systemPrompt: string;
+  color: string;
+}
 
 // ─── Participant colors palette ──────────────────────────────────────────────
 export const COUNCIL_COLORS = [
@@ -222,6 +240,10 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
   ]);
   const [isSending, setIsSending] = useState(false);
 
+  // Tracks whether we've finished loading from AsyncStorage; gates saves so
+  // we don't overwrite stored data before hydration completes.
+  const hydratedRef = useRef(false);
+
   const wsMap = useRef<Map<string, WebSocket>>(new Map());
   const recordingRef = useRef<Audio.Recording | null>(null);
   const hearingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -234,6 +256,71 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
   const shouldReconnectRef = useRef<Set<string>>(new Set());
   const reconnectAttemptsRef = useRef<Map<string, number>>(new Map());
   const reconnectTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  // ── Hydrate from AsyncStorage on mount ─────────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [storedMessages, storedParticipants] = await Promise.all([
+          AsyncStorage.getItem(STORAGE_MESSAGES_KEY),
+          AsyncStorage.getItem(STORAGE_MANUAL_PARTICIPANTS_KEY),
+        ]);
+
+        if (cancelled) return;
+
+        if (storedMessages) {
+          const parsed: CouncilMessage[] = JSON.parse(storedMessages);
+          // Drop any messages that were mid-stream when the app closed
+          const cleaned = parsed.map((m) => ({ ...m, streaming: false }));
+          if (cleaned.length > 0) {
+            setMessages(cleaned);
+          }
+        }
+
+        if (storedParticipants) {
+          const persisted: PersistedParticipant[] = JSON.parse(storedParticipants);
+          if (persisted.length > 0) {
+            setParticipants((prev) => {
+              const autoLoaded = prev.filter((p) => p.isAutoLoaded);
+              const restored: CouncilParticipant[] = persisted.map((p) => ({
+                ...p,
+                isAutoLoaded: false,
+                session: null,
+                sessionLoading: false,
+                hearingOn: false,
+                cameraOn: false,
+                screenOn: false,
+              }));
+              return [...autoLoaded, ...restored];
+            });
+          }
+        }
+      } catch {}
+      if (!cancelled) {
+        hydratedRef.current = true;
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // ── Persist messages to AsyncStorage whenever they change ───────────────
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    // Don't persist any actively-streaming placeholders
+    const toSave = messages.map((m) => ({ ...m, streaming: false }));
+    AsyncStorage.setItem(STORAGE_MESSAGES_KEY, JSON.stringify(toSave)).catch(() => {});
+  }, [messages]);
+
+  // ── Persist manual participants whenever they change ────────────────────
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    const manualParticipants = participants.filter((p) => !p.isAutoLoaded);
+    const toSave: PersistedParticipant[] = manualParticipants.map(({ id, connectionId, displayName, provider, apiKey, model, baseUrl, systemPrompt, color }) => ({
+      id, connectionId, displayName, provider, apiKey, model, baseUrl, systemPrompt, color,
+    }));
+    AsyncStorage.setItem(STORAGE_MANUAL_PARTICIPANTS_KEY, JSON.stringify(toSave)).catch(() => {});
+  }, [participants]);
 
   // ── Auto-load connected AIs ─────────────────────────────────────────────
   // This effect is intentionally NOT guarded by an initializedRef so it always
@@ -665,12 +752,14 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
   }, [participants, messages]);
 
   const clearMessages = useCallback(() => {
-    setMessages([{
+    const cleared: CouncilMessage[] = [{
       id: genId(),
       role: 'system',
       content: 'Council session cleared.',
       timestamp: new Date().toLocaleTimeString(),
-    }]);
+    }];
+    setMessages(cleared);
+    AsyncStorage.setItem(STORAGE_MESSAGES_KEY, JSON.stringify(cleared)).catch(() => {});
   }, []);
 
   // ── Cleanup on unmount ──────────────────────────────────────────────────

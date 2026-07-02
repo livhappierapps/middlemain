@@ -482,7 +482,20 @@ export default function CouncilScreen() {
               </View>
             </View>
             <View style={{ flexDirection: 'row', gap: 6 }}>
-              <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); clearMessages(); }} style={{ padding: 7 }}>
+              <TouchableOpacity
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  Alert.alert(
+                    'Clear History',
+                    'This will permanently remove all council messages. Participants will remain.',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Clear', style: 'destructive', onPress: () => clearMessages() },
+                    ],
+                  );
+                }}
+                style={{ padding: 7 }}
+              >
                 <Feather name="trash-2" size={17} color={theme.textMuted} />
               </TouchableOpacity>
               <TouchableOpacity

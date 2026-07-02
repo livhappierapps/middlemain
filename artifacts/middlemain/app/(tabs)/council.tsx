@@ -48,7 +48,7 @@ function AddParticipantModal({
 }: {
   visible: boolean;
   onClose: () => void;
-  onAdd: (data: Omit<CouncilParticipant, 'id' | 'session' | 'sessionLoading' | 'hearingOn' | 'cameraOn' | 'screenOn' | 'isAutoLoaded'>) => void;
+  onAdd: (data: Omit<CouncilParticipant, 'id' | 'session' | 'sessionLoading' | 'hearingOn' | 'cameraOn' | 'screenOn' | 'isAutoLoaded' | 'sessionError'>) => void;
   usedColors: string[];
 }) {
   const { theme } = useTheme();
@@ -189,9 +189,9 @@ function ParticipantCard({
         <View style={{ flex: 1 }}>
           <Text numberOfLines={1} style={{ color: participant.color, fontSize: 11, fontFamily: 'Inter_600SemiBold' }}>{participant.displayName}</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 }}>
-            <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: participant.session ? participant.color : theme.textMuted }} />
-            <Text style={{ color: theme.textMuted, fontSize: 8, fontFamily: 'Inter_400Regular' }}>
-              {participant.sessionLoading ? 'connecting…' : participant.session ? 'bridged' : 'text only'}
+            <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: participant.sessionError ? '#ff4444' : participant.session ? participant.color : theme.textMuted }} />
+            <Text style={{ color: participant.sessionError ? '#ff4444' : theme.textMuted, fontSize: 8, fontFamily: 'Inter_400Regular' }} numberOfLines={1}>
+              {participant.sessionLoading ? 'connecting…' : participant.sessionError ? 'disconnected' : participant.session ? 'bridged' : 'text only'}
             </Text>
           </View>
         </View>

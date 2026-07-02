@@ -42,6 +42,7 @@ export interface CouncilParticipant {
   hearingOn: boolean;
   cameraOn: boolean;
   screenOn: boolean;
+  sessionError?: string;
 }
 
 export interface CouncilMessage {
@@ -59,7 +60,7 @@ interface CouncilContextValue {
   participants: CouncilParticipant[];
   messages: CouncilMessage[];
   isSending: boolean;
-  addParticipant: (data: Omit<CouncilParticipant, 'id' | 'session' | 'sessionLoading' | 'hearingOn' | 'cameraOn' | 'screenOn' | 'isAutoLoaded'>) => void;
+  addParticipant: (data: Omit<CouncilParticipant, 'id' | 'session' | 'sessionLoading' | 'hearingOn' | 'cameraOn' | 'screenOn' | 'isAutoLoaded' | 'sessionError'>) => void;
   removeParticipant: (id: string) => void;
   sendUserMessage: (text: string, mentionedIds: string[]) => Promise<void>;
   toggleHearing: (participantId: string) => Promise<void>;
@@ -89,6 +90,8 @@ function getServerBase(): string {
 }
 
 const CHUNK_MS = 2500;
+const WS_MAX_RECONNECT_ATTEMPTS = 5;
+const WS_BASE_RECONNECT_DELAY_MS = 1000;
 
 const RECORDING_OPTIONS: Audio.RecordingOptions = {
   android: {
@@ -222,34 +225,104 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
   const wsMap = useRef<Map<string, WebSocket>>(new Map());
   const recordingRef = useRef<Audio.Recording | null>(null);
   const hearingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const initializedRef = useRef(false);
+
+  // Mirror participants into a ref so WS reconnect closures always see current state
+  const participantsRef = useRef<CouncilParticipant[]>([]);
+  useEffect(() => { participantsRef.current = participants; }, [participants]);
+
+  // Track which participants should auto-reconnect (hearing is ON) and reconnect attempts
+  const shouldReconnectRef = useRef<Set<string>>(new Set());
+  const reconnectAttemptsRef = useRef<Map<string, number>>(new Map());
+  const reconnectTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   // ── Auto-load connected AIs ─────────────────────────────────────────────
+  // This effect is intentionally NOT guarded by an initializedRef so it always
+  // re-syncs when connections change or when the provider remounts (e.g. hot
+  // reload or navigation stack reset). It only touches auto-loaded participants,
+  // so manually-added ones are preserved.
   useEffect(() => {
-    if (initializedRef.current) return;
     if (connections.length === 0) return;
-    initializedRef.current = true;
 
-    const autoParticipants: CouncilParticipant[] = connections.map((conn, idx) => ({
-      id: genId(),
-      connectionId: conn.id,
-      displayName: conn.name,
-      provider: conn.provider,
-      apiKey: conn.apiKey,
-      model: conn.model,
-      baseUrl: conn.baseUrl,
-      systemPrompt: conn.systemPrompt || 'You are a helpful AI assistant.',
-      color: COUNCIL_COLORS[idx % COUNCIL_COLORS.length],
-      isAutoLoaded: true,
-      session: null,
-      sessionLoading: false,
-      hearingOn: false,
-      cameraOn: false,
-      screenOn: false,
-    }));
+    setParticipants((prev) => {
+      // Keep manually-added participants
+      const manual = prev.filter((p) => !p.isAutoLoaded);
 
-    setParticipants(autoParticipants);
+      // Build the new auto-loaded list from current connections, preserving
+      // existing participant IDs so bridge sessions / WS refs are not orphaned.
+      const autoParticipants: CouncilParticipant[] = connections.map((conn, idx) => {
+        const existing = prev.find((p) => p.isAutoLoaded && p.connectionId === conn.id);
+        if (existing) return existing;
+        return {
+          id: genId(),
+          connectionId: conn.id,
+          displayName: conn.name,
+          provider: conn.provider,
+          apiKey: conn.apiKey,
+          model: conn.model,
+          baseUrl: conn.baseUrl,
+          systemPrompt: conn.systemPrompt || 'You are a helpful AI assistant.',
+          color: COUNCIL_COLORS[idx % COUNCIL_COLORS.length],
+          isAutoLoaded: true,
+          session: null,
+          sessionLoading: false,
+          hearingOn: false,
+          cameraOn: false,
+          screenOn: false,
+        };
+      });
+
+      return [...autoParticipants, ...manual];
+    });
   }, [connections]);
+
+  // ── WebSocket management ────────────────────────────────────────────────
+  const connectParticipantWs = useCallback((participantId: string, wsUrl: string): WebSocket => {
+    const ws = new WebSocket(wsUrl);
+
+    ws.onerror = () => {};
+
+    ws.onclose = () => {
+      wsMap.current.delete(participantId);
+
+      if (!shouldReconnectRef.current.has(participantId)) return;
+
+      const attempts = (reconnectAttemptsRef.current.get(participantId) ?? 0) + 1;
+      reconnectAttemptsRef.current.set(participantId, attempts);
+
+      if (attempts >= WS_MAX_RECONNECT_ATTEMPTS) {
+        shouldReconnectRef.current.delete(participantId);
+        reconnectAttemptsRef.current.delete(participantId);
+        setParticipants((prev) =>
+          prev.map((p) =>
+            p.id === participantId
+              ? { ...p, hearingOn: false, sessionError: 'Connection lost. Tap the mic to retry.' }
+              : p,
+          ),
+        );
+        return;
+      }
+
+      const delay = Math.min(WS_BASE_RECONNECT_DELAY_MS * Math.pow(2, attempts - 1), 16000);
+      const timeout = setTimeout(() => {
+        reconnectTimeoutsRef.current.delete(participantId);
+        if (!shouldReconnectRef.current.has(participantId)) return;
+        const current = participantsRef.current.find((p) => p.id === participantId);
+        if (!current?.session?.wsUrl) return;
+        const newWs = connectParticipantWs(participantId, current.session.wsUrl);
+        wsMap.current.set(participantId, newWs);
+      }, delay);
+      reconnectTimeoutsRef.current.set(participantId, timeout);
+    };
+
+    return ws;
+  }, []);
+
+  const cancelReconnect = useCallback((participantId: string) => {
+    shouldReconnectRef.current.delete(participantId);
+    reconnectAttemptsRef.current.delete(participantId);
+    const timeout = reconnectTimeoutsRef.current.get(participantId);
+    if (timeout) { clearTimeout(timeout); reconnectTimeoutsRef.current.delete(participantId); }
+  }, []);
 
   // ── Bridge session per participant ──────────────────────────────────────
   const initBridgeSession = useCallback(async (participantId: string) => {
@@ -257,7 +330,7 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
     if (!domain) return;
 
     setParticipants((prev) =>
-      prev.map((p) => (p.id === participantId ? { ...p, sessionLoading: true } : p)),
+      prev.map((p) => (p.id === participantId ? { ...p, sessionLoading: true, sessionError: undefined } : p)),
     );
 
     try {
@@ -289,34 +362,37 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
   }, [bridgeConfig]);
 
   const teardownParticipantSession = useCallback((participantId: string) => {
+    cancelReconnect(participantId);
     const ws = wsMap.current.get(participantId);
     if (ws) { ws.close(); wsMap.current.delete(participantId); }
     setParticipants((prev) =>
       prev.map((p) =>
         p.id === participantId
-          ? { ...p, session: null, hearingOn: false, cameraOn: false, screenOn: false }
+          ? { ...p, session: null, hearingOn: false, cameraOn: false, screenOn: false, sessionError: undefined }
           : p,
       ),
     );
-  }, []);
+  }, [cancelReconnect]);
 
   // ── Participant management ──────────────────────────────────────────────
-  const addParticipant = useCallback((data: Omit<CouncilParticipant, 'id' | 'session' | 'sessionLoading' | 'hearingOn' | 'cameraOn' | 'screenOn' | 'isAutoLoaded'>) => {
-    const usedColors = new Set(participants.map((p) => p.color));
-    const color = data.color || COUNCIL_COLORS.find((c) => !usedColors.has(c)) || COUNCIL_COLORS[participants.length % COUNCIL_COLORS.length];
-    const newParticipant: CouncilParticipant = {
-      ...data,
-      color,
-      id: genId(),
-      isAutoLoaded: false,
-      session: null,
-      sessionLoading: false,
-      hearingOn: false,
-      cameraOn: false,
-      screenOn: false,
-    };
-    setParticipants((prev) => [...prev, newParticipant]);
-  }, [participants]);
+  const addParticipant = useCallback((data: Omit<CouncilParticipant, 'id' | 'session' | 'sessionLoading' | 'hearingOn' | 'cameraOn' | 'screenOn' | 'isAutoLoaded' | 'sessionError'>) => {
+    setParticipants((prev) => {
+      const usedColors = new Set(prev.map((p) => p.color));
+      const color = data.color || COUNCIL_COLORS.find((c) => !usedColors.has(c)) || COUNCIL_COLORS[prev.length % COUNCIL_COLORS.length];
+      const newParticipant: CouncilParticipant = {
+        ...data,
+        color,
+        id: genId(),
+        isAutoLoaded: false,
+        session: null,
+        sessionLoading: false,
+        hearingOn: false,
+        cameraOn: false,
+        screenOn: false,
+      };
+      return [...prev, newParticipant];
+    });
+  }, []);
 
   const removeParticipant = useCallback((id: string) => {
     teardownParticipantSession(id);
@@ -397,6 +473,14 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
     let currentParticipant = participants.find((p) => p.id === participantId);
     if (!currentParticipant) return;
 
+    // Clear any prior error when the user manually retries
+    if (currentParticipant.sessionError) {
+      setParticipants((prev) =>
+        prev.map((p) => (p.id === participantId ? { ...p, sessionError: undefined } : p)),
+      );
+      currentParticipant = { ...currentParticipant, sessionError: undefined };
+    }
+
     let session = currentParticipant.session;
     if (!session && !currentParticipant.hearingOn) {
       session = await initBridgeSession(participantId);
@@ -407,20 +491,22 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
     const nextOn = !currentParticipant.hearingOn;
 
     if (nextOn && session) {
-      const ws = new WebSocket(session.wsUrl);
-      ws.onerror = () => {};
+      shouldReconnectRef.current.add(participantId);
+      reconnectAttemptsRef.current.delete(participantId);
+      const ws = connectParticipantWs(participantId, session.wsUrl);
       wsMap.current.set(participantId, ws);
     } else {
+      cancelReconnect(participantId);
       const ws = wsMap.current.get(participantId);
       if (ws) { ws.close(); wsMap.current.delete(participantId); }
     }
 
     const nextParticipants = participants.map((p) =>
-      p.id === participantId ? { ...p, session: session ?? p.session, hearingOn: nextOn } : p,
+      p.id === participantId ? { ...p, session: session ?? p.session, hearingOn: nextOn, sessionError: undefined } : p,
     );
     setParticipants(nextParticipants);
     await restartAudioIfNeeded(nextParticipants);
-  }, [participants, initBridgeSession, restartAudioIfNeeded]);
+  }, [participants, initBridgeSession, connectParticipantWs, cancelReconnect, restartAudioIfNeeded]);
 
   const toggleCamera = useCallback(async (participantId: string) => {
     const p = participants.find((x) => x.id === participantId);
@@ -591,6 +677,11 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     return () => {
       stopAudio();
+      // Cancel all pending reconnects
+      reconnectTimeoutsRef.current.forEach((t) => clearTimeout(t));
+      reconnectTimeoutsRef.current.clear();
+      shouldReconnectRef.current.clear();
+      reconnectAttemptsRef.current.clear();
       wsMap.current.forEach((ws) => ws.close());
       wsMap.current.clear();
     };

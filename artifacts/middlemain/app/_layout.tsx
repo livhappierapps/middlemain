@@ -16,6 +16,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AIProvider } from "@/context/AIContext";
 import { AisAndEarsProvider } from "@/context/AisAndEarsContext";
+import { NetworkProvider } from "@/context/NetworkContext";
 import { PurchaseProvider } from "@/context/PurchaseContext";
 import { SkillsProvider } from "@/context/SkillsContext";
 import { ThemeProvider } from "@/context/ThemeContext";
@@ -59,15 +60,17 @@ export default function RootLayout() {
           <QueryClientProvider client={queryClient}>
             <GestureHandlerRootView style={{ flex: 1 }}>
               <KeyboardProvider>
-                <AIProvider>
-                  <AisAndEarsProvider>
-                    <SkillsProvider>
-                      <PurchaseProvider>
-                        <RootLayoutNav />
-                      </PurchaseProvider>
-                    </SkillsProvider>
-                  </AisAndEarsProvider>
-                </AIProvider>
+                <NetworkProvider>
+                  <AIProvider>
+                    <AisAndEarsProvider>
+                      <SkillsProvider>
+                        <PurchaseProvider>
+                          <RootLayoutNav />
+                        </PurchaseProvider>
+                      </SkillsProvider>
+                    </AisAndEarsProvider>
+                  </AIProvider>
+                </NetworkProvider>
               </KeyboardProvider>
             </GestureHandlerRootView>
           </QueryClientProvider>

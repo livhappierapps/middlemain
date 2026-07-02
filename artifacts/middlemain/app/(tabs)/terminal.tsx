@@ -18,6 +18,8 @@ import {
 import { captureRef } from 'react-native-view-shot';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AdBanner } from '@/components/AdBanner';
+import { AICursorOverlay, CursorAction, parseCursorAction, stripCursorBlock } from '@/components/AICursorOverlay';
+import { NetworkStatusBar } from '@/components/NetworkStatusBar';
 import { NeonText } from '@/components/NeonText';
 import { ThemedBackground } from '@/components/ThemedBackground';
 import { ChatMessage, useAI } from '@/context/AIContext';
@@ -39,6 +41,15 @@ function genId() {
 }
 
 const VISION_INTERVAL_MS = 3000;
+const CONTROL_INTERVAL_MS = 1500;
+
+const CURSOR_CONTROL_SYSTEM_PROMPT = `You are Leo, an AI with live cursor control over the Middlemain screen. When you receive screen share frames:
+1. Briefly describe what you see and offer help or observations
+2. Optionally move your cursor to something interesting by including EXACTLY this block at the end of your response:
+\`\`\`cursor
+{"x": 0.5, "y": 0.4, "tap": false, "label": "here"}
+\`\`\`
+Where x (0=left, 1=right) and y (0=top, 1=bottom) are relative positions. Set "tap": true to show a tap ripple. Keep your response concise — it appears in a terminal.`;
 
 export default function TerminalScreen() {
   const { theme } = useTheme();
@@ -67,12 +78,16 @@ export default function TerminalScreen() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingLine, setStreamingLine] = useState('');
   const [attachedImage, setAttachedImage] = useState<{ uri: string; base64: string } | null>(null);
+  const [controlOn, setControlOn] = useState(false);
+  const [cursorAction, setCursorAction] = useState<CursorAction | null>(null);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
   const scrollRef = useRef<ScrollView>(null);
   const cameraRef = useRef<CameraView>(null);
   const screenCaptureRef = useRef<View>(null);
   const cameraIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const screenIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const controlIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
 
@@ -132,6 +147,58 @@ export default function TerminalScreen() {
       }
     };
   }, [cameraOn, session, cameraPermission]);
+
+  // Cursor control interval — direct Grok Vision, no AIs & Ears needed
+  useEffect(() => {
+    if (controlOn && selectedConn) {
+      controlIntervalRef.current = setInterval(async () => {
+        if (!screenCaptureRef.current) return;
+        try {
+          const base64 = await captureRef(screenCaptureRef, { format: 'jpg', quality: 0.5, result: 'base64' });
+          if (!base64) return;
+          const messages: ChatMessage[] = [{
+            role: 'user',
+            content: 'Here is my current Middlemain screen. Describe what you see briefly and optionally move your cursor.',
+          }];
+          let fullResponse = '';
+          await sendMessage(
+            selectedConn.id,
+            messages,
+            (chunk) => { fullResponse += chunk; },
+            () => {
+              const action = parseCursorAction(fullResponse);
+              if (action) {
+                setCursorAction({ ...action });
+                if (action.scroll) {
+                  const delta = action.scroll.direction === 'down' ? action.scroll.px : -action.scroll.px;
+                  scrollRef.current?.scrollTo({ y: delta, animated: true });
+                }
+              }
+              const stripped = stripCursorBlock(fullResponse).trim();
+              if (stripped) {
+                appendLine({ type: 'vision', content: `[Leo cursor] ${stripped}`, source: 'screen' });
+                setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 30);
+              }
+            },
+            (err) => appendLine({ type: 'error', content: `[cursor control error] ${err}` }),
+            base64,
+            CURSOR_CONTROL_SYSTEM_PROMPT,
+          );
+        } catch {}
+      }, CONTROL_INTERVAL_MS);
+    } else {
+      if (controlIntervalRef.current) {
+        clearInterval(controlIntervalRef.current);
+        controlIntervalRef.current = null;
+      }
+    }
+    return () => {
+      if (controlIntervalRef.current) {
+        clearInterval(controlIntervalRef.current);
+        controlIntervalRef.current = null;
+      }
+    };
+  }, [controlOn, selectedConn]);
 
   // Screen capture interval
   useEffect(() => {
@@ -286,7 +353,24 @@ export default function TerminalScreen() {
   const displaySkills = attachedImage ? skills : textSkills;
 
   const bridgeConnected = bridgeStatus === 'connected';
-  const anySenseOn = hearingOn || cameraOn || screenOn;
+  const anySenseOn = hearingOn || cameraOn || screenOn || controlOn;
+
+  const handleToggleControl = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (!selectedConn) {
+      appendLine({ type: 'error', content: 'Connect an AI first — Leo needs a Vision connection to use cursor control.' });
+      return;
+    }
+    const next = !controlOn;
+    setControlOn(next);
+    if (!next) setCursorAction(null);
+    appendLine({
+      type: 'system',
+      content: next
+        ? '>>> Leo cursor control ACTIVE — Leo will see your screen and move the cursor'
+        : '>>> Leo cursor control deactivated',
+    });
+  };
 
   const handleToggleCamera = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -325,7 +409,8 @@ export default function TerminalScreen() {
       <View style={{ paddingTop: topInset + 10, paddingHorizontal: 16, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: theme.border, backgroundColor: theme.surface + 'E6' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
           <NeonText size={15} weight="700" letterSpacing={3}>BRIDGE TERMINAL</NeonText>
-          <View style={{ flexDirection: 'row', gap: 6 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <NetworkStatusBar />
             <TouchableOpacity onPress={copyLast} style={{ padding: 6 }}>
               <Feather name="copy" size={17} color={theme.textMuted} />
             </TouchableOpacity>
@@ -389,13 +474,37 @@ export default function TerminalScreen() {
             {screenOn && <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: theme.accent }} />}
           </TouchableOpacity>
 
-          {/* Bridge status dot */}
-          {bridgeConnected && (
-            <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#00ff88' }} />
-              <Text style={{ color: '#00ff88', fontSize: 9, fontFamily: 'Inter_600SemiBold', letterSpacing: 0.5 }}>BRIDGED</Text>
-            </View>
-          )}
+          {/* Cursor Control */}
+          <TouchableOpacity
+            onPress={handleToggleControl}
+            style={{
+              flexDirection: 'row', alignItems: 'center', gap: 4,
+              paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12,
+              borderWidth: controlOn ? 1.5 : 1,
+              borderColor: controlOn ? theme.primary : theme.border,
+              backgroundColor: controlOn ? theme.primary + '22' : 'transparent',
+            }}
+          >
+            <Feather name="crosshair" size={11} color={controlOn ? theme.primary : theme.textMuted} />
+            <Text style={{ color: controlOn ? theme.primary : theme.textMuted, fontSize: 10, fontFamily: 'Inter_600SemiBold' }}>CTRL</Text>
+            {controlOn && <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: theme.primary }} />}
+          </TouchableOpacity>
+
+          {/* Status dots */}
+          <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            {controlOn && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: theme.primary }} />
+                <Text style={{ color: theme.primary, fontSize: 9, fontFamily: 'Inter_600SemiBold', letterSpacing: 0.5 }}>CTRL</Text>
+              </View>
+            )}
+            {bridgeConnected && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#00ff88' }} />
+                <Text style={{ color: '#00ff88', fontSize: 9, fontFamily: 'Inter_600SemiBold', letterSpacing: 0.5 }}>BRIDGED</Text>
+              </View>
+            )}
+          </View>
         </View>
 
         {/* AI selector */}
@@ -488,7 +597,18 @@ export default function TerminalScreen() {
       )}
 
       {/* Terminal output — wrapped for screen capture */}
-      <View ref={screenCaptureRef} style={{ flex: 1 }}>
+      <View
+        ref={screenCaptureRef}
+        style={{ flex: 1 }}
+        onLayout={(e) => setContainerSize({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
+      >
+        {/* AI cursor overlay — floats above terminal when CTRL is active */}
+        <AICursorOverlay
+          visible={controlOn}
+          action={cursorAction}
+          containerWidth={containerSize.width}
+          containerHeight={containerSize.height}
+        />
         <ScrollView
           ref={scrollRef}
           style={{ flex: 1, padding: 12 }}

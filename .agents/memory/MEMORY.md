@@ -3,3 +3,4 @@
 - [pnpm lockfile overrides sync](pnpm-overrides-sync.md) — Root package.json must have pnpm.overrides matching pnpm-lock.yaml or EAS build frozen install fails.
 - [EAS Xcode version](eas-xcode.md) — iOS production builds require `"image": "latest"` in eas.json to get Xcode 26+; omitting it causes build failure.
 - [Expo E2E testing skip](expo-e2e-skip.md) — Playwright-based runTest() cannot reach the Expo mobile build via browser proxy; skip with documented reason.
+- [EAS Build from main agent](eas-build-restriction.md) — EAS CLI acquires a git index lock which Replit's sandbox blocks in the main agent. Must use a project_tasks background task to trigger EAS builds. Workaround env var: EAS_SKIP_AUTO_FINGERPRINT=1 still needed alongside the task approach.

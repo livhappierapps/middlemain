@@ -3,6 +3,12 @@ import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
+import { resilientFetch } from '@/utils/resilientFetch';
+
+const WS_PING_INTERVAL_MS = 15_000;
+const WS_PING_TIMEOUT_MS = 10_000;
+const WS_MAX_RECONNECT_ATTEMPTS = 8;
+const WS_RECONNECT_BASE_MS = 1_000;
 
 const DEFAULT_API_KEY = 'bridge_ffeb0d255c586c5dd0be421fd4813f38253c2de106291bc9';
 const CONFIG_KEY = '@aie_bridge_config';
@@ -93,6 +99,12 @@ export function AisAndEarsProvider({ children }: { children: React.ReactNode }) 
   const [screenOn, setScreenOn] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
+  const wsUrlRef = useRef<string | null>(null);
+  const wsReconnectAttemptsRef = useRef(0);
+  const wsReconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wsPingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const wsPingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const shouldReconnectRef = useRef(false);
   const recordingRef = useRef<Audio.Recording | null>(null);
   const hearingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const listeners = useRef<Set<(msg: BridgeMessage) => void>>(new Set());
@@ -133,19 +145,79 @@ export function AisAndEarsProvider({ children }: { children: React.ReactNode }) 
     }
   }, []);
 
+  const stopWsPing = useCallback(() => {
+    if (wsPingIntervalRef.current) { clearInterval(wsPingIntervalRef.current); wsPingIntervalRef.current = null; }
+    if (wsPingTimeoutRef.current) { clearTimeout(wsPingTimeoutRef.current); wsPingTimeoutRef.current = null; }
+  }, []);
+
+  const setupWebSocket = useCallback((wsUrl: string) => {
+    if (!shouldReconnectRef.current) return;
+    const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      wsReconnectAttemptsRef.current = 0;
+      // Keepalive ping every 15s
+      stopWsPing();
+      wsPingIntervalRef.current = setInterval(() => {
+        if (ws.readyState !== WebSocket.OPEN) return;
+        try { ws.send(JSON.stringify({ type: 'ping' })); } catch {}
+        wsPingTimeoutRef.current = setTimeout(() => {
+          emit({ type: 'bridge_status', content: '⚠ Bridge ping timeout — reconnecting…' });
+          ws.close();
+        }, WS_PING_TIMEOUT_MS);
+      }, WS_PING_INTERVAL_MS);
+    };
+
+    ws.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'pong') {
+          if (wsPingTimeoutRef.current) { clearTimeout(wsPingTimeoutRef.current); wsPingTimeoutRef.current = null; }
+          return;
+        }
+        if (msg.type === 'response.audio_transcript.done' && msg.transcript) {
+          emit({ type: 'transcript', content: msg.transcript });
+        }
+      } catch {}
+    };
+
+    ws.onerror = () => {};
+
+    ws.onclose = () => {
+      stopWsPing();
+      if (!shouldReconnectRef.current) return;
+      const attempts = wsReconnectAttemptsRef.current;
+      if (attempts >= WS_MAX_RECONNECT_ATTEMPTS) {
+        emit({ type: 'bridge_error', content: 'Bridge audio stream: max reconnect attempts reached.' });
+        shouldReconnectRef.current = false;
+        return;
+      }
+      const delay = Math.min(WS_RECONNECT_BASE_MS * Math.pow(2, attempts), 30_000);
+      wsReconnectAttemptsRef.current = attempts + 1;
+      emit({ type: 'bridge_status', content: `↺ Audio stream dropped — reconnecting in ${(delay / 1000).toFixed(0)}s (attempt ${attempts + 1})…` });
+      wsReconnectTimerRef.current = setTimeout(() => setupWebSocket(wsUrl), delay);
+    };
+  }, [emit, stopWsPing]);
+
   const disconnect = useCallback(async () => {
+    shouldReconnectRef.current = false;
+    stopWsPing();
+    if (wsReconnectTimerRef.current) { clearTimeout(wsReconnectTimerRef.current); wsReconnectTimerRef.current = null; }
     await stopAudio();
     if (wsRef.current) {
       wsRef.current.close();
       wsRef.current = null;
     }
+    wsUrlRef.current = null;
+    wsReconnectAttemptsRef.current = 0;
     setSession(null);
     setStatus('idle');
     setHearingOn(false);
     setCameraOn(false);
     setScreenOn(false);
     emit({ type: 'bridge_status', content: 'Disconnected from AIs & Ears.' });
-  }, [stopAudio, emit]);
+  }, [stopAudio, stopWsPing, emit]);
 
   const connect = useCallback(async () => {
     const domain = config.domain.trim().replace(/\/$/, '');
@@ -157,55 +229,52 @@ export function AisAndEarsProvider({ children }: { children: React.ReactNode }) 
     setStatus('connecting');
     setErrorMsg(null);
     try {
-      const res = await globalThis.fetch(`${domain}/api/bridge/session`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          apiKey: config.apiKey,
-          tier: 'full-session',
-          durationMinutes: config.durationMinutes,
-        }),
-      });
+      const res = await resilientFetch(
+        `${domain}/api/bridge/session`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            apiKey: config.apiKey,
+            tier: 'full-session',
+            durationMinutes: config.durationMinutes,
+          }),
+        },
+        { timeoutMs: 12_000, retries: 3, retryBaseMs: 1_000 },
+      );
       if (!res.ok) throw new Error(`Session failed: ${res.status}`);
       const data: Session = await res.json();
       setSession(data);
       setStatus('connected');
+      wsUrlRef.current = data.wsUrl;
+      shouldReconnectRef.current = true;
+      wsReconnectAttemptsRef.current = 0;
       emit({ type: 'bridge_status', content: `✓ AIs & Ears bridge active · session ${data.sessionId.slice(0, 8)}…` });
-
-      const ws = new WebSocket(data.wsUrl);
-      ws.onmessage = (e) => {
-        try {
-          const msg = JSON.parse(e.data);
-          if (msg.type === 'response.audio_transcript.done' && msg.transcript) {
-            emit({ type: 'transcript', content: msg.transcript });
-          }
-        } catch {}
-      };
-      ws.onerror = () => emit({ type: 'bridge_error', content: 'Audio WebSocket error.' });
-      ws.onclose = () => {
-        if (status === 'connected') emit({ type: 'bridge_status', content: 'Audio stream closed.' });
-      };
-      wsRef.current = ws;
+      setupWebSocket(data.wsUrl);
     } catch (err: any) {
       setStatus('error');
       setErrorMsg(err.message ?? 'Connection failed');
       emit({ type: 'bridge_error', content: `Bridge error: ${err.message}` });
     }
-  }, [config, emit, status]);
+  }, [config, emit, setupWebSocket]);
 
   const sendVisionFrame = useCallback(async (imageData: string, source: 'camera' | 'screen'): Promise<string | null> => {
     if (!session) return null;
     try {
-      const res = await globalThis.fetch(session.visionUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId: session.sessionId,
-          imageData,
-          prompt: source === 'screen' ? 'Describe what you see on this screen.' : 'What do you observe?',
-          isFirstFrame: false,
-        }),
-      });
+      const res = await resilientFetch(
+        session.visionUrl,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: session.sessionId,
+            imageData,
+            prompt: source === 'screen' ? 'Describe what you see on this screen.' : 'What do you observe?',
+            isFirstFrame: false,
+          }),
+        },
+        { timeoutMs: 12_000, retries: 2, retryBaseMs: 800 },
+      );
       if (!res.ok) return null;
       const data = await res.json();
       const msg = data.message ?? null;

@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { resilientFetch } from '@/utils/resilientFetch';
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { fetch } from 'expo/fetch';
 
@@ -67,6 +68,7 @@ interface AIContextValue {
     onDone: () => void,
     onError: (err: string) => void,
     imageBase64?: string,
+    systemPromptOverride?: string,
   ) => Promise<void>;
 }
 
@@ -114,18 +116,22 @@ async function callOpenAICompat(
     ...messages.slice(0, -1),
     buildUserMessage(typeof last.content === 'string' ? last.content : '', imageBase64),
   ];
-  return fetch(`${baseUrl}/chat/completions`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${conn.apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model,
-      messages: [
-        ...(conn.systemPrompt ? [{ role: 'system', content: conn.systemPrompt }] : []),
-        ...augmented,
-      ],
-      stream,
-    }),
-  });
+  return resilientFetch(
+    `${baseUrl}/chat/completions`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${conn.apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        messages: [
+          ...(conn.systemPrompt ? [{ role: 'system', content: conn.systemPrompt }] : []),
+          ...augmented,
+        ],
+        stream,
+      }),
+    },
+    { timeoutMs: stream ? 60_000 : 30_000, retries: 3, retryBaseMs: 1_200 },
+  );
 }
 
 async function callAnthropic(
@@ -145,16 +151,20 @@ async function callAnthropic(
         ],
       }
     : last;
-  return fetch(`${baseUrl}/messages`, {
-    method: 'POST',
-    headers: { 'x-api-key': conn.apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({
-      model: pickModel(conn, !!imageBase64),
-      max_tokens: 2048,
-      stream,
-      messages: [...messages.slice(0, -1), augmentedLast],
-    }),
-  });
+  return resilientFetch(
+    `${baseUrl}/messages`,
+    {
+      method: 'POST',
+      headers: { 'x-api-key': conn.apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: pickModel(conn, !!imageBase64),
+        max_tokens: 2048,
+        stream,
+        messages: [...messages.slice(0, -1), augmentedLast],
+      }),
+    },
+    { timeoutMs: stream ? 60_000 : 30_000, retries: 3, retryBaseMs: 1_200 },
+  );
 }
 
 async function callServerProxy(
@@ -165,19 +175,23 @@ async function callServerProxy(
 ): Promise<Response> {
   const base = conn.baseUrl || getServerBase();
   const last = messages[messages.length - 1];
-  return fetch(`${base}/grok/chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: imageBase64 ? (conn.visionModel || 'grok-2-vision-1212') : (conn.model || 'grok-3'),
-      messages: [...messages.slice(0, -1), buildUserMessage(
-        typeof last.content === 'string' ? last.content : '',
-        imageBase64,
-      )],
-      stream,
-      systemPrompt: conn.systemPrompt,
-    }),
-  });
+  return resilientFetch(
+    `${base}/grok/chat`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: imageBase64 ? (conn.visionModel || 'grok-2-vision-1212') : (conn.model || 'grok-3'),
+        messages: [...messages.slice(0, -1), buildUserMessage(
+          typeof last.content === 'string' ? last.content : '',
+          imageBase64,
+        )],
+        stream,
+        systemPrompt: conn.systemPrompt,
+      }),
+    },
+    { timeoutMs: stream ? 60_000 : 30_000, retries: 3, retryBaseMs: 1_200 },
+  );
 }
 
 async function callAI(
@@ -315,11 +329,15 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
       onDone: () => void,
       onError: (err: string) => void,
       imageBase64?: string,
+      systemPromptOverride?: string,
     ) => {
       const conn = connections.find((c) => c.id === connectionId);
       if (!conn) { onError('Connection not found'); return; }
+      const effectiveConn = systemPromptOverride
+        ? { ...conn, systemPrompt: systemPromptOverride }
+        : conn;
       try {
-        const resp = await callAI(conn, messages, true, imageBase64);
+        const resp = await callAI(effectiveConn, messages, true, imageBase64);
         if (!resp.ok) {
           const text = await resp.text();
           onError(`API error ${resp.status}: ${text.slice(0, 200)}`);

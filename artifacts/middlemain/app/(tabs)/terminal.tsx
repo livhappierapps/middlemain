@@ -2,7 +2,6 @@ import { Feather } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
-import { CameraView, useCameraPermissions } from 'expo-camera';
 import { router } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -63,7 +62,7 @@ export default function TerminalScreen() {
     session,
   } = useAisAndEars();
   const insets = useSafeAreaInsets();
-  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [cameraGranted, setCameraGranted] = useState(false);
 
   const [input, setInput] = useState('');
   const [lines, setLines] = useState<TerminalLine[]>([
@@ -83,7 +82,7 @@ export default function TerminalScreen() {
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
   const scrollRef = useRef<ScrollView>(null);
-  const cameraRef = useRef<CameraView>(null);
+  const cameraRef = useRef<any>(null);
   const screenCaptureRef = useRef<View>(null);
   const cameraIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const screenIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -118,8 +117,9 @@ export default function TerminalScreen() {
   // Camera capture interval
   useEffect(() => {
     if (cameraOn && session) {
-      if (!cameraPermission?.granted) {
-        requestCameraPermission().then((result) => {
+      if (!cameraGranted) {
+        ImagePicker.requestCameraPermissionsAsync().then((result) => {
+          setCameraGranted(result.granted);
           if (!result.granted) {
             appendLine({ type: 'error', content: 'Camera permission denied. Enable in Settings.' });
           }
@@ -146,7 +146,7 @@ export default function TerminalScreen() {
         cameraIntervalRef.current = null;
       }
     };
-  }, [cameraOn, session, cameraPermission]);
+  }, [cameraOn, session, cameraGranted]);
 
   // Cursor control interval — direct Grok Vision, no AIs & Ears needed
   useEffect(() => {
@@ -587,14 +587,11 @@ export default function TerminalScreen() {
         )}
       </View>
 
-      {/* Hidden CameraView for frame capture (1×1 when active) */}
-      {cameraOn && cameraPermission?.granted && (
-        <CameraView
-          ref={cameraRef}
-          facing="front"
-          style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }}
-        />
-      )}
+      {/* Hidden CameraView for frame capture — native only */}
+      {Platform.OS !== 'web' && cameraOn && cameraGranted && (() => {
+        const NativeCameraView = (require('expo-camera') as typeof import('expo-camera')).CameraView;
+        return <NativeCameraView ref={cameraRef} facing="front" style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }} />;
+      })()}
 
       {/* Terminal output — wrapped for screen capture */}
       <View

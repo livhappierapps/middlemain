@@ -23,6 +23,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: "link", selected: "link" }} />
         <Label>Connect</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="council">
+        <Icon sf={{ default: "person.3", selected: "person.3.fill" }} />
+        <Label>Council</Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="settings">
         <Icon sf={{ default: "gearshape", selected: "gearshape.fill" }} />
         <Label>Settings</Label>
@@ -117,6 +121,22 @@ function ClassicTabLayout() {
               <SymbolView name="link" tintColor={color} size={22} />
             ) : (
               <Feather name="link" size={20} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="council"
+        options={{
+          title: "Council",
+          tabBarIcon: ({ color, focused }) =>
+            isIOS ? (
+              <SymbolView
+                name={focused ? "person.3.fill" : "person.3"}
+                tintColor={color}
+                size={22}
+              />
+            ) : (
+              <Feather name="users" size={20} color={color} />
             ),
         }}
       />

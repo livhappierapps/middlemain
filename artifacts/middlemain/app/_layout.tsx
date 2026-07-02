@@ -16,6 +16,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AIProvider } from "@/context/AIContext";
 import { AisAndEarsProvider } from "@/context/AisAndEarsContext";
+import { CouncilProvider } from "@/context/CouncilContext";
 import { NetworkProvider } from "@/context/NetworkContext";
 import { PurchaseProvider } from "@/context/PurchaseContext";
 import { SkillsProvider } from "@/context/SkillsContext";
@@ -63,11 +64,13 @@ export default function RootLayout() {
                 <NetworkProvider>
                   <AIProvider>
                     <AisAndEarsProvider>
-                      <SkillsProvider>
-                        <PurchaseProvider>
-                          <RootLayoutNav />
-                        </PurchaseProvider>
-                      </SkillsProvider>
+                      <CouncilProvider>
+                        <SkillsProvider>
+                          <PurchaseProvider>
+                            <RootLayoutNav />
+                          </PurchaseProvider>
+                        </SkillsProvider>
+                      </CouncilProvider>
                     </AisAndEarsProvider>
                   </AIProvider>
                 </NetworkProvider>

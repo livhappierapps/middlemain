@@ -37,6 +37,7 @@
       },
       "permissions": [
         "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.INTERNET"
@@ -49,6 +50,19 @@
       "expo-router",
       "expo-font",
       "expo-web-browser",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Middlemain uses the camera to capture screenshots and images for AI visual analysis in the Bridge Terminal.",
+          "microphonePermission": "Middlemain uses the microphone for AI voice input in the Council."
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Middlemain uses the microphone for AI voice input in the Council."
+        }
+      ],
       [
         "expo-image-picker",
         {

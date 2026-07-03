@@ -307,7 +307,7 @@ export function AisAndEarsProvider({ children }: { children: React.ReactNode }) 
         const uri = rec.getURI();
         if (uri && wsRef.current?.readyState === WebSocket.OPEN) {
           const base64 = await FileSystem.readAsStringAsync(uri, {
-            encoding: FileSystem.EncodingType.Base64,
+            encoding: 'base64',
           });
           wsRef.current.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: base64 }));
           try { await FileSystem.deleteAsync(uri, { idempotent: true }); } catch {}

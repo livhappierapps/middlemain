@@ -529,7 +529,7 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
         const uri = rec.getURI();
         if (uri) {
           const base64 = await FileSystem.readAsStringAsync(uri, {
-            encoding: FileSystem.EncodingType.Base64,
+            encoding: 'base64',
           });
           openWs.forEach((ws) => {
             if (ws.readyState === WebSocket.OPEN) {

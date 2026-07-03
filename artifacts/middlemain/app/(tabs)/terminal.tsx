@@ -87,6 +87,7 @@ export default function TerminalScreen() {
   const cameraIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const screenIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const controlIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const greetedConnsRef = useRef<Set<string>>(new Set());
 
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
 
@@ -330,6 +331,46 @@ export default function TerminalScreen() {
     setAttachedImage(null);
   };
 
+  const selectConnection = async (connId: string) => {
+    setSelectedConnId(connId);
+    if (isStreaming) return;
+    if (greetedConnsRef.current.has(connId)) return;
+    const conn = connections.find((c) => c.id === connId);
+    if (!conn) return;
+    greetedConnsRef.current.add(connId);
+
+    appendLine({ type: 'system', content: `>>> Handshaking with ${conn.name}…` });
+    setIsStreaming(true);
+    setStreamingLine('');
+    let accumulated = '';
+
+    const greetingPrompt = `You are ${conn.name}. The user just connected to you through Middlemain, a mobile AI development bridge. Confirm the connection with a single short, friendly message — like you're jumping on a call together. Be warm, be yourself, max 2 sentences. No markdown, no bullet points.`;
+
+    await sendMessage(
+      connId,
+      [{ role: 'user', content: 'Hey, you there?' }],
+      (chunk) => {
+        accumulated += chunk;
+        setStreamingLine(accumulated);
+        setTimeout(() => scrollRef.current?.scrollToEnd({ animated: false }), 20);
+      },
+      () => {
+        setIsStreaming(false);
+        setStreamingLine('');
+        appendLine({ type: 'output', content: accumulated });
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      },
+      (err) => {
+        setIsStreaming(false);
+        setStreamingLine('');
+        greetedConnsRef.current.delete(connId);
+        appendLine({ type: 'error', content: `Handshake failed: ${err}` });
+      },
+      undefined,
+      greetingPrompt,
+    );
+  };
+
   const copyLast = async () => {
     const last = [...lines].reverse().find((l) => l.type === 'output');
     if (last) {
@@ -520,7 +561,7 @@ export default function TerminalScreen() {
             ) : connections.map((c) => (
               <TouchableOpacity
                 key={c.id}
-                onPress={() => setSelectedConnId(c.id)}
+                onPress={() => selectConnection(c.id)}
                 style={{
                   paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, borderWidth: 1,
                   borderColor: selectedConnId === c.id ? theme.primary : theme.border,

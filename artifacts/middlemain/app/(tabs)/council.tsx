@@ -225,7 +225,17 @@ function ParticipantCard({
 }
 
 // ─── Message Bubble ───────────────────────────────────────────────────────────
-function MessageBubble({ message, isUser }: { message: { id: string; role: string; participantId?: string; participantName?: string; participantColor?: string; content: string; timestamp: string; streaming?: boolean }; isUser: boolean }) {
+function MessageBubble({
+  message,
+  isUser,
+  replyTo,
+  onReact,
+}: {
+  message: { id: string; role: string; participantId?: string; participantName?: string; participantColor?: string; content: string; timestamp: string; streaming?: boolean; replyToId?: string };
+  isUser: boolean;
+  replyTo?: { senderName: string; senderColor: string; content: string } | null;
+  onReact?: () => void;
+}) {
   const { theme } = useTheme();
 
   if (message.role === 'system') {
@@ -240,9 +250,20 @@ function MessageBubble({ message, isUser }: { message: { id: string; role: strin
 
   const accentColor = isUser ? theme.primary : (message.participantColor ?? theme.secondary);
   const label = isUser ? 'YOU' : (message.participantName ?? 'AI')?.toUpperCase();
+  const isThreaded = !!message.replyToId;
 
   return (
-    <View style={{ marginBottom: 12, alignItems: isUser ? 'flex-end' : 'flex-start' }}>
+    <TouchableOpacity
+      activeOpacity={0.85}
+      onLongPress={!isUser && onReact ? onReact : undefined}
+      delayLongPress={400}
+      style={{ marginBottom: 12, alignItems: isUser ? 'flex-end' : 'flex-start', paddingLeft: isThreaded ? 16 : 0 }}
+    >
+      {/* Thread indent line */}
+      {isThreaded && (
+        <View style={{ position: 'absolute', left: 6, top: 4, bottom: 4, width: 2, borderRadius: 1, backgroundColor: accentColor + '55' }} />
+      )}
+
       <View style={{ flexDirection: isUser ? 'row-reverse' : 'row', alignItems: 'flex-end', gap: 6, maxWidth: '88%' }}>
         {/* Avatar dot */}
         <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: accentColor + '33', borderWidth: 1, borderColor: accentColor, alignItems: 'center', justifyContent: 'center', marginBottom: 2 }}>
@@ -267,7 +288,19 @@ function MessageBubble({ message, isUser }: { message: { id: string; role: strin
             borderTopRightRadius: isUser ? 2 : 10,
             paddingHorizontal: 12,
             paddingVertical: 8,
+            overflow: 'hidden',
           }}>
+            {/* Quoted reply preview */}
+            {replyTo && (
+              <View style={{ borderLeftWidth: 2, borderLeftColor: replyTo.senderColor, paddingLeft: 8, marginBottom: 8, opacity: 0.75 }}>
+                <Text style={{ color: replyTo.senderColor, fontSize: 9, fontFamily: 'Inter_700Bold', letterSpacing: 0.8, marginBottom: 2 }}>
+                  {replyTo.senderName.toUpperCase()}
+                </Text>
+                <Text numberOfLines={2} style={{ color: theme.textMuted, fontSize: 11, fontFamily: 'Inter_400Regular', lineHeight: 15 }}>
+                  {replyTo.content}
+                </Text>
+              </View>
+            )}
             {message.streaming && message.content === '' ? (
               <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center', paddingVertical: 4 }}>
                 <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: accentColor, opacity: 0.8 }} />
@@ -285,7 +318,7 @@ function MessageBubble({ message, isUser }: { message: { id: string; role: strin
           </View>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -313,6 +346,10 @@ export default function CouncilScreen() {
   const [mentionSuggestions, setMentionSuggestions] = useState<CouncilParticipant[]>([]);
   const [mentionQuery, setMentionQuery] = useState('');
   const [resolvedMentions, setResolvedMentions] = useState<{ id: string; name: string }[]>([]);
+  const [replyToMsgId, setReplyToMsgId] = useState<string | null>(null);
+  const [replyToTargetId, setReplyToTargetId] = useState<string | null>(null);
+
+  const inputRef = useRef<TextInput>(null);
 
   const scrollRef = useRef<ScrollView>(null);
   const screenCaptureRef = useRef<View>(null);
@@ -409,10 +446,11 @@ export default function CouncilScreen() {
     });
   }, [input]);
 
-  // Extract @mentions from final text
+  // Extract @mentions from final text.
+  // Handles mentions followed by punctuation (, ; : !) as well as whitespace.
   const parseMentions = useCallback((text: string): string[] => {
     const matches: string[] = [];
-    const regex = /@(\w[\w\s]*?)(?=\s|@|$)/g;
+    const regex = /@(\w[\w\s]*?)(?=[\s,;:!@]|$)/g;
     let m: RegExpExecArray | null;
     while ((m = regex.exec(text)) !== null) {
       const name = m[1].trim();
@@ -422,10 +460,63 @@ export default function CouncilScreen() {
     return matches;
   }, [participants]);
 
+  const handleLongPressMessage = useCallback((msg: { id: string; role: string; participantId?: string; participantName?: string; participantColor?: string; content: string }) => {
+    if (msg.role !== 'ai' || !msg.participantName) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    const senderName = msg.participantName;
+    const quotedText = msg.content.length > 120 ? msg.content.slice(0, 120) + '…' : msg.content;
+
+    // Build list of other participants (excluding the sender) who can react
+    const targets = participants.filter((p) => p.id !== msg.participantId);
+
+    if (targets.length === 0) {
+      Alert.alert('No other participants', 'Add another AI to the council to react to this message.');
+      return;
+    }
+
+    // Show picker: one button per target AI
+    Alert.alert(
+      `React to ${senderName}`,
+      'Which AI should react?',
+      [
+        ...targets.map((t) => ({
+          text: t.displayName,
+          onPress: () => {
+            const prefill = `@${t.displayName}, react to @${senderName}: "${quotedText}"`;
+            setInput(prefill);
+            setReplyToMsgId(msg.id);
+            setReplyToTargetId(t.id);
+            setMentionSuggestions([]);
+            setResolvedMentions([]);
+            setTimeout(() => inputRef.current?.focus(), 100);
+          },
+        })),
+        { text: 'Cancel', style: 'cancel' },
+      ],
+    );
+  }, [participants]);
+
   const handleSend = useCallback(async () => {
     const text = input.trim();
     if (!text || isSending) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    const rid = replyToMsgId ?? undefined;
+    const targetId = replyToTargetId;
+
+    // When in react mode, route exclusively to the pre-selected target AI.
+    // This avoids inadvertently routing to the quoted sender whose @mention
+    // also appears in the text.
+    if (rid && targetId) {
+      setInput('');
+      setResolvedMentions([]);
+      setMentionSuggestions([]);
+      setReplyToMsgId(null);
+      setReplyToTargetId(null);
+      await sendUserMessage(text, [targetId], rid);
+      return;
+    }
 
     const mentionedIds = parseMentions(text);
     if (mentionedIds.length === 0 && participants.length > 0) {
@@ -438,7 +529,9 @@ export default function CouncilScreen() {
             text: 'Send to All', onPress: () => {
               setInput('');
               setResolvedMentions([]);
-              sendUserMessage(text, participants.map((p) => p.id));
+              setReplyToMsgId(null);
+              setReplyToTargetId(null);
+              sendUserMessage(text, participants.map((p) => p.id), rid);
             },
           },
         ],
@@ -449,8 +542,10 @@ export default function CouncilScreen() {
     setInput('');
     setResolvedMentions([]);
     setMentionSuggestions([]);
-    await sendUserMessage(text, mentionedIds);
-  }, [input, isSending, parseMentions, participants, sendUserMessage]);
+    setReplyToMsgId(null);
+    setReplyToTargetId(null);
+    await sendUserMessage(text, mentionedIds, rid);
+  }, [input, isSending, parseMentions, participants, sendUserMessage, replyToMsgId, replyToTargetId]);
 
   const handleRemove = (id: string, name: string) => {
     Alert.alert('Remove Participant', `Remove ${name} from the council?`, [
@@ -553,9 +648,28 @@ export default function CouncilScreen() {
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
-            {messages.map((msg) => (
-              <MessageBubble key={msg.id} message={msg} isUser={msg.role === 'user'} />
-            ))}
+            {messages.map((msg) => {
+              const replyTo = msg.replyToId
+                ? (() => {
+                    const orig = messages.find((m) => m.id === msg.replyToId);
+                    if (!orig) return null;
+                    return {
+                      senderName: orig.role === 'user' ? 'You' : (orig.participantName ?? 'AI'),
+                      senderColor: orig.role === 'user' ? theme.primary : (orig.participantColor ?? theme.secondary),
+                      content: orig.content,
+                    };
+                  })()
+                : null;
+              return (
+                <MessageBubble
+                  key={msg.id}
+                  message={msg}
+                  isUser={msg.role === 'user'}
+                  replyTo={replyTo}
+                  onReact={msg.role === 'ai' ? () => handleLongPressMessage(msg) : undefined}
+                />
+              );
+            })}
             {isSending && (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}>
                 <ActivityIndicator size="small" color={theme.primary} />
@@ -564,6 +678,30 @@ export default function CouncilScreen() {
             )}
           </ScrollView>
         </View>
+
+        {/* Reply preview bar */}
+        {replyToMsgId && (() => {
+          const orig = messages.find((m) => m.id === replyToMsgId);
+          if (!orig) return null;
+          const senderName = orig.role === 'user' ? 'You' : (orig.participantName ?? 'AI');
+          const senderColor = orig.role === 'user' ? theme.primary : (orig.participantColor ?? theme.secondary);
+          return (
+            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, borderTopWidth: 1, borderTopColor: theme.border, paddingHorizontal: 14, paddingVertical: 8, gap: 8 }}>
+              <View style={{ width: 2, borderRadius: 1, alignSelf: 'stretch', backgroundColor: senderColor }} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: senderColor, fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 0.8, marginBottom: 1 }}>
+                  Reacting to {senderName}
+                </Text>
+                <Text numberOfLines={1} style={{ color: theme.textMuted, fontSize: 11, fontFamily: 'Inter_400Regular' }}>
+                  {orig.content}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => { setReplyToMsgId(null); setReplyToTargetId(null); setInput(''); }} style={{ padding: 4 }}>
+                <Feather name="x" size={14} color={theme.textMuted} />
+              </TouchableOpacity>
+            </View>
+          );
+        })()}
 
         {/* @mention suggestions */}
         {mentionSuggestions.length > 0 && (
@@ -600,11 +738,12 @@ export default function CouncilScreen() {
           backgroundColor: theme.surface + 'E6',
         }}>
           <TextInput
+            ref={inputRef}
             style={{
               flex: 1,
               backgroundColor: theme.background,
               borderWidth: 1,
-              borderColor: theme.border,
+              borderColor: replyToMsgId ? theme.primary + '88' : theme.border,
               borderRadius: 12,
               color: theme.text,
               fontSize: 14,
@@ -615,7 +754,13 @@ export default function CouncilScreen() {
             }}
             value={input}
             onChangeText={handleInputChange}
-            placeholder={participants.length > 0 ? `@${participants[0]?.displayName ?? 'Name'} say hello…` : 'Add participants to start…'}
+            placeholder={
+              replyToMsgId
+                ? '@Name to direct the reaction…'
+                : participants.length > 0
+                  ? `@${participants[0]?.displayName ?? 'Name'} say hello…`
+                  : 'Add participants to start…'
+            }
             placeholderTextColor={theme.textMuted}
             multiline
             editable={participants.length > 0}

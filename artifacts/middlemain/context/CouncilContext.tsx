@@ -72,6 +72,7 @@ export interface CouncilMessage {
   content: string;
   timestamp: string;
   streaming?: boolean;
+  replyToId?: string;
 }
 
 interface CouncilContextValue {
@@ -80,7 +81,7 @@ interface CouncilContextValue {
   isSending: boolean;
   addParticipant: (data: Omit<CouncilParticipant, 'id' | 'session' | 'sessionLoading' | 'hearingOn' | 'cameraOn' | 'screenOn' | 'isAutoLoaded' | 'sessionError'>) => void;
   removeParticipant: (id: string) => void;
-  sendUserMessage: (text: string, mentionedIds: string[]) => Promise<void>;
+  sendUserMessage: (text: string, mentionedIds: string[], replyToId?: string) => Promise<void>;
   toggleHearing: (participantId: string) => Promise<void>;
   toggleCamera: (participantId: string) => void;
   toggleScreen: (participantId: string) => void;
@@ -653,7 +654,7 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
   }, [participants]);
 
   // ── Message sending ─────────────────────────────────────────────────────
-  const sendUserMessage = useCallback(async (text: string, mentionedIds: string[]) => {
+  const sendUserMessage = useCallback(async (text: string, mentionedIds: string[], replyToId?: string) => {
     if (!text.trim()) return;
 
     const userMsg: CouncilMessage = {
@@ -661,6 +662,7 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
       role: 'user',
       content: text.trim(),
       timestamp: new Date().toLocaleTimeString(),
+      replyToId,
     };
     setMessages((prev) => [...prev, userMsg]);
     setIsSending(true);
@@ -688,6 +690,7 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
             content: '',
             timestamp: new Date().toLocaleTimeString(),
             streaming: true,
+            replyToId,
           },
         ]);
 

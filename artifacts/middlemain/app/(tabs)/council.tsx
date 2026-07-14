@@ -40,6 +40,35 @@ const PROVIDERS: { key: AIProvider; label: string }[] = [
 ];
 
 // ─── Add Participant Modal ────────────────────────────────────────────────────
+const AGENT_PRESETS: { label: string; prompt: string }[] = [
+  {
+    label: '🤖 Dev Agent',
+    prompt: 'You are a senior software engineer and Replit dev agent. You write clean, efficient code, debug issues methodically, and explain your reasoning. Stay focused on implementation.',
+  },
+  {
+    label: '🔍 Code Reviewer',
+    prompt: 'You are a strict but constructive code reviewer. Identify bugs, security issues, performance problems, and style violations. Be specific and suggest concrete fixes.',
+  },
+  {
+    label: '🧠 Research Agent',
+    prompt: 'You are a research and analysis agent. You break down complex topics, synthesize information, and provide well-structured summaries. Cite your reasoning clearly.',
+  },
+  {
+    label: '🎯 Product Agent',
+    prompt: 'You are a product manager and UX strategist. You think in terms of user needs, priorities, and outcomes. Push back on over-engineering and keep focus on what matters.',
+  },
+  {
+    label: '🛡️ Security Agent',
+    prompt: 'You are a cybersecurity expert. You audit code and systems for vulnerabilities, suggest hardening strategies, and think like an attacker to protect like a defender.',
+  },
+  {
+    label: '✏️ Custom',
+    prompt: '',
+  },
+];
+
+const DEFAULT_SYSTEM_PROMPT = 'You are an AI participant in a multi-agent council. Collaborate with other AIs and the user to solve problems together.';
+
 function AddParticipantModal({
   visible,
   onClose,
@@ -57,6 +86,8 @@ function AddParticipantModal({
   const [apiKey, setApiKey] = useState('');
   const [model, setModel] = useState(PROVIDER_DEFAULTS['xai'].model);
   const [baseUrl, setBaseUrl] = useState('');
+  const [systemPrompt, setSystemPrompt] = useState(DEFAULT_SYSTEM_PROMPT);
+  const [activePreset, setActivePreset] = useState<string | null>(null);
 
   const inputStyle = {
     backgroundColor: theme.surface + 'E6',
@@ -83,7 +114,12 @@ function AddParticipantModal({
     setProvider(p);
     setModel(PROVIDER_DEFAULTS[p]?.model ?? '');
     setBaseUrl(PROVIDER_DEFAULTS[p]?.baseUrl ?? '');
-    if (!name) setName(PROVIDER_DEFAULTS[p]?.label ?? p);
+  };
+
+  const handlePreset = (preset: { label: string; prompt: string }) => {
+    setActivePreset(preset.label);
+    if (preset.prompt) setSystemPrompt(preset.prompt);
+    else setSystemPrompt('');
   };
 
   const handleAdd = () => {
@@ -97,21 +133,25 @@ function AddParticipantModal({
       apiKey: apiKey.trim(),
       model: model.trim(),
       baseUrl: baseUrl.trim() || PROVIDER_DEFAULTS[provider]?.baseUrl || '',
-      systemPrompt: 'You are a helpful AI assistant participating in a multi-AI council chat.',
+      systemPrompt: systemPrompt.trim() || DEFAULT_SYSTEM_PROMPT,
       color,
     });
-    setName(''); setApiKey(''); setModel(PROVIDER_DEFAULTS['xai'].model); setBaseUrl(''); setProvider('xai');
+    setName(''); setApiKey(''); setModel(PROVIDER_DEFAULTS['xai'].model); setBaseUrl('');
+    setSystemPrompt(DEFAULT_SYSTEM_PROMPT); setActivePreset(null); setProvider('xai');
     onClose();
   };
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: '#00000088', justifyContent: 'flex-end' }}>
-        <View style={{ backgroundColor: theme.background, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: Platform.OS === 'ios' ? 40 : 20, maxHeight: '85%' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <View style={{ backgroundColor: theme.background, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: Platform.OS === 'ios' ? 40 : 20, maxHeight: '92%' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
             <NeonText size={16} weight="700" letterSpacing={2}>ADD PARTICIPANT</NeonText>
             <TouchableOpacity onPress={onClose}><Feather name="x" size={22} color={theme.textMuted} /></TouchableOpacity>
           </View>
+          <Text style={{ color: theme.textMuted, fontSize: 11, fontFamily: 'Inter_400Regular', marginBottom: 12 }}>
+            Same model + different system prompt = different agent
+          </Text>
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             <Text style={labelStyle}>PROVIDER</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
@@ -131,20 +171,54 @@ function AddParticipantModal({
             </View>
 
             <Text style={labelStyle}>DISPLAY NAME</Text>
-            <TextInput style={inputStyle} value={name} onChangeText={setName} placeholder="Claude, GPT-4, etc." placeholderTextColor={theme.textMuted} />
+            <TextInput style={inputStyle} value={name} onChangeText={setName} placeholder="Boss, Whiz, Dev Agent…" placeholderTextColor={theme.textMuted} />
 
             <Text style={labelStyle}>API KEY</Text>
-            <TextInput style={inputStyle} value={apiKey} onChangeText={setApiKey} placeholder="sk-..." placeholderTextColor={theme.textMuted} secureTextEntry autoCapitalize="none" autoCorrect={false} />
+            <TextInput style={inputStyle} value={apiKey} onChangeText={setApiKey} placeholder="sk-ant-… / sk-… / xai-…" placeholderTextColor={theme.textMuted} secureTextEntry autoCapitalize="none" autoCorrect={false} />
 
             <Text style={labelStyle}>MODEL</Text>
-            <TextInput style={inputStyle} value={model} onChangeText={setModel} placeholder="grok-3" placeholderTextColor={theme.textMuted} autoCapitalize="none" autoCorrect={false} />
+            <TextInput style={inputStyle} value={model} onChangeText={setModel} placeholder="claude-opus-4-5 / gpt-4o / grok-3" placeholderTextColor={theme.textMuted} autoCapitalize="none" autoCorrect={false} />
 
-            {provider === 'custom' && (
+            {(provider === 'custom' || provider === 'server') && (
               <>
                 <Text style={labelStyle}>BASE URL</Text>
                 <TextInput style={inputStyle} value={baseUrl} onChangeText={setBaseUrl} placeholder="https://api.example.com/v1" placeholderTextColor={theme.textMuted} autoCapitalize="none" autoCorrect={false} keyboardType="url" />
               </>
             )}
+
+            <Text style={labelStyle}>AGENT ROLE — QUICK PRESETS</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }}>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {AGENT_PRESETS.map((preset) => (
+                  <TouchableOpacity
+                    key={preset.label}
+                    onPress={() => handlePreset(preset)}
+                    style={{
+                      paddingHorizontal: 12, paddingVertical: 8, borderRadius: theme.radius, borderWidth: 1,
+                      borderColor: activePreset === preset.label ? theme.secondary : theme.border,
+                      backgroundColor: activePreset === preset.label ? theme.secondary + '22' : 'transparent',
+                    }}
+                  >
+                    <Text style={{ color: activePreset === preset.label ? theme.secondary : theme.textMuted, fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>{preset.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+
+            <Text style={labelStyle}>SYSTEM PROMPT</Text>
+            <TextInput
+              style={[inputStyle, { height: 110, textAlignVertical: 'top', paddingTop: 12 }]}
+              value={systemPrompt}
+              onChangeText={(t) => { setSystemPrompt(t); setActivePreset(null); }}
+              placeholder="Define this agent's role, personality, and focus…"
+              placeholderTextColor={theme.textMuted}
+              multiline
+              autoCapitalize="sentences"
+              autoCorrect
+            />
+            <Text style={{ color: theme.textMuted, fontSize: 10, fontFamily: 'Inter_400Regular', marginTop: 4 }}>
+              💡 This is what makes two Claude instances behave as completely different agents.
+            </Text>
 
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 24, marginBottom: 8 }}>
               <NeonButton label="Cancel" onPress={onClose} variant="ghost" style={{ flex: 1 }} fullWidth />

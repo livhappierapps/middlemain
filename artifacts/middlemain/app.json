@@ -2,7 +2,7 @@
   "expo": {
     "name": "Middlemain",
     "slug": "middlemain",
-    "owner": "livhappier",
+    "owner": "livhappierapps",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -37,10 +37,10 @@
       },
       "permissions": [
         "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO",
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.INTERNET"
+        "android.permission.INTERNET",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ]
     },
     "web": {
@@ -78,7 +78,7 @@
     },
     "extra": {
       "eas": {
-        "projectId": "fb03b720-f301-4187-b046-2a190e808c9b"
+        "projectId": "af4c1578-e30f-497d-9a0f-4f8a259a92a4"
       }
     }
   }

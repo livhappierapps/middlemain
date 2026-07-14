@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
+import * as Haptics from 'expo-haptics';
 import React, {
   createContext,
   useCallback,
@@ -387,6 +388,18 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
               : p,
           ),
         );
+        const displayName =
+          participantsRef.current.find((p) => p.id === participantId)?.displayName ?? 'A participant';
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: genId(),
+            role: 'system',
+            content: `${displayName} lost connection. Tap the mic to retry.`,
+            timestamp: new Date().toLocaleTimeString(),
+          },
+        ]);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
         return;
       }
 

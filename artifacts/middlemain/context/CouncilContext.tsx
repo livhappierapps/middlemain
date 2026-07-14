@@ -704,11 +704,20 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
         try {
           const resp = await callParticipantAI(participant, historyMessages);
           if (!resp.ok) {
-            const errText = await resp.text();
+            const errHint =
+              resp.status === 401 || resp.status === 403
+                ? 'API key invalid or unauthorized — check your key in Connect settings.'
+                : resp.status === 404
+                ? 'Endpoint not found — check the base URL in Connect settings.'
+                : resp.status === 429
+                ? 'Rate limited — slow down or check your quota.'
+                : resp.status >= 500
+                ? `Server error (${resp.status}) — the AI provider is having issues, try again.`
+                : `Request failed (${resp.status}) — check your connection settings.`;
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === streamId
-                  ? { ...m, content: `Error: ${resp.status} — ${errText.slice(0, 100)}`, streaming: false }
+                  ? { ...m, content: `⚠️ ${errHint}`, streaming: false }
                   : m,
               ),
             );

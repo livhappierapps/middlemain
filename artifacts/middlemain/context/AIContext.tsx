@@ -339,8 +339,17 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
       try {
         const resp = await callAI(effectiveConn, messages, true, imageBase64);
         if (!resp.ok) {
-          const text = await resp.text();
-          onError(`API error ${resp.status}: ${text.slice(0, 200)}`);
+          const errHint =
+            resp.status === 401 || resp.status === 403
+              ? 'API key invalid or unauthorized — check your key in Connect settings.'
+              : resp.status === 404
+              ? 'Endpoint not found — check the base URL in Connect settings.'
+              : resp.status === 429
+              ? 'Rate limited — slow down or check your quota.'
+              : resp.status >= 500
+              ? `Server error (${resp.status}) — the AI provider is having issues, try again.`
+              : `Request failed (${resp.status}) — check your connection settings.`;
+          onError(errHint);
           return;
         }
         await streamSSE(resp, onChunk, onDone, onError);

@@ -80,9 +80,13 @@ interface CouncilContextValue {
   participants: CouncilParticipant[];
   messages: CouncilMessage[];
   isSending: boolean;
+  isAutoRunning: boolean;
+  autoRound: number;
   addParticipant: (data: Omit<CouncilParticipant, 'id' | 'session' | 'sessionLoading' | 'hearingOn' | 'cameraOn' | 'screenOn' | 'isAutoLoaded' | 'sessionError'>) => void;
   removeParticipant: (id: string) => void;
   sendUserMessage: (text: string, mentionedIds: string[], replyToId?: string) => Promise<void>;
+  startAutonomousSession: (kickoff: string, maxRounds?: number) => Promise<void>;
+  stopAutonomousSession: () => void;
   toggleHearing: (participantId: string) => Promise<void>;
   toggleCamera: (participantId: string) => void;
   toggleScreen: (participantId: string) => void;
@@ -171,6 +175,56 @@ async function streamSSE(
   }
 }
 
+function buildAutonomousHistory(
+  participant: CouncilParticipant,
+  allMessages: CouncilMessage[],
+  round: number,
+  allParticipants: CouncilParticipant[],
+): ChatMessage[] {
+  const raw: ChatMessage[] = [];
+
+  for (const m of allMessages) {
+    if (m.role === 'system') continue;
+    if (m.streaming) continue;
+    if (!m.content.trim()) continue;
+
+    if (m.role === 'user') {
+      raw.push({ role: 'user', content: m.content });
+    } else if (m.role === 'ai') {
+      if (m.participantId === participant.id) {
+        raw.push({ role: 'assistant', content: m.content });
+      } else {
+        raw.push({ role: 'user', content: `[${m.participantName ?? 'Agent'}]: ${m.content}` });
+      }
+    }
+  }
+
+  const otherNames = allParticipants
+    .filter((p) => p.id !== participant.id)
+    .map((p) => p.displayName)
+    .join(', ');
+
+  raw.push({
+    role: 'user',
+    content: `[Auto Round ${round} — your turn, ${participant.displayName}] You are collaborating with ${otherNames}. Build on what's been shared above. Be specific and actionable. Ask follow-up questions by name if you need more detail from another agent.`,
+  });
+
+  // Merge consecutive same-role messages (Anthropic requires strict alternation)
+  const merged: ChatMessage[] = [];
+  for (const msg of raw) {
+    if (merged.length > 0 && merged[merged.length - 1].role === msg.role) {
+      merged[merged.length - 1] = {
+        ...merged[merged.length - 1],
+        content: merged[merged.length - 1].content + '\n\n' + msg.content,
+      };
+    } else {
+      merged.push({ ...msg });
+    }
+  }
+
+  return merged;
+}
+
 async function callParticipantAI(
   participant: CouncilParticipant,
   messages: ChatMessage[],
@@ -188,6 +242,7 @@ async function callParticipantAI(
         model: participant.model,
         max_tokens: 2048,
         stream: true,
+        ...(participant.systemPrompt ? { system: participant.systemPrompt } : {}),
         messages,
       }),
     });
@@ -241,6 +296,8 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
     },
   ]);
   const [isSending, setIsSending] = useState(false);
+  const [isAutoRunning, setIsAutoRunning] = useState(false);
+  const [autoRound, setAutoRound] = useState(0);
 
   // Tracks whether we've finished loading from AsyncStorage; gates saves so
   // we don't overwrite stored data before hydration completes.
@@ -249,10 +306,13 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
   const wsMap = useRef<Map<string, WebSocket>>(new Map());
   const recordingRef = useRef<Audio.Recording | null>(null);
   const hearingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const autoStopRef = useRef(false);
 
-  // Mirror participants into a ref so WS reconnect closures always see current state
+  // Mirror participants + messages into refs so async closures always see current state
   const participantsRef = useRef<CouncilParticipant[]>([]);
   useEffect(() => { participantsRef.current = participants; }, [participants]);
+  const messagesRef = useRef<CouncilMessage[]>([]);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
 
   // Track which participants should auto-reconnect (hearing is ON) and reconnect attempts
   const shouldReconnectRef = useRef<Set<string>>(new Set());
@@ -776,6 +836,150 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
     setIsSending(false);
   }, [participants, messages]);
 
+  // ── Autonomous participant turn ──────────────────────────────────────────────
+  const sendParticipantAutonomousTurn = useCallback(async (
+    participant: CouncilParticipant,
+    round: number,
+  ) => {
+    const streamId = genId();
+    const snapshot = messagesRef.current;
+    const allParts = participantsRef.current;
+
+    const historyMessages = buildAutonomousHistory(participant, snapshot, round, allParts);
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: streamId,
+        role: 'ai',
+        participantId: participant.id,
+        participantName: participant.displayName,
+        participantColor: participant.color,
+        content: '',
+        timestamp: new Date().toLocaleTimeString(),
+        streaming: true,
+      },
+    ]);
+
+    let accumulated = '';
+    try {
+      const resp = await callParticipantAI(participant, historyMessages);
+      if (!resp.ok) {
+        const hint = resp.status === 401 || resp.status === 403
+          ? 'API key invalid.'
+          : resp.status === 429 ? 'Rate limited — slow down.'
+          : `Error ${resp.status}`;
+        setMessages((prev) =>
+          prev.map((m) => m.id === streamId ? { ...m, content: `⚠️ ${hint}`, streaming: false } : m),
+        );
+        return;
+      }
+      await streamSSE(
+        resp,
+        (chunk) => {
+          accumulated += chunk;
+          setMessages((prev) =>
+            prev.map((m) => m.id === streamId ? { ...m, content: accumulated } : m),
+          );
+        },
+        () => {
+          setMessages((prev) =>
+            prev.map((m) => m.id === streamId ? { ...m, streaming: false } : m),
+          );
+        },
+        (err) => {
+          setMessages((prev) =>
+            prev.map((m) => m.id === streamId ? { ...m, content: `Error: ${err}`, streaming: false } : m),
+          );
+        },
+      );
+    } catch (e: any) {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === streamId ? { ...m, content: `Error: ${e?.message ?? 'Unknown'}`, streaming: false } : m,
+        ),
+      );
+    }
+  }, []);
+
+  // ── Autonomous session orchestrator ─────────────────────────────────────────
+  const startAutonomousSession = useCallback(async (kickoff: string, maxRounds = 4) => {
+    const pts = participantsRef.current;
+    if (pts.length === 0) return;
+
+    autoStopRef.current = false;
+    setIsAutoRunning(true);
+    setAutoRound(0);
+
+    // Round 0 — send kickoff to all participants simultaneously
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: genId(),
+        role: 'system',
+        content: `⚡ AUTO SESSION STARTED — ${maxRounds} rounds · ${pts.length} agents`,
+        timestamp: new Date().toLocaleTimeString(),
+      },
+    ]);
+
+    await sendUserMessage(kickoff, pts.map((p) => p.id));
+
+    // Give React time to flush streaming completions to messagesRef
+    await new Promise((r) => setTimeout(r, 1200));
+
+    // Autonomous rounds — sequential per participant
+    for (let round = 1; round <= maxRounds; round++) {
+      if (autoStopRef.current) break;
+      setAutoRound(round);
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: genId(),
+          role: 'system',
+          content: `⚡ ROUND ${round} / ${maxRounds}`,
+          timestamp: new Date().toLocaleTimeString(),
+        },
+      ]);
+
+      for (const participant of participantsRef.current) {
+        if (autoStopRef.current) break;
+        await sendParticipantAutonomousTurn(participant, round);
+        if (!autoStopRef.current) await new Promise((r) => setTimeout(r, 900));
+      }
+    }
+
+    if (!autoStopRef.current) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: genId(),
+          role: 'system',
+          content: `✅ AUTO SESSION COMPLETE — ${maxRounds} rounds finished`,
+          timestamp: new Date().toLocaleTimeString(),
+        },
+      ]);
+    }
+
+    setIsAutoRunning(false);
+    setAutoRound(0);
+  }, [sendUserMessage, sendParticipantAutonomousTurn]);
+
+  const stopAutonomousSession = useCallback(() => {
+    autoStopRef.current = true;
+    setIsAutoRunning(false);
+    setAutoRound(0);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: genId(),
+        role: 'system',
+        content: '⏹ Auto session stopped.',
+        timestamp: new Date().toLocaleTimeString(),
+      },
+    ]);
+  }, []);
+
   const clearMessages = useCallback(() => {
     const cleared: CouncilMessage[] = [{
       id: genId(),
@@ -806,9 +1010,13 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
       participants,
       messages,
       isSending,
+      isAutoRunning,
+      autoRound,
       addParticipant,
       removeParticipant,
       sendUserMessage,
+      startAutonomousSession,
+      stopAutonomousSession,
       toggleHearing,
       toggleCamera,
       toggleScreen,

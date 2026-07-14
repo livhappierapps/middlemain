@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Clipboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -396,6 +397,91 @@ function MessageBubble({
   );
 }
 
+// ─── Auto Mode Modal ─────────────────────────────────────────────────────────
+function AutoModeModal({
+  visible,
+  onClose,
+  onStart,
+  participantNames,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onStart: (kickoff: string, maxRounds: number) => void;
+  participantNames: string[];
+}) {
+  const { theme } = useTheme();
+  const [kickoff, setKickoff] = useState('');
+  const [rounds, setRounds] = useState(4);
+  const roundOptions = [2, 3, 4, 6, 8];
+
+  const labelStyle = { color: theme.textMuted, fontSize: 10, fontFamily: 'Inter_600SemiBold' as const, letterSpacing: 1.5, marginTop: 14 };
+  const inputStyle = {
+    backgroundColor: theme.surface + 'E6', borderWidth: 1, borderColor: theme.border,
+    borderRadius: theme.radius, color: theme.text, fontSize: 14,
+    fontFamily: 'Inter_400Regular' as const, paddingHorizontal: 14, paddingVertical: 12, marginTop: 6,
+  };
+
+  const handleStart = () => {
+    if (!kickoff.trim()) { Alert.alert('Required', 'Enter a kickoff message to start the session.'); return; }
+    onStart(kickoff.trim(), rounds);
+    setKickoff('');
+    setRounds(4);
+    onClose();
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: '#00000088', justifyContent: 'flex-end' }}>
+        <View style={{ backgroundColor: theme.background, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: Platform.OS === 'ios' ? 40 : 20 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+            <NeonText size={16} weight="700" letterSpacing={2}>⚡ AUTO SESSION</NeonText>
+            <TouchableOpacity onPress={onClose}><Feather name="x" size={22} color={theme.textMuted} /></TouchableOpacity>
+          </View>
+          <Text style={{ color: theme.textMuted, fontSize: 11, fontFamily: 'Inter_400Regular', marginBottom: 4 }}>
+            Agents talk to each other autonomously: {participantNames.join(' → ')} → repeat
+          </Text>
+
+          <Text style={labelStyle}>KICKOFF MESSAGE</Text>
+          <TextInput
+            style={[inputStyle, { height: 90, textAlignVertical: 'top', paddingTop: 12 }]}
+            value={kickoff}
+            onChangeText={setKickoff}
+            placeholder={`Tell all agents the goal. e.g. "Boss — tell Whiz and Vhiz exactly what you need from them to complete 2WAI. All three of you work it out together."`}
+            placeholderTextColor={theme.textMuted}
+            multiline
+            autoCapitalize="sentences"
+          />
+
+          <Text style={labelStyle}>ROUNDS (how many back-and-forth cycles)</Text>
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
+            {roundOptions.map((r) => (
+              <TouchableOpacity
+                key={r}
+                onPress={() => setRounds(r)}
+                style={{
+                  flex: 1, paddingVertical: 10, borderRadius: theme.radius, borderWidth: 1, alignItems: 'center',
+                  borderColor: rounds === r ? theme.secondary : theme.border,
+                  backgroundColor: rounds === r ? theme.secondary + '22' : 'transparent',
+                }}
+              >
+                <Text style={{ color: rounds === r ? theme.secondary : theme.textMuted, fontFamily: 'Inter_700Bold', fontSize: 14 }}>{r}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <Text style={{ color: theme.textMuted, fontSize: 10, fontFamily: 'Inter_400Regular', marginTop: 6 }}>
+            💡 Each round = every agent takes one turn. {rounds} rounds × {participantNames.length} agents = {rounds * participantNames.length} total responses.
+          </Text>
+
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 20 }}>
+            <NeonButton label="Cancel" onPress={onClose} variant="ghost" style={{ flex: 1 }} fullWidth />
+            <NeonButton label="⚡ Launch Session" onPress={handleStart} variant="primary" style={{ flex: 1 }} fullWidth />
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 export default function CouncilScreen() {
   const { theme } = useTheme();
@@ -403,9 +489,13 @@ export default function CouncilScreen() {
     participants,
     messages,
     isSending,
+    isAutoRunning,
+    autoRound,
     addParticipant,
     removeParticipant,
     sendUserMessage,
+    startAutonomousSession,
+    stopAutonomousSession,
     toggleHearing,
     toggleCamera,
     toggleScreen,
@@ -417,6 +507,9 @@ export default function CouncilScreen() {
 
   const [input, setInput] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showAutoModal, setShowAutoModal] = useState(false);
+  const [autoKickoff, setAutoKickoff] = useState('');
+  const [autoMaxRounds, setAutoMaxRounds] = useState(4);
   const [mentionSuggestions, setMentionSuggestions] = useState<CouncilParticipant[]>([]);
   const [mentionQuery, setMentionQuery] = useState('');
   const [resolvedMentions, setResolvedMentions] = useState<{ id: string; name: string }[]>([]);
@@ -650,7 +743,27 @@ export default function CouncilScreen() {
                 </Text>
               </View>
             </View>
-            <View style={{ flexDirection: 'row', gap: 6 }}>
+            <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+              {/* Export session */}
+              <TouchableOpacity
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  const text = messages
+                    .filter((m) => m.content.trim())
+                    .map((m) => {
+                      if (m.role === 'system') return `--- ${m.content} ---`;
+                      const who = m.role === 'user' ? 'YOU' : (m.participantName ?? 'AI');
+                      return `[${who}] ${m.timestamp}\n${m.content}`;
+                    })
+                    .join('\n\n');
+                  Clipboard.setString(text);
+                  Alert.alert('Copied!', 'Full session copied to clipboard — paste anywhere.');
+                }}
+                style={{ padding: 7 }}
+              >
+                <Feather name="copy" size={16} color={theme.textMuted} />
+              </TouchableOpacity>
+              {/* Clear */}
               <TouchableOpacity
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -667,6 +780,33 @@ export default function CouncilScreen() {
               >
                 <Feather name="trash-2" size={17} color={theme.textMuted} />
               </TouchableOpacity>
+              {/* Auto Mode / Stop */}
+              {isAutoRunning ? (
+                <TouchableOpacity
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); stopAutonomousSession(); }}
+                  style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#ff4444', backgroundColor: '#ff444422', flexDirection: 'row', alignItems: 'center', gap: 5 }}
+                >
+                  <ActivityIndicator size="small" color="#ff4444" />
+                  <Text style={{ color: '#ff4444', fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 1 }}>
+                    R{autoRound} · STOP
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    if (participants.length < 2) {
+                      Alert.alert('Need 2+ Agents', 'Add at least two AI participants to start an autonomous session.');
+                      return;
+                    }
+                    setShowAutoModal(true);
+                  }}
+                  style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: theme.secondary, backgroundColor: theme.secondary + '18', flexDirection: 'row', alignItems: 'center', gap: 5 }}
+                >
+                  <Text style={{ color: theme.secondary, fontSize: 9, fontFamily: 'Inter_700Bold', letterSpacing: 1.5 }}>⚡ AUTO</Text>
+                </TouchableOpacity>
+              )}
+              {/* Add participant */}
               <TouchableOpacity
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowAddModal(true); }}
                 style={{ padding: 7, borderRadius: 8, borderWidth: 1, borderColor: theme.primary, backgroundColor: theme.primary + '18' }}
@@ -862,6 +1002,16 @@ export default function CouncilScreen() {
         onClose={() => setShowAddModal(false)}
         onAdd={(data) => { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); addParticipant(data); }}
         usedColors={usedColors}
+      />
+
+      <AutoModeModal
+        visible={showAutoModal}
+        onClose={() => setShowAutoModal(false)}
+        onStart={(kickoff, maxRounds) => {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          startAutonomousSession(kickoff, maxRounds);
+        }}
+        participantNames={participants.map((p) => p.displayName)}
       />
     </ThemedBackground>
   );

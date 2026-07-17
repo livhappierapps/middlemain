@@ -128,7 +128,12 @@ export function AisAndEarsProvider({ children }: { children: React.ReactNode }) 
 
   const updateConfig = useCallback((patch: Partial<Config>) => {
     setConfigState((prev) => {
-      const next = { ...prev, ...patch };
+      const next = {
+        ...prev,
+        ...patch,
+        ...(patch.apiKey !== undefined ? { apiKey: patch.apiKey.trim() } : {}),
+        ...(patch.domain !== undefined ? { domain: patch.domain.trim() } : {}),
+      };
       AsyncStorage.setItem(CONFIG_KEY, JSON.stringify(next));
       return next;
     });
@@ -235,7 +240,7 @@ export function AisAndEarsProvider({ children }: { children: React.ReactNode }) 
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            apiKey: config.apiKey,
+            apiKey: config.apiKey.trim(),
             tier: 'full-session',
             durationMinutes: config.durationMinutes,
           }),

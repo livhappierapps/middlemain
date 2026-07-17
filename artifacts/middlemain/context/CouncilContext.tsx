@@ -499,7 +499,7 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          apiKey: bridgeConfig.apiKey,
+          apiKey: bridgeConfig.apiKey.trim(),
           tier: 'full-session',
           durationMinutes: bridgeConfig.durationMinutes,
         }),

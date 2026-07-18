@@ -21,7 +21,8 @@ import { AICursorOverlay, CursorAction, parseCursorAction, stripCursorBlock } fr
 import { NetworkStatusBar } from '@/components/NetworkStatusBar';
 import { NeonText } from '@/components/NeonText';
 import { ThemedBackground } from '@/components/ThemedBackground';
-import { ChatMessage, useAI } from '@/context/AIContext';
+import { ChatMessage, OpenAITool, useAI } from '@/context/AIContext';
+import { useMCP } from '@/context/MCPContext';
 import { useAisAndEars } from '@/context/AisAndEarsContext';
 import { useSkills } from '@/context/SkillsContext';
 import { useTheme } from '@/context/ThemeContext';
@@ -52,7 +53,8 @@ Where x (0=left, 1=right) and y (0=top, 1=bottom) are relative positions. Set "t
 
 export default function TerminalScreen() {
   const { theme } = useTheme();
-  const { connections, activeConnection, sendMessage } = useAI();
+  const { connections, activeConnection, sendMessage, sendMessageWithTools } = useAI();
+  const { status: mcpStatus, tools: mcpTools, callTool: mcpCallTool } = useMCP();
   const { skills } = useSkills();
   const {
     status: bridgeStatus,
@@ -302,28 +304,65 @@ export default function TerminalScreen() {
       ? { ...selectedConn, systemPrompt: skill.systemPrompt }
       : selectedConn;
 
-    await sendMessage(
-      selectedConn.id,
-      messages,
-      (chunk) => {
-        accumulated += chunk;
-        setStreamingLine(accumulated);
-        setTimeout(() => scrollRef.current?.scrollToEnd({ animated: false }), 20);
-      },
-      () => {
-        setIsStreaming(false);
-        setStreamingLine('');
-        appendLine({ type: 'output', content: accumulated });
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      },
-      (err) => {
-        setIsStreaming(false);
-        setStreamingLine('');
-        appendLine({ type: 'error', content: `Error: ${err}` });
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      },
-      capturedImage?.base64,
-    );
+    const canUseMCPTools =
+      mcpStatus === 'connected' &&
+      mcpTools.length > 0 &&
+      selectedConn.provider !== 'anthropic' &&
+      selectedConn.provider !== 'server';
+
+    const openAITools: OpenAITool[] = canUseMCPTools
+      ? mcpTools.map((t) => ({
+          type: 'function' as const,
+          function: {
+            name: t.name,
+            description: t.description,
+            parameters: t.inputSchema,
+          },
+        }))
+      : [];
+
+    const onChunk = (chunk: string) => {
+      accumulated += chunk;
+      setStreamingLine(accumulated);
+      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: false }), 20);
+    };
+    const onDone = () => {
+      setIsStreaming(false);
+      setStreamingLine('');
+      appendLine({ type: 'output', content: accumulated });
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    };
+    const onError = (err: string) => {
+      setIsStreaming(false);
+      setStreamingLine('');
+      appendLine({ type: 'error', content: `Error: ${err}` });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    };
+
+    if (canUseMCPTools) {
+      await sendMessageWithTools(
+        selectedConn.id,
+        messages,
+        openAITools,
+        mcpCallTool,
+        (status) => {
+          if (status) appendLine({ type: 'system', content: `>>> Memory: ${status}` });
+        },
+        onChunk,
+        onDone,
+        onError,
+        capturedImage?.base64,
+      );
+    } else {
+      await sendMessage(
+        selectedConn.id,
+        messages,
+        onChunk,
+        onDone,
+        onError,
+        capturedImage?.base64,
+      );
+    }
   };
 
   const clearTerminal = () => {

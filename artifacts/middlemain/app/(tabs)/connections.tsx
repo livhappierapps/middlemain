@@ -16,6 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AdBanner } from '@/components/AdBanner';
 import { AisAndEarsBridgeCard } from '@/components/AisAndEarsBridgeCard';
+import { MemoryMachineCard } from '@/components/MemoryMachineCard';
 import { ConnectionCard } from '@/components/ConnectionCard';
 import { NeonButton } from '@/components/NeonButton';
 import { NeonText } from '@/components/NeonText';
@@ -271,6 +272,14 @@ export default function ConnectionsScreen() {
             SENSORY BRIDGE
           </Text>
           <AisAndEarsBridgeCard />
+        </View>
+
+        {/* Memory Machine */}
+        <View style={{ paddingTop: 4 }}>
+          <Text style={{ color: theme.textMuted, fontSize: 10, fontFamily: 'Inter_600SemiBold', letterSpacing: 1.5, paddingHorizontal: 16, marginBottom: 10 }}>
+            MEMORY BRIDGE
+          </Text>
+          <MemoryMachineCard />
         </View>
 
         {/* Divider */}

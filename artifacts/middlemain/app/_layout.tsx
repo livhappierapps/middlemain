@@ -17,6 +17,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AIProvider } from "@/context/AIContext";
 import { AisAndEarsProvider } from "@/context/AisAndEarsContext";
 import { CouncilProvider } from "@/context/CouncilContext";
+import { MCPProvider } from "@/context/MCPContext";
 import { NetworkProvider } from "@/context/NetworkContext";
 import { PurchaseProvider } from "@/context/PurchaseContext";
 import { SkillsProvider } from "@/context/SkillsContext";
@@ -63,15 +64,17 @@ export default function RootLayout() {
               <KeyboardProvider>
                 <NetworkProvider>
                   <AIProvider>
-                    <AisAndEarsProvider>
-                      <CouncilProvider>
-                        <SkillsProvider>
-                          <PurchaseProvider>
-                            <RootLayoutNav />
-                          </PurchaseProvider>
-                        </SkillsProvider>
-                      </CouncilProvider>
-                    </AisAndEarsProvider>
+                    <MCPProvider>
+                      <AisAndEarsProvider>
+                        <CouncilProvider>
+                          <SkillsProvider>
+                            <PurchaseProvider>
+                              <RootLayoutNav />
+                            </PurchaseProvider>
+                          </SkillsProvider>
+                        </CouncilProvider>
+                      </AisAndEarsProvider>
+                    </MCPProvider>
                   </AIProvider>
                 </NetworkProvider>
               </KeyboardProvider>

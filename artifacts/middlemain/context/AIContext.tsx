@@ -25,9 +25,26 @@ export interface MessageContent {
   image_url?: { url: string };
 }
 
+export interface ToolCall {
+  id: string;
+  type: 'function';
+  function: { name: string; arguments: string };
+}
+
 export interface ChatMessage {
   role: string;
-  content: string | MessageContent[];
+  content: string | MessageContent[] | null;
+  tool_calls?: ToolCall[];
+  tool_call_id?: string;
+}
+
+export interface OpenAITool {
+  type: 'function';
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, any>;
+  };
 }
 
 export const PROVIDER_DEFAULTS: Record<AIProvider, { baseUrl: string; model: string; visionModel: string; label: string }> = {
@@ -70,6 +87,18 @@ interface AIContextValue {
     imageBase64?: string,
     systemPromptOverride?: string,
   ) => Promise<void>;
+  sendMessageWithTools: (
+    connectionId: string,
+    messages: ChatMessage[],
+    tools: OpenAITool[],
+    mcpCallTool: (name: string, args: Record<string, any>) => Promise<string>,
+    onStatus: (msg: string) => void,
+    onChunk: (chunk: string) => void,
+    onDone: () => void,
+    onError: (err: string) => void,
+    imageBase64?: string,
+    systemPromptOverride?: string,
+  ) => Promise<void>;
 }
 
 const STORAGE_KEY = '@middlemain_connections';
@@ -85,6 +114,7 @@ const AIContext = createContext<AIContextValue>({
   addServerGrokConnection: () => '',
   testConnection: async () => false,
   sendMessage: async () => {},
+  sendMessageWithTools: async () => {},
 });
 
 function genId(): string {
@@ -360,6 +390,138 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
     [connections],
   );
 
+  const sendMessageWithTools = useCallback(
+    async (
+      connectionId: string,
+      messages: ChatMessage[],
+      tools: OpenAITool[],
+      mcpCallTool: (name: string, args: Record<string, any>) => Promise<string>,
+      onStatus: (msg: string) => void,
+      onChunk: (chunk: string) => void,
+      onDone: () => void,
+      onError: (err: string) => void,
+      imageBase64?: string,
+      systemPromptOverride?: string,
+    ) => {
+      const conn = connections.find((c) => c.id === connectionId);
+      if (!conn) { onError('Connection not found'); return; }
+      const effectiveConn = systemPromptOverride ? { ...conn, systemPrompt: systemPromptOverride } : conn;
+
+      const baseUrl = effectiveConn.baseUrl || PROVIDER_DEFAULTS[effectiveConn.provider]?.baseUrl || '';
+      const model = effectiveConn.model;
+      const sysMessages: ChatMessage[] = effectiveConn.systemPrompt
+        ? [{ role: 'system', content: effectiveConn.systemPrompt }]
+        : [];
+
+      const MAX_ROUNDS = 5;
+      let workingMessages: ChatMessage[] = [...messages];
+
+      for (let round = 0; round < MAX_ROUNDS; round++) {
+        try {
+          const resp = await resilientFetch(
+            `${baseUrl}/chat/completions`,
+            {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${effectiveConn.apiKey}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                model,
+                messages: [...sysMessages, ...workingMessages],
+                tools: tools.length > 0 ? tools : undefined,
+                tool_choice: tools.length > 0 ? 'auto' : undefined,
+                stream: false,
+              }),
+            },
+            { timeoutMs: 30_000, retries: 2, retryBaseMs: 1_000 },
+          );
+
+          if (!resp.ok) {
+            const hint =
+              resp.status === 401 || resp.status === 403
+                ? 'API key invalid — check your connection settings.'
+                : resp.status === 429
+                ? 'Rate limited — try again shortly.'
+                : `AI error (${resp.status})`;
+            onError(hint);
+            return;
+          }
+
+          const json = await resp.json();
+          const choice = json.choices?.[0];
+          if (!choice) { onError('No response from AI'); return; }
+
+          const assistantMsg: ChatMessage = choice.message;
+
+          if (choice.finish_reason === 'tool_calls' && assistantMsg?.tool_calls?.length) {
+            workingMessages = [...workingMessages, assistantMsg];
+            for (const tc of assistantMsg.tool_calls) {
+              const toolName = tc.function?.name ?? '';
+              const argsStr = tc.function?.arguments ?? '{}';
+              onStatus(`🧠 ${toolName}…`);
+              try {
+                const args = JSON.parse(argsStr);
+                const result = await mcpCallTool(toolName, args);
+                workingMessages = [
+                  ...workingMessages,
+                  { role: 'tool', tool_call_id: tc.id, content: result },
+                ];
+              } catch (err: any) {
+                workingMessages = [
+                  ...workingMessages,
+                  { role: 'tool', tool_call_id: tc.id, content: `Error: ${err.message}` },
+                ];
+              }
+            }
+            continue;
+          }
+
+          // Final answer — stream it for the streaming UX feel
+          onStatus('');
+          const streamResp = await resilientFetch(
+            `${baseUrl}/chat/completions`,
+            {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${effectiveConn.apiKey}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                model,
+                messages: [...sysMessages, ...workingMessages],
+                stream: true,
+              }),
+            },
+            { timeoutMs: 60_000, retries: 2, retryBaseMs: 1_000 },
+          );
+          if (!streamResp.ok) {
+            // Fall back to delivering the already-fetched content
+            onChunk(typeof assistantMsg?.content === 'string' ? assistantMsg.content : '');
+            onDone();
+            return;
+          }
+          await streamSSE(streamResp, onChunk, onDone, onError);
+          return;
+
+        } catch (err: any) {
+          onError(err?.message ?? 'Request failed');
+          return;
+        }
+      }
+
+      // Max rounds hit — stream final answer without tools
+      try {
+        const fallback = await callAI(effectiveConn, workingMessages, true, imageBase64);
+        if (!fallback.ok) { onError(`Error ${fallback.status}`); return; }
+        await streamSSE(fallback, onChunk, onDone, onError);
+      } catch (err: any) {
+        onError(err?.message ?? 'Fallback error');
+      }
+    },
+    [connections],
+  );
+
   const activeConnection = connections.find((c) => c.isActive) ?? connections[0] ?? null;
 
   return (
@@ -367,7 +529,7 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
       connections, activeConnection, serverGrokAvailable,
       addConnection, updateConnection, deleteConnection,
       setActiveConnection, addServerGrokConnection,
-      testConnection, sendMessage,
+      testConnection, sendMessage, sendMessageWithTools,
     }}>
       {children}
     </AIContext.Provider>

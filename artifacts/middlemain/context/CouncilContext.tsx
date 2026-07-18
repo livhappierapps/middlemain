@@ -384,13 +384,32 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
     AsyncStorage.setItem(STORAGE_MANUAL_PARTICIPANTS_KEY, JSON.stringify(toSave)).catch(() => {});
   }, [participants]);
 
+  // cancelReconnect is declared here (before the auto-load effect) so the effect
+  // can reference it without hitting the temporal dead zone. It only touches refs
+  // so it has no ordering dependency on connectParticipantWs.
+  const cancelReconnect = useCallback((participantId: string) => {
+    shouldReconnectRef.current.delete(participantId);
+    reconnectAttemptsRef.current.delete(participantId);
+    const timeout = reconnectTimeoutsRef.current.get(participantId);
+    if (timeout) { clearTimeout(timeout); reconnectTimeoutsRef.current.delete(participantId); }
+  }, []);
+
   // ── Auto-load connected AIs ─────────────────────────────────────────────
   // This effect is intentionally NOT guarded by an initializedRef so it always
   // re-syncs when connections change or when the provider remounts (e.g. hot
   // reload or navigation stack reset). It only touches auto-loaded participants,
   // so manually-added ones are preserved.
   useEffect(() => {
-    if (connections.length === 0) return;
+    // Tear down bridge sessions for auto-loaded participants whose connection
+    // was deleted. We read from the ref so we don't need participants as a dep.
+    const connectionIds = new Set(connections.map((c) => c.id));
+    participantsRef.current
+      .filter((p) => p.isAutoLoaded && p.connectionId && !connectionIds.has(p.connectionId))
+      .forEach((p) => {
+        cancelReconnect(p.id);
+        const ws = wsMap.current.get(p.id);
+        if (ws) { ws.close(); wsMap.current.delete(p.id); }
+      });
 
     setParticipants((prev) => {
       // Keep manually-added participants
@@ -398,9 +417,21 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
 
       // Build the new auto-loaded list from current connections, preserving
       // existing participant IDs so bridge sessions / WS refs are not orphaned.
+      // Mutable connection fields (name, model, apiKey, etc.) are always synced
+      // from the latest connection so edits are immediately reflected.
       const autoParticipants: CouncilParticipant[] = connections.map((conn, idx) => {
         const existing = prev.find((p) => p.isAutoLoaded && p.connectionId === conn.id);
-        if (existing) return existing;
+        if (existing) {
+          return {
+            ...existing,
+            displayName: conn.name,
+            provider: conn.provider,
+            apiKey: conn.apiKey,
+            model: conn.model,
+            baseUrl: conn.baseUrl,
+            systemPrompt: conn.systemPrompt || 'You are a helpful AI assistant.',
+          };
+        }
         return {
           id: genId(),
           connectionId: conn.id,
@@ -422,7 +453,7 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
 
       return [...autoParticipants, ...manual];
     });
-  }, [connections]);
+  }, [connections, cancelReconnect]);
 
   // ── WebSocket management ────────────────────────────────────────────────
   const connectParticipantWs = useCallback((participantId: string, wsUrl: string): WebSocket => {
@@ -476,13 +507,6 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
     };
 
     return ws;
-  }, []);
-
-  const cancelReconnect = useCallback((participantId: string) => {
-    shouldReconnectRef.current.delete(participantId);
-    reconnectAttemptsRef.current.delete(participantId);
-    const timeout = reconnectTimeoutsRef.current.get(participantId);
-    if (timeout) { clearTimeout(timeout); reconnectTimeoutsRef.current.delete(participantId); }
   }, []);
 
   // ── Bridge session per participant ──────────────────────────────────────

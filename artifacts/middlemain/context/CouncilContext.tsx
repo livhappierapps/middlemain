@@ -17,6 +17,7 @@ import { fetch } from 'expo/fetch';
 
 // ─── Storage keys ────────────────────────────────────────────────────────────
 const STORAGE_MESSAGES_KEY = 'council_messages_v1';
+const MAX_STORED_MESSAGES = 200;
 const STORAGE_MANUAL_PARTICIPANTS_KEY = 'council_manual_participants_v1';
 
 // Shape stored for each manual participant (no transient session/sense state)
@@ -333,8 +334,10 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
 
         if (storedMessages) {
           const parsed: CouncilMessage[] = JSON.parse(storedMessages);
-          // Drop any messages that were mid-stream when the app closed
-          const cleaned = parsed.map((m) => ({ ...m, streaming: false }));
+          // Drop mid-stream placeholders; cap legacy oversized storage
+          const cleaned = parsed
+            .slice(-MAX_STORED_MESSAGES)
+            .map((m) => ({ ...m, streaming: false }));
           if (cleaned.length > 0) {
             setMessages(cleaned);
           }
@@ -369,8 +372,10 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
   // ── Persist messages to AsyncStorage whenever they change ───────────────
   useEffect(() => {
     if (!hydratedRef.current) return;
-    // Don't persist any actively-streaming placeholders
-    const toSave = messages.map((m) => ({ ...m, streaming: false }));
+    // Don't persist any actively-streaming placeholders; cap to recent messages
+    const toSave = messages
+      .slice(-MAX_STORED_MESSAGES)
+      .map((m) => ({ ...m, streaming: false }));
     AsyncStorage.setItem(STORAGE_MESSAGES_KEY, JSON.stringify(toSave)).catch(() => {});
   }, [messages]);
 

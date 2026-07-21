@@ -1,6 +1,8 @@
 import { Feather } from '@expo/vector-icons';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
+import * as Sharing from 'expo-sharing';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -532,6 +534,70 @@ export default function CouncilScreen() {
     return result.granted;
   }, []);
 
+  const handleExport = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    if (messages.length === 0) {
+      Alert.alert('Nothing to Export', 'Start a conversation first.');
+      return;
+    }
+
+    const dateStr = new Date().toLocaleDateString('en-US', {
+      year: 'numeric', month: 'long', day: 'numeric',
+    });
+    const lines: string[] = [
+      '# Council Session',
+      `*Exported from Middlemain — ${dateStr}*`,
+      '',
+      '---',
+    ];
+
+    for (const m of messages) {
+      if (!m.content.trim()) continue;
+      if (m.role === 'system') {
+        lines.push('', `> ${m.content}`, '');
+      } else {
+        const who = m.role === 'user' ? '**YOU**' : `**${m.participantName ?? 'AI'}**`;
+        const ts = new Date(m.timestamp).toLocaleString('en-US', {
+          month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+        });
+        lines.push('', `${who} — ${ts}`, '', m.content, '', '---');
+      }
+    }
+
+    const md = lines.join('\n');
+    const isAvailable = await Sharing.isAvailableAsync().catch(() => false);
+
+    Alert.alert('Export Session', 'How would you like to export?', [
+      {
+        text: 'Copy Text',
+        onPress: () => {
+          Clipboard.setString(md);
+          Alert.alert('Copied!', 'Session copied to clipboard.');
+        },
+      },
+      ...(isAvailable ? [{
+        text: 'Share / Save File',
+        onPress: async () => {
+          try {
+            const path = FileSystem.cacheDirectory + 'council-session.md';
+            await FileSystem.writeAsStringAsync(path, md, {
+              encoding: FileSystem.EncodingType.UTF8,
+            });
+            await Sharing.shareAsync(path, {
+              mimeType: 'text/markdown',
+              dialogTitle: 'Share Council Session',
+              UTI: 'net.daringfireball.markdown',
+            });
+          } catch {
+            Alert.alert('Export Failed', 'Could not create the file. Try Copy Text instead.');
+          }
+        },
+      }] : []),
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }, [messages]);
+
   const anyCameraOn = participants.some((p) => p.cameraOn);
   const anyScreenOn = participants.some((p) => p.screenOn);
   const cameraParticipants = participants.filter((p) => p.cameraOn);
@@ -746,22 +812,10 @@ export default function CouncilScreen() {
             <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
               {/* Export session */}
               <TouchableOpacity
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  const text = messages
-                    .filter((m) => m.content.trim())
-                    .map((m) => {
-                      if (m.role === 'system') return `--- ${m.content} ---`;
-                      const who = m.role === 'user' ? 'YOU' : (m.participantName ?? 'AI');
-                      return `[${who}] ${m.timestamp}\n${m.content}`;
-                    })
-                    .join('\n\n');
-                  Clipboard.setString(text);
-                  Alert.alert('Copied!', 'Full session copied to clipboard — paste anywhere.');
-                }}
+                onPress={handleExport}
                 style={{ padding: 7 }}
               >
-                <Feather name="copy" size={16} color={theme.textMuted} />
+                <Feather name="share" size={16} color={theme.textMuted} />
               </TouchableOpacity>
               {/* Clear */}
               <TouchableOpacity

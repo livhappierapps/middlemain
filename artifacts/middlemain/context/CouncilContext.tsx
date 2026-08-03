@@ -93,6 +93,8 @@ interface CouncilContextValue {
   toggleScreen: (participantId: string) => void;
   sendVisionFrameToAll: (imageData: string, source: 'camera' | 'screen', participantIds?: string[]) => Promise<void>;
   clearMessages: () => void;
+  /** Inject a system message directly into the council feed (no AI response triggered). */
+  injectSystemMessage: (content: string) => void;
 }
 
 const CouncilCtx = createContext<CouncilContextValue | null>(null);
@@ -1020,6 +1022,18 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
     AsyncStorage.setItem(STORAGE_MESSAGES_KEY, JSON.stringify(cleared)).catch(() => {});
   }, []);
 
+  const injectSystemMessage = useCallback((content: string) => {
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: genId(),
+        role: 'system',
+        content,
+        timestamp: new Date().toLocaleTimeString(),
+      },
+    ]);
+  }, []);
+
   // ── Cleanup on unmount ──────────────────────────────────────────────────
   useEffect(() => {
     return () => {
@@ -1051,6 +1065,7 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
       toggleScreen,
       sendVisionFrameToAll,
       clearMessages,
+      injectSystemMessage,
     }}>
       {children}
     </CouncilCtx.Provider>

@@ -31,6 +31,7 @@ import {
 } from '@/context/CouncilContext';
 import { AIProvider, PROVIDER_DEFAULTS } from '@/context/AIContext';
 import { useTheme } from '@/context/ThemeContext';
+import { useMCP } from '@/context/MCPContext';
 
 const VISION_INTERVAL_MS = 3000;
 
@@ -503,7 +504,9 @@ export default function CouncilScreen() {
     toggleScreen,
     sendVisionFrameToAll,
     clearMessages,
+    injectSystemMessage,
   } = useCouncil();
+  const { callTool, status: mcpStatus } = useMCP();
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
 
@@ -597,6 +600,88 @@ export default function CouncilScreen() {
       { text: 'Cancel', style: 'cancel' },
     ]);
   }, [messages]);
+
+  // ── Leo's Memory Machine integration ─────────────────────────────────────
+
+  /** Pull Leo's relevant memories and inject them as a system message. */
+  const handleMemoryRecall = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (mcpStatus !== 'connected') {
+      Alert.alert('Memory Not Connected', 'Connect the Memory Machine in Settings → Memory Bridge first, then try again.');
+      return;
+    }
+    injectSystemMessage('🧠 Recalling Leo\'s memories…');
+    try {
+      const result = await callTool('search_memories', { query: 'Middlemain council agents tasks directives' });
+      injectSystemMessage(`🧠 LEO'S MEMORY:\n\n${result}`);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (err: any) {
+      injectSystemMessage(`⚠️ Memory recall failed: ${err?.message ?? 'Unknown error'}`);
+    }
+  }, [mcpStatus, callTool, injectSystemMessage]);
+
+  /** Save the current council session to Leo's Memory Machine. */
+  const handleMemorySave = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (mcpStatus !== 'connected') {
+      Alert.alert('Memory Not Connected', 'Connect the Memory Machine in Settings → Memory Bridge first.');
+      return;
+    }
+    const saveable = messages.filter((m) => m.content.trim() && !m.streaming);
+    if (saveable.length === 0) {
+      Alert.alert('Nothing to Save', 'Start a conversation first.');
+      return;
+    }
+    const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    const title = `Middlemain Council — ${dateStr}`;
+    const recentMessages = saveable.slice(-40);
+    const content = recentMessages.map((m) => {
+      if (m.role === 'system') return `[System: ${m.content}]`;
+      const who = m.role === 'user' ? 'User' : (m.participantName ?? 'AI');
+      return `${who}: ${m.content}`;
+    }).join('\n\n');
+
+    Alert.alert(
+      'Save to Leo\'s Memory',
+      `Save last ${recentMessages.length} messages to Leo's Memory Machine?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Save Memory',
+          onPress: async () => {
+            try {
+              await callTool('save_memory', { title, content, tags: ['middlemain', 'council'] });
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              injectSystemMessage('✅ Session saved to Leo\'s Memory Machine.');
+            } catch (err: any) {
+              Alert.alert('Save Failed', err?.message ?? 'Could not save to Memory Machine.');
+            }
+          },
+        },
+      ],
+    );
+  }, [mcpStatus, messages, callTool, injectSystemMessage]);
+
+  /** Quick-add Leo as Executive participant using the server Grok proxy. */
+  const handleAddLeo = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const alreadyHasLeo = participants.some(
+      (p) => p.displayName.toLowerCase().includes('leo'),
+    );
+    if (alreadyHasLeo) {
+      Alert.alert('Leo is Already Here', 'Leo is already in the council.');
+      return;
+    }
+    addParticipant({
+      displayName: 'Leo',
+      provider: 'server',
+      apiKey: '',
+      model: 'grok-3',
+      systemPrompt:
+        'You are Leo, the Executive AI overseeing Middlemain\'s AI agent council. You have authority over all agents in this session. Be direct and decisive. Give clear directives, track what agents have done, hold them accountable, and remember context across rounds. When things go off-track, correct course immediately.',
+      color: '#a78bfa',
+    });
+  }, [participants, addParticipant]);
 
   const anyCameraOn = participants.some((p) => p.cameraOn);
   const anyScreenOn = participants.some((p) => p.screenOn);
@@ -810,6 +895,20 @@ export default function CouncilScreen() {
               </View>
             </View>
             <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+              {/* Leo memory recall */}
+              <TouchableOpacity
+                onPress={handleMemoryRecall}
+                style={{ padding: 7 }}
+              >
+                <Feather name="cpu" size={16} color={mcpStatus === 'connected' ? '#a78bfa' : theme.textMuted} />
+              </TouchableOpacity>
+              {/* Leo memory save */}
+              <TouchableOpacity
+                onPress={handleMemorySave}
+                style={{ padding: 7 }}
+              >
+                <Feather name="bookmark" size={16} color={mcpStatus === 'connected' ? '#a78bfa' : theme.textMuted} />
+              </TouchableOpacity>
               {/* Export session */}
               <TouchableOpacity
                 onPress={handleExport}
@@ -895,15 +994,27 @@ export default function CouncilScreen() {
               </TouchableOpacity>
             </ScrollView>
           ) : (
-            <TouchableOpacity
-              onPress={() => setShowAddModal(true)}
-              style={{ borderWidth: 1.5, borderColor: theme.primary, borderStyle: 'dashed', borderRadius: 10, paddingVertical: 14, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 }}
-            >
-              <Feather name="users" size={16} color={theme.primary} />
-              <Text style={{ color: theme.primary, fontSize: 13, fontFamily: 'Inter_600SemiBold', letterSpacing: 0.5 }}>
-                Add AI participants
-              </Text>
-            </TouchableOpacity>
+            <View style={{ gap: 8 }}>
+              <TouchableOpacity
+                onPress={() => setShowAddModal(true)}
+                style={{ borderWidth: 1.5, borderColor: theme.primary, borderStyle: 'dashed', borderRadius: 10, paddingVertical: 14, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 }}
+              >
+                <Feather name="users" size={16} color={theme.primary} />
+                <Text style={{ color: theme.primary, fontSize: 13, fontFamily: 'Inter_600SemiBold', letterSpacing: 0.5 }}>
+                  Add AI participants
+                </Text>
+              </TouchableOpacity>
+              {/* Leo Executive quick-add */}
+              <TouchableOpacity
+                onPress={handleAddLeo}
+                style={{ borderWidth: 1.5, borderColor: '#a78bfa', borderRadius: 10, paddingVertical: 12, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8, backgroundColor: '#a78bfa11' }}
+              >
+                <Feather name="star" size={15} color="#a78bfa" />
+                <Text style={{ color: '#a78bfa', fontSize: 13, fontFamily: 'Inter_600SemiBold', letterSpacing: 0.5 }}>
+                  ⚡ Add Leo (Executive)
+                </Text>
+              </TouchableOpacity>
+            </View>
           )}
         </View>
 

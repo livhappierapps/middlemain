@@ -1,8 +1,10 @@
 import { Feather } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -24,6 +26,20 @@ import { useTheme } from '@/context/ThemeContext';
 import { useCouncil } from '@/context/CouncilContext';
 
 const APP_VERSION = '0.1.0 (Beta)';
+
+const EXEC_KEY_STORAGE = '@middlemain_executive_key';
+
+function getApiBase(): string {
+  const domain = process.env.EXPO_PUBLIC_DOMAIN;
+  if (domain) return `https://${domain}/api`;
+  return '/api';
+}
+
+const EXEC_ENDPOINTS = [
+  { method: 'POST', path: '/api/executive/chat', desc: 'Send a message to Leo' },
+  { method: 'POST', path: '/api/executive/memory/search', desc: 'Search Leo\'s memory' },
+  { method: 'POST', path: '/api/executive/memory/save', desc: 'Save a memory for Leo' },
+];
 
 function SectionHeader({ title }: { title: string }) {
   const { theme } = useTheme();
@@ -115,6 +131,17 @@ export default function SettingsScreen() {
   const [webhookInput, setWebhookInput] = useState(webhookUrl);
   const [webhookSaving, setWebhookSaving] = useState(false);
   const [webhookTesting, setWebhookTesting] = useState(false);
+
+  // Executive API card
+  const [execCardOpen, setExecCardOpen] = useState(false);
+  const [execKey, setExecKey] = useState<string | null>(null);
+  const [execKeyRevealed, setExecKeyRevealed] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem(EXEC_KEY_STORAGE).then((val) => {
+      if (val) setExecKey(val);
+    });
+  }, []);
 
   const handlePurchaseMonthly = async () => {
     Alert.alert('Subscribe Monthly', 'Middlemain Pro — $3.99/month\n\nUnlimited AI bridge sessions, priority support, and all future features.', [
@@ -330,6 +357,152 @@ export default function SettingsScreen() {
             />
           </View>
         </NeonCard>
+
+        {/* Executive API */}
+        <TouchableOpacity
+          onPress={() => { setExecCardOpen((o) => !o); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+          style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, marginTop: 24, marginBottom: 12, gap: 8 }}
+          activeOpacity={0.7}
+        >
+          <Text style={{ flex: 1, color: theme.textMuted, fontSize: 10, fontFamily: 'Inter_600SemiBold', letterSpacing: 2 }}>
+            LEO EXECUTIVE API
+          </Text>
+          <Feather name={execCardOpen ? 'chevron-up' : 'chevron-down'} size={14} color={theme.textMuted} />
+        </TouchableOpacity>
+
+        {execCardOpen && (
+          <NeonCard style={{ marginHorizontal: 16, marginBottom: 4 }} accentColor={theme.primary}>
+            {/* Header */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <Feather name="terminal" size={18} color={theme.primary} />
+              <NeonText size={14} weight="600" color={theme.primary} glow>
+                Leo Executive API
+              </NeonText>
+            </View>
+            <Text style={{ color: theme.textMuted, fontSize: 12, fontFamily: 'Inter_400Regular', marginBottom: 16, lineHeight: 18 }}>
+              Call Leo's Executive API from outside Middlemain. Include the{' '}
+              <Text style={{ color: theme.primary, fontFamily: 'Inter_600SemiBold' }}>X-Executive-Key</Text>
+              {' '}header on every request.
+            </Text>
+
+            {/* Base URL */}
+            <Text style={{ color: theme.textMuted, fontSize: 10, fontFamily: 'Inter_600SemiBold', letterSpacing: 1.5, marginBottom: 6 }}>
+              BASE URL
+            </Text>
+            <TouchableOpacity
+              onPress={async () => {
+                const base = getApiBase();
+                await Clipboard.setStringAsync(base);
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                Alert.alert('Copied', base);
+              }}
+              style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface + 'E6', borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 16, gap: 10 }}
+              activeOpacity={0.7}
+            >
+              <Text style={{ flex: 1, color: theme.text, fontSize: 12, fontFamily: 'Inter_400Regular' }} numberOfLines={1}>
+                {getApiBase()}
+              </Text>
+              <Feather name="copy" size={14} color={theme.textMuted} />
+            </TouchableOpacity>
+
+            {/* Endpoints */}
+            <Text style={{ color: theme.textMuted, fontSize: 10, fontFamily: 'Inter_600SemiBold', letterSpacing: 1.5, marginBottom: 8 }}>
+              ENDPOINTS
+            </Text>
+            {EXEC_ENDPOINTS.map((ep) => {
+              const full = `${getApiBase()}${ep.path.replace(/^\/api/, '')}`;
+              return (
+                <TouchableOpacity
+                  key={ep.path}
+                  onPress={async () => {
+                    await Clipboard.setStringAsync(full);
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                    Alert.alert('Copied', full);
+                  }}
+                  style={{ flexDirection: 'row', alignItems: 'flex-start', backgroundColor: theme.surface + 'E6', borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 8, gap: 10 }}
+                  activeOpacity={0.7}
+                >
+                  <View style={{ backgroundColor: theme.primary + '22', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginTop: 1 }}>
+                    <Text style={{ color: theme.primary, fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 0.5 }}>{ep.method}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: theme.text, fontSize: 12, fontFamily: 'Inter_400Regular' }}>{ep.path}</Text>
+                    <Text style={{ color: theme.textMuted, fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 2 }}>{ep.desc}</Text>
+                  </View>
+                  <Feather name="copy" size={13} color={theme.textMuted} style={{ marginTop: 2 }} />
+                </TouchableOpacity>
+              );
+            })}
+
+            {/* Auth header */}
+            <Text style={{ color: theme.textMuted, fontSize: 10, fontFamily: 'Inter_600SemiBold', letterSpacing: 1.5, marginTop: 8, marginBottom: 8 }}>
+              AUTHENTICATION
+            </Text>
+            <View style={{ backgroundColor: theme.surface + 'E6', borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 16 }}>
+              <Text style={{ color: theme.textMuted, fontSize: 11, fontFamily: 'Inter_400Regular', marginBottom: 2 }}>Header</Text>
+              <Text style={{ color: theme.text, fontSize: 12, fontFamily: 'Inter_400Regular' }}>
+                <Text style={{ color: theme.primary, fontFamily: 'Inter_600SemiBold' }}>X-Executive-Key</Text>
+                {': '}
+                <Text style={{ color: theme.textMuted }}>&lt;your-key&gt;</Text>
+              </Text>
+            </View>
+
+            {/* Key */}
+            <Text style={{ color: theme.textMuted, fontSize: 10, fontFamily: 'Inter_600SemiBold', letterSpacing: 1.5, marginBottom: 8 }}>
+              YOUR KEY
+            </Text>
+            {execKey ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface + 'E6', borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 6, gap: 10 }}>
+                <Text style={{ flex: 1, color: theme.text, fontSize: 12, fontFamily: 'Inter_400Regular', letterSpacing: execKeyRevealed ? 0.5 : 2 }} numberOfLines={1}>
+                  {execKeyRevealed ? execKey : '•'.repeat(Math.min(execKey.length, 24))}
+                </Text>
+                <TouchableOpacity onPress={() => { setExecKeyRevealed((r) => !r); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Feather name={execKeyRevealed ? 'eye-off' : 'eye'} size={15} color={theme.textMuted} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={async () => {
+                    await Clipboard.setStringAsync(execKey);
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                    Alert.alert('Copied', 'Executive key copied to clipboard.');
+                  }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Feather name="copy" size={15} color={theme.textMuted} />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={{ backgroundColor: theme.surface + 'E6', borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 6 }}>
+                <Text style={{ color: theme.textMuted, fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 18 }}>
+                  No key saved on this device.{'\n'}
+                  <Text style={{ fontSize: 11 }}>Set{' '}
+                    <Text style={{ color: theme.primary, fontFamily: 'Inter_600SemiBold' }}>LEO_EXECUTIVE_KEY</Text>
+                    {' '}on the API server, then add the key below.
+                  </Text>
+                </Text>
+                <TextInput
+                  style={{ marginTop: 10, backgroundColor: 'transparent', borderWidth: 1, borderColor: theme.border, borderRadius: 6, color: theme.text, fontSize: 12, fontFamily: 'Inter_400Regular', paddingHorizontal: 10, paddingVertical: 8 }}
+                  placeholder="Paste key to save locally…"
+                  placeholderTextColor={theme.textMuted}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  secureTextEntry
+                  onSubmitEditing={async (e) => {
+                    const val = e.nativeEvent.text.trim();
+                    if (val) {
+                      await AsyncStorage.setItem(EXEC_KEY_STORAGE, val);
+                      setExecKey(val);
+                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                    }
+                  }}
+                  returnKeyType="done"
+                />
+              </View>
+            )}
+            <Text style={{ color: theme.textMuted, fontSize: 11, fontFamily: 'Inter_400Regular', lineHeight: 16 }}>
+              💡 The key is stored locally on this device only and is never transmitted to our servers.
+            </Text>
+          </NeonCard>
+        )}
 
         {/* REPORT SECTION — highly visible */}
         <SectionHeader title="REPORT A PROBLEM" />

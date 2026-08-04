@@ -7,6 +7,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  AppState,
+  AppStateStatus,
   Clipboard,
   KeyboardAvoidingView,
   Modal,
@@ -529,6 +531,17 @@ export default function CouncilScreen() {
   const cameraIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const screenIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Refs so AppState handler always sees fresh values without stale closures
+  const messagesRef = useRef(messages);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
+  const mcpStatusRef = useRef(mcpStatus);
+  useEffect(() => { mcpStatusRef.current = mcpStatus; }, [mcpStatus]);
+  const callToolRef = useRef(callTool);
+  useEffect(() => { callToolRef.current = callTool; }, [callTool]);
+
+  // Tracks message count at last auto-save to avoid redundant background saves
+  const lastAutoSavedCountRef = useRef(0);
+
   const [cameraGranted, setCameraGranted] = useState(false);
 
   const requestCameraPermission = useCallback(async () => {
@@ -661,6 +674,48 @@ export default function CouncilScreen() {
       ],
     );
   }, [mcpStatus, messages, callTool, injectSystemMessage]);
+
+  /**
+   * Silently save the current council session to Leo's Memory Machine.
+   * Used for auto-saves (clear + background) — no Alert dialogs.
+   * Returns true if saved, false if skipped/failed.
+   */
+  const performAutoSave = useCallback(async (): Promise<boolean> => {
+    if (mcpStatusRef.current !== 'connected') return false;
+    const saveable = messagesRef.current.filter(
+      (m) => m.content.trim() && !m.streaming && m.role !== 'system',
+    );
+    if (saveable.length === 0) return false;
+    const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    const title = `Middlemain Council — ${dateStr}`;
+    const recentMessages = saveable.slice(-40);
+    const content = recentMessages
+      .map((m) => {
+        const who = m.role === 'user' ? 'User' : (m.participantName ?? 'AI');
+        return `${who}: ${m.content}`;
+      })
+      .join('\n\n');
+    try {
+      await callToolRef.current('save_memory', { title, content, tags: ['middlemain', 'council', 'auto-save'] });
+      lastAutoSavedCountRef.current = messagesRef.current.length;
+      return true;
+    } catch {
+      return false;
+    }
+  }, []); // stable — all access via refs
+
+  // ── AppState listener: auto-save when app backgrounds ──────────────────
+  useEffect(() => {
+    const handleAppStateChange = async (nextState: AppStateStatus) => {
+      if (nextState !== 'background' && nextState !== 'inactive') return;
+      // Only save if message count has grown since the last auto-save
+      if (messagesRef.current.length <= lastAutoSavedCountRef.current) return;
+      // Fire-and-forget — don't block or alert
+      performAutoSave().catch(() => {});
+    };
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription.remove();
+  }, [performAutoSave]);
 
   /** Quick-add Leo as Executive participant using the server Grok proxy. */
   const handleAddLeo = useCallback(() => {
@@ -920,12 +975,25 @@ export default function CouncilScreen() {
               <TouchableOpacity
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  const hasSaveable = messages.some(
+                    (m) => m.content.trim() && !m.streaming && m.role !== 'system',
+                  );
+                  const willAutoSave = mcpStatus === 'connected' && hasSaveable;
                   Alert.alert(
                     'Clear History',
-                    'This will permanently remove all council messages. Participants will remain.',
+                    willAutoSave
+                      ? 'Session will be auto-saved to Leo\'s Memory before clearing. Participants will remain.'
+                      : 'This will permanently remove all council messages. Participants will remain.',
                     [
                       { text: 'Cancel', style: 'cancel' },
-                      { text: 'Clear', style: 'destructive', onPress: () => clearMessages() },
+                      {
+                        text: 'Clear',
+                        style: 'destructive',
+                        onPress: async () => {
+                          await performAutoSave();
+                          clearMessages();
+                        },
+                      },
                     ],
                   );
                 }}

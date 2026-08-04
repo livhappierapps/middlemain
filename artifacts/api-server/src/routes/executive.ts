@@ -4,6 +4,32 @@ import { logger } from "../lib/logger";
 const executiveRouter = Router();
 const XAI_BASE = "https://api.x.ai/v1";
 
+// ─── Webhook inbox ────────────────────────────────────────────────────────────
+// In-memory ring buffer of council digests received from Middlemain.
+// Survives until the process restarts; Leo reads them via /executive/webhook/inbox.
+
+interface WebhookDigest {
+  sessionId?: string;
+  trigger: "interval" | "auto-session-end" | "test";
+  exchangeCount: number;
+  messages: {
+    role: string;
+    participantName?: string;
+    content: string;
+    timestamp: string;
+  }[];
+  participants: { name: string; model: string; provider: string }[];
+  sentAt: string;
+}
+
+interface InboxEntry {
+  receivedAt: string;
+  digest: WebhookDigest;
+}
+
+const webhookInbox: InboxEntry[] = [];
+const MAX_INBOX = 30;
+
 function getMcpUrl(): string {
   return (
     process.env["LEO_MEMORY_MACHINE_URL"] ||
@@ -259,6 +285,109 @@ executiveRouter.post(
       logger.error({ err }, "Executive memory recent error");
       res.status(500).json({ error: msg });
     }
+  }
+);
+
+// ─── Webhook endpoints ────────────────────────────────────────────────────────
+
+/**
+ * POST /api/executive/webhook/council
+ * Middlemain posts a council digest here when messages accumulate.
+ * No executive key required — this is the inbound receiver.
+ */
+executiveRouter.post(
+  "/executive/webhook/council",
+  (req: Request, res: Response) => {
+    const digest = req.body as WebhookDigest;
+    if (!digest || typeof digest !== "object") {
+      res.status(400).json({ error: "Invalid digest payload" });
+      return;
+    }
+
+    const entry: InboxEntry = {
+      receivedAt: new Date().toISOString(),
+      digest: { ...digest, trigger: digest.trigger ?? "interval" },
+    };
+    webhookInbox.unshift(entry);
+    if (webhookInbox.length > MAX_INBOX) webhookInbox.length = MAX_INBOX;
+
+    logger.info(
+      {
+        trigger: digest.trigger,
+        exchangeCount: digest.exchangeCount,
+        messageCount: digest.messages?.length,
+      },
+      "Council digest received via webhook"
+    );
+
+    res.json({ received: true, inboxSize: webhookInbox.length });
+  }
+);
+
+/**
+ * POST /api/executive/webhook/test
+ * Middlemain sends a minimal test payload to verify the webhook URL is reachable.
+ * Also stores in inbox so Leo can confirm it arrived.
+ */
+executiveRouter.post(
+  "/executive/webhook/test",
+  (req: Request, res: Response) => {
+    const body = (req.body ?? {}) as Partial<WebhookDigest>;
+
+    const entry: InboxEntry = {
+      receivedAt: new Date().toISOString(),
+      digest: {
+        trigger: "test",
+        exchangeCount: 0,
+        messages: [],
+        participants: [],
+        sentAt: body.sentAt ?? new Date().toISOString(),
+        ...body,
+      },
+    };
+    webhookInbox.unshift(entry);
+    if (webhookInbox.length > MAX_INBOX) webhookInbox.length = MAX_INBOX;
+
+    logger.info("Council webhook test ping received");
+
+    res.json({ received: true, test: true, message: "Webhook is reachable" });
+  }
+);
+
+/**
+ * GET /api/executive/webhook/inbox
+ * Leo reads council digests that were posted to this server.
+ * Requires executive key.
+ */
+executiveRouter.get(
+  "/executive/webhook/inbox",
+  (req: Request, res: Response) => {
+    if (!checkExecutiveKey(req, res)) return;
+
+    const limitParam = req.query["limit"];
+    const limit = limitParam
+      ? Math.min(Number(limitParam), MAX_INBOX)
+      : MAX_INBOX;
+
+    res.json({
+      inbox: webhookInbox.slice(0, limit),
+      count: webhookInbox.length,
+    });
+  }
+);
+
+/**
+ * DELETE /api/executive/webhook/inbox
+ * Leo clears all received digests.
+ * Requires executive key.
+ */
+executiveRouter.delete(
+  "/executive/webhook/inbox",
+  (req: Request, res: Response) => {
+    if (!checkExecutiveKey(req, res)) return;
+    const cleared = webhookInbox.length;
+    webhookInbox.length = 0;
+    res.json({ cleared });
   }
 );
 

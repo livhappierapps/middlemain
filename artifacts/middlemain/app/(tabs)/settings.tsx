@@ -21,6 +21,7 @@ import { ThemedBackground } from '@/components/ThemedBackground';
 import { ThemeSelector } from '@/components/ThemeSelector';
 import { usePurchase } from '@/context/PurchaseContext';
 import { useTheme } from '@/context/ThemeContext';
+import { useCouncil } from '@/context/CouncilContext';
 
 const APP_VERSION = '0.1.0 (Beta)';
 
@@ -103,12 +104,17 @@ function PricingCard({
 export default function SettingsScreen() {
   const { theme, themeKey } = useTheme();
   const { tier, hasRemovedAds, purchaseMonthly, purchaseAnnual, purchaseAdRemoval, restorePurchases } = usePurchase();
+  const { webhookUrl, setWebhookUrl, testWebhook } = useCouncil();
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
 
   const [reportText, setReportText] = useState('');
   const [reportCategory, setReportCategory] = useState<'bug' | 'feature' | 'other'>('bug');
   const [reportSending, setReportSending] = useState(false);
+
+  const [webhookInput, setWebhookInput] = useState(webhookUrl);
+  const [webhookSaving, setWebhookSaving] = useState(false);
+  const [webhookTesting, setWebhookTesting] = useState(false);
 
   const handlePurchaseMonthly = async () => {
     Alert.alert('Subscribe Monthly', 'Middlemain Pro — $3.99/month\n\nUnlimited AI bridge sessions, priority support, and all future features.', [
@@ -147,6 +153,35 @@ export default function SettingsScreen() {
         },
       },
     ]);
+  };
+
+  const handleSaveWebhook = async () => {
+    setWebhookSaving(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await setWebhookUrl(webhookInput.trim());
+    setWebhookSaving(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Alert.alert('Saved', webhookInput.trim() ? 'Webhook URL saved. The council will post digests here every 5 exchanges and after each auto session.' : 'Webhook URL cleared.');
+  };
+
+  const handleTestWebhook = async () => {
+    if (!webhookInput.trim()) {
+      Alert.alert('No URL', 'Enter a webhook URL first, then save it before testing.');
+      return;
+    }
+    // Save first to ensure the URL is current
+    await setWebhookUrl(webhookInput.trim());
+    setWebhookTesting(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const result = await testWebhook();
+    setWebhookTesting(false);
+    if (result.ok) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert('✅ Webhook reachable', 'Test digest was accepted by your URL. Leo can now receive council updates.');
+    } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('⚠️ Webhook failed', result.error ?? 'Could not reach the URL. Check it is correct and publicly accessible.');
+    }
   };
 
   const handleSendReport = async () => {
@@ -229,6 +264,72 @@ export default function SettingsScreen() {
             </Text>
           </TouchableOpacity>
         </View>
+
+        {/* Executive Webhook */}
+        <SectionHeader title="EXECUTIVE WEBHOOK" />
+        <NeonCard style={{ marginHorizontal: 16, marginBottom: 4 }} accentColor={theme.accent}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <Feather name="radio" size={18} color={theme.accent} />
+            <NeonText size={14} weight="600" color={theme.accent} glow>
+              Leo's Inbound Webhook
+            </NeonText>
+          </View>
+          <Text style={{ color: theme.textMuted, fontSize: 12, fontFamily: 'Inter_400Regular', marginBottom: 14, lineHeight: 18 }}>
+            The council will POST a digest to this URL every 5 exchanges and after each auto session ends — letting Leo monitor and join from outside.
+          </Text>
+
+          <Text style={{ color: theme.textMuted, fontSize: 10, fontFamily: 'Inter_600SemiBold', letterSpacing: 1.5, marginBottom: 6 }}>
+            WEBHOOK URL
+          </Text>
+          <TextInput
+            style={{
+              backgroundColor: theme.surface + 'E6',
+              borderWidth: 1,
+              borderColor: theme.border,
+              borderRadius: theme.radius,
+              color: theme.text,
+              fontSize: 13,
+              fontFamily: 'Inter_400Regular',
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+              marginBottom: 12,
+            }}
+            value={webhookInput}
+            onChangeText={setWebhookInput}
+            placeholder="https://your-domain.com/api/executive/webhook/council"
+            placeholderTextColor={theme.textMuted}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+          />
+
+          <Text style={{ color: theme.textMuted, fontSize: 11, fontFamily: 'Inter_400Regular', marginBottom: 14, lineHeight: 16 }}>
+            💡 Use your API server's{' '}
+            <Text style={{ color: theme.accent, fontFamily: 'Inter_600SemiBold' }}>
+              /api/executive/webhook/council
+            </Text>
+            {' '}endpoint as the URL, or any URL Leo controls.
+          </Text>
+
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <NeonButton
+              label="Save"
+              onPress={handleSaveWebhook}
+              loading={webhookSaving}
+              variant="primary"
+              style={{ flex: 1 }}
+              fullWidth
+            />
+            <NeonButton
+              label="Send Test"
+              onPress={handleTestWebhook}
+              loading={webhookTesting}
+              variant="secondary"
+              style={{ flex: 1 }}
+              fullWidth
+            />
+          </View>
+        </NeonCard>
 
         {/* REPORT SECTION — highly visible */}
         <SectionHeader title="REPORT A PROBLEM" />

@@ -19,6 +19,12 @@ import { fetch } from 'expo/fetch';
 const STORAGE_MESSAGES_KEY = 'council_messages_v1';
 const MAX_STORED_MESSAGES = 200;
 const STORAGE_MANUAL_PARTICIPANTS_KEY = 'council_manual_participants_v1';
+const STORAGE_WEBHOOK_URL_KEY = 'council_webhook_url_v1';
+
+// Number of AI exchanges between webhook digests
+const WEBHOOK_EXCHANGE_INTERVAL = 5;
+// Max messages included in each digest payload
+const WEBHOOK_DIGEST_MAX_MESSAGES = 30;
 
 // Shape stored for each manual participant (no transient session/sense state)
 interface PersistedParticipant {
@@ -83,6 +89,12 @@ interface CouncilContextValue {
   isSending: boolean;
   isAutoRunning: boolean;
   autoRound: number;
+  /** Configured webhook URL for outbound council digests. */
+  webhookUrl: string;
+  /** Update and persist the webhook URL. */
+  setWebhookUrl: (url: string) => Promise<void>;
+  /** Fire a test digest to the configured webhook URL. Returns success flag + optional error. */
+  testWebhook: () => Promise<{ ok: boolean; error?: string }>;
   addParticipant: (data: Omit<CouncilParticipant, 'id' | 'session' | 'sessionLoading' | 'hearingOn' | 'cameraOn' | 'screenOn' | 'isAutoLoaded' | 'sessionError'>) => void;
   removeParticipant: (id: string) => void;
   sendUserMessage: (text: string, mentionedIds: string[], replyToId?: string) => Promise<void>;
@@ -301,10 +313,14 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
   const [isSending, setIsSending] = useState(false);
   const [isAutoRunning, setIsAutoRunning] = useState(false);
   const [autoRound, setAutoRound] = useState(0);
+  const [webhookUrl, setWebhookUrlState] = useState('');
 
   // Tracks whether we've finished loading from AsyncStorage; gates saves so
   // we don't overwrite stored data before hydration completes.
   const hydratedRef = useRef(false);
+
+  // Counts completed AI exchanges since the last webhook digest was fired
+  const exchangeCountRef = useRef(0);
 
   const wsMap = useRef<Map<string, WebSocket>>(new Map());
   const recordingRef = useRef<Audio.Recording | null>(null);
@@ -327,9 +343,10 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
     (async () => {
       try {
-        const [storedMessages, storedParticipants] = await Promise.all([
+        const [storedMessages, storedParticipants, storedWebhookUrl] = await Promise.all([
           AsyncStorage.getItem(STORAGE_MESSAGES_KEY),
           AsyncStorage.getItem(STORAGE_MANUAL_PARTICIPANTS_KEY),
+          AsyncStorage.getItem(STORAGE_WEBHOOK_URL_KEY),
         ]);
 
         if (cancelled) return;
@@ -362,6 +379,10 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
               return [...autoLoaded, ...restored];
             });
           }
+        }
+
+        if (storedWebhookUrl) {
+          setWebhookUrlState(storedWebhookUrl);
         }
       } catch {}
       if (!cancelled) {
@@ -400,6 +421,68 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
     const timeout = reconnectTimeoutsRef.current.get(participantId);
     if (timeout) { clearTimeout(timeout); reconnectTimeoutsRef.current.delete(participantId); }
   }, []);
+
+  // ── Webhook helpers ─────────────────────────────────────────────────────
+
+  /** Persist a new webhook URL to state + AsyncStorage. */
+  const setWebhookUrl = useCallback(async (url: string) => {
+    setWebhookUrlState(url);
+    await AsyncStorage.setItem(STORAGE_WEBHOOK_URL_KEY, url).catch(() => {});
+  }, []);
+
+  /**
+   * Build and POST a digest to the configured webhook URL.
+   * `trigger` describes what caused the fire.
+   */
+  const fireWebhookDigest = useCallback(async (
+    trigger: 'interval' | 'auto-session-end' | 'test',
+    currentMessages: CouncilMessage[],
+    currentParticipants: CouncilParticipant[],
+    overrideUrl?: string,
+  ): Promise<{ ok: boolean; error?: string }> => {
+    const url = (overrideUrl ?? webhookUrl).trim();
+    if (!url) return { ok: false, error: 'No webhook URL configured' };
+
+    const nonStreaming = currentMessages.filter((m) => !m.streaming);
+    const digest = {
+      trigger,
+      exchangeCount: exchangeCountRef.current,
+      sentAt: new Date().toISOString(),
+      participants: currentParticipants.map((p) => ({
+        name: p.displayName,
+        model: p.model,
+        provider: p.provider,
+      })),
+      messages: nonStreaming
+        .slice(-WEBHOOK_DIGEST_MAX_MESSAGES)
+        .map((m) => ({
+          role: m.role,
+          participantName: m.participantName,
+          content: m.content,
+          timestamp: m.timestamp,
+        })),
+    };
+
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(digest),
+      });
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => '');
+        return { ok: false, error: `HTTP ${resp.status}${text ? ': ' + text.slice(0, 120) : ''}` };
+      }
+      return { ok: true };
+    } catch (e: any) {
+      return { ok: false, error: e?.message ?? 'Network error' };
+    }
+  }, [webhookUrl]);
+
+  /** Send a test ping to the configured webhook URL. */
+  const testWebhook = useCallback(async (): Promise<{ ok: boolean; error?: string }> => {
+    return fireWebhookDigest('test', messagesRef.current, participantsRef.current);
+  }, [fireWebhookDigest]);
 
   // ── Auto-load connected AIs ─────────────────────────────────────────────
   // This effect is intentionally NOT guarded by an initializedRef so it always
@@ -864,8 +947,23 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
       }),
     );
 
+    // Count this as one exchange (user message + all AI replies = 1)
+    exchangeCountRef.current += 1;
+
+    // Fire a webhook digest every WEBHOOK_EXCHANGE_INTERVAL exchanges
+    if (
+      webhookUrl.trim() &&
+      exchangeCountRef.current > 0 &&
+      exchangeCountRef.current % WEBHOOK_EXCHANGE_INTERVAL === 0
+    ) {
+      // Fire and forget — don't block the UI
+      const snap = messagesRef.current;
+      const parts = participantsRef.current;
+      fireWebhookDigest('interval', snap, parts).catch(() => {});
+    }
+
     setIsSending(false);
-  }, [participants, messages]);
+  }, [participants, messages, webhookUrl, fireWebhookDigest]);
 
   // ── Autonomous participant turn ──────────────────────────────────────────────
   const sendParticipantAutonomousTurn = useCallback(async (
@@ -990,11 +1088,18 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
           timestamp: new Date().toLocaleTimeString(),
         },
       ]);
+
+      // Fire webhook digest at end of auto session
+      if (webhookUrl.trim()) {
+        const snap = messagesRef.current;
+        const parts = participantsRef.current;
+        fireWebhookDigest('auto-session-end', snap, parts).catch(() => {});
+      }
     }
 
     setIsAutoRunning(false);
     setAutoRound(0);
-  }, [sendUserMessage, sendParticipantAutonomousTurn]);
+  }, [sendUserMessage, sendParticipantAutonomousTurn, webhookUrl, fireWebhookDigest]);
 
   const stopAutonomousSession = useCallback(() => {
     autoStopRef.current = true;
@@ -1055,6 +1160,9 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
       isSending,
       isAutoRunning,
       autoRound,
+      webhookUrl,
+      setWebhookUrl,
+      testWebhook,
       addParticipant,
       removeParticipant,
       sendUserMessage,

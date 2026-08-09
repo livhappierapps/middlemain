@@ -738,6 +738,27 @@ export default function CouncilScreen() {
     });
   }, [participants, addParticipant]);
 
+  /** Quick-add Ash as EdenMux agent participant using the server proxy. */
+  const handleAddAsh = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const alreadyHasAsh = participants.some(
+      (p) => p.displayName.toLowerCase().includes('ash'),
+    );
+    if (alreadyHasAsh) {
+      Alert.alert('Ash is Already Here', 'Ash is already in the council.');
+      return;
+    }
+    addParticipant({
+      displayName: 'Ash',
+      provider: 'server',
+      apiKey: '',
+      model: 'grok-3',
+      systemPrompt:
+        'You are Ash, an EdenMux AI agent and core member of the EdenMux council alongside Leo, Whiz, and Vhiz. Your role is systems architecture and integration — you understand how the pieces of a product connect and make sure nothing falls through the cracks. You are precise, methodical, and collaborative. When given a directive, you break it into concrete steps, flag dependencies, and report back clearly. You defer to Leo on executive decisions but own your technical domain fully.',
+      color: '#34d399',
+    });
+  }, [participants, addParticipant]);
+
   const anyCameraOn = participants.some((p) => p.cameraOn);
   const anyScreenOn = participants.some((p) => p.screenOn);
   const cameraParticipants = participants.filter((p) => p.cameraOn);
@@ -1080,6 +1101,16 @@ export default function CouncilScreen() {
                 <Feather name="star" size={15} color="#a78bfa" />
                 <Text style={{ color: '#a78bfa', fontSize: 13, fontFamily: 'Inter_600SemiBold', letterSpacing: 0.5 }}>
                   ⚡ Add Leo (Executive)
+                </Text>
+              </TouchableOpacity>
+              {/* Ash EdenMux quick-add */}
+              <TouchableOpacity
+                onPress={handleAddAsh}
+                style={{ borderWidth: 1.5, borderColor: '#34d399', borderRadius: 10, paddingVertical: 12, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8, backgroundColor: '#34d39911' }}
+              >
+                <Feather name="cpu" size={15} color="#34d399" />
+                <Text style={{ color: '#34d399', fontSize: 13, fontFamily: 'Inter_600SemiBold', letterSpacing: 0.5 }}>
+                  ⚡ Add Ash (EdenMux)
                 </Text>
               </TouchableOpacity>
             </View>

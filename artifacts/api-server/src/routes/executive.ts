@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { logger } from "../lib/logger";
+import { getXaiKey, hasXaiKey, setXaiKey } from "../lib/xaiKey";
 
 const executiveRouter = Router();
 const XAI_BASE = "https://api.x.ai/v1";
@@ -100,6 +101,23 @@ async function mcpToolCall(
 }
 
 /**
+ * POST /api/executive/set-xai-key
+ * Push a fresh xAI API key to the server at runtime — no restart needed.
+ * Requires executive key. Key lives in memory until next server restart.
+ */
+executiveRouter.post("/executive/set-xai-key", (req: Request, res: Response) => {
+  if (!checkExecutiveKey(req, res)) return;
+  const { key } = req.body as { key?: string };
+  if (!key || typeof key !== "string" || !key.trim()) {
+    res.status(400).json({ error: "key is required" });
+    return;
+  }
+  setXaiKey(key.trim());
+  logger.info("XAI API key updated via executive endpoint");
+  res.json({ ok: true, message: "XAI key updated — takes effect immediately" });
+});
+
+/**
  * GET /api/executive/status
  * Leo pings this to confirm his API is live and check capability flags.
  */
@@ -109,7 +127,7 @@ executiveRouter.get("/executive/status", (req: Request, res: Response) => {
     status: "online",
     memoryMachineUrl: getMcpUrl(),
     memoryConfigured: !!process.env["LEO_MEMORY_TOKEN"],
-    grokConfigured: !!process.env["XAI_API_KEY"],
+    grokConfigured: hasXaiKey(),
     capabilities: ["chat", "memory/search", "memory/save", "memory/recent"],
   });
 });
@@ -122,7 +140,7 @@ executiveRouter.get("/executive/status", (req: Request, res: Response) => {
 executiveRouter.post("/executive/chat", async (req: Request, res: Response) => {
   if (!checkExecutiveKey(req, res)) return;
 
-  const apiKey = process.env["XAI_API_KEY"];
+  const apiKey = getXaiKey();
   if (!apiKey) {
     res.status(503).json({ error: "XAI_API_KEY not configured on server" });
     return;

@@ -137,6 +137,11 @@ export default function SettingsScreen() {
   const [execKey, setExecKey] = useState<string | null>(null);
   const [execKeyRevealed, setExecKeyRevealed] = useState(false);
 
+  // XAI key updater
+  const [xaiKeyInput, setXaiKeyInput] = useState('');
+  const [xaiKeySaving, setXaiKeySaving] = useState(false);
+  const [xaiKeyStatus, setXaiKeyStatus] = useState<'idle' | 'ok' | 'error'>('idle');
+
   useEffect(() => {
     AsyncStorage.getItem(EXEC_KEY_STORAGE).then((val) => {
       if (val) setExecKey(val);
@@ -180,6 +185,44 @@ export default function SettingsScreen() {
         },
       },
     ]);
+  };
+
+  const handleSaveXaiKey = async () => {
+    if (!xaiKeyInput.trim()) {
+      Alert.alert('Empty key', 'Paste your xAI API key first.');
+      return;
+    }
+    if (!execKey) {
+      Alert.alert('No executive key', 'Open the LEO EXECUTIVE API section and save your executive key first.');
+      return;
+    }
+    setXaiKeySaving(true);
+    setXaiKeyStatus('idle');
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      const resp = await fetch(`${getApiBase()}/executive/set-xai-key`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Executive-Key': execKey },
+        body: JSON.stringify({ key: xaiKeyInput.trim() }),
+      });
+      if (resp.ok) {
+        setXaiKeyStatus('ok');
+        setXaiKeyInput('');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Alert.alert('✅ Key updated', 'xAI key is live on the server. AI Analyze and Leo chat will use it immediately.');
+      } else {
+        const json = await resp.json().catch(() => ({})) as any;
+        setXaiKeyStatus('error');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        Alert.alert('Failed', json?.error ?? `Server error ${resp.status}`);
+      }
+    } catch (err: any) {
+      setXaiKeyStatus('error');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Failed', err?.message ?? 'Could not reach server');
+    } finally {
+      setXaiKeySaving(false);
+    }
   };
 
   const handleSaveWebhook = async () => {
@@ -501,6 +544,61 @@ export default function SettingsScreen() {
             <Text style={{ color: theme.textMuted, fontSize: 11, fontFamily: 'Inter_400Regular', lineHeight: 16 }}>
               💡 The key is stored locally on this device only and is never transmitted to our servers.
             </Text>
+
+            {/* ── XAI / Grok key updater ── */}
+            <View style={{ marginTop: 20, borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 16 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <Feather name="zap" size={14} color="#f59e0b" />
+                <Text style={{ color: theme.textMuted, fontSize: 10, fontFamily: 'Inter_600SemiBold', letterSpacing: 1.5, flex: 1 }}>
+                  XAI / GROK API KEY
+                </Text>
+                {xaiKeyStatus === 'ok' && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#34d399' }} />
+                    <Text style={{ color: '#34d399', fontSize: 10, fontFamily: 'Inter_600SemiBold' }}>LIVE</Text>
+                  </View>
+                )}
+                {xaiKeyStatus === 'error' && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#ff6b6b' }} />
+                    <Text style={{ color: '#ff6b6b', fontSize: 10, fontFamily: 'Inter_600SemiBold' }}>FAILED</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={{ color: theme.textMuted, fontSize: 11, fontFamily: 'Inter_400Regular', lineHeight: 16, marginBottom: 10 }}>
+                Paste a fresh key from{' '}
+                <Text style={{ color: '#f59e0b', fontFamily: 'Inter_600SemiBold' }}>console.x.ai</Text>
+                {' '}to update the server without a restart.
+              </Text>
+              <TextInput
+                style={{
+                  backgroundColor: theme.surface + 'E6',
+                  borderWidth: 1,
+                  borderColor: xaiKeyStatus === 'error' ? '#ff6b6b' : xaiKeyStatus === 'ok' ? '#34d399' : theme.border,
+                  borderRadius: theme.radius,
+                  color: theme.text,
+                  fontSize: 13,
+                  fontFamily: 'Inter_400Regular',
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                  marginBottom: 10,
+                }}
+                value={xaiKeyInput}
+                onChangeText={(t) => { setXaiKeyInput(t); setXaiKeyStatus('idle'); }}
+                placeholder="xai-…"
+                placeholderTextColor={theme.textMuted}
+                autoCapitalize="none"
+                autoCorrect={false}
+                secureTextEntry
+              />
+              <NeonButton
+                label={xaiKeySaving ? 'Updating…' : 'Update Grok Key'}
+                onPress={handleSaveXaiKey}
+                loading={xaiKeySaving}
+                variant="primary"
+                fullWidth
+              />
+            </View>
           </NeonCard>
         )}
 

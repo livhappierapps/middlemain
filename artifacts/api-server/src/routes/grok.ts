@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { logger } from "../lib/logger";
+import { getXaiKey, hasXaiKey } from "../lib/xaiKey";
 
 const grokRouter = Router();
 const XAI_BASE = "https://api.x.ai/v1";
@@ -20,7 +21,7 @@ interface ChatMessage {
  * Supports multimodal (vision) messages — pass imageBase64 in body.
  */
 grokRouter.post("/grok/chat", async (req: Request, res: Response) => {
-  const apiKey = process.env["XAI_API_KEY"];
+  const apiKey = getXaiKey();
   if (!apiKey) { res.status(503).json({ error: "XAI_API_KEY not configured on server" }); return; }
 
   const { model = "grok-3", messages, stream = true, systemPrompt } = req.body as {
@@ -43,7 +44,7 @@ grokRouter.post("/grok/chat", async (req: Request, res: Response) => {
   try {
     const upstream = await fetch(`${XAI_BASE}/chat/completions`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({ model, messages: fullMessages, stream }),
     });
 
@@ -86,7 +87,7 @@ grokRouter.post("/grok/chat", async (req: Request, res: Response) => {
  */
 grokRouter.get("/grok/status", (_req: Request, res: Response) => {
   res.json({
-    configured: !!process.env["XAI_API_KEY"],
+    configured: hasXaiKey(),
     models: {
       text: "grok-3",
       vision: "grok-2-vision-1212",

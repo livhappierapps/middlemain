@@ -27,6 +27,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: "person.3", selected: "person.3.fill" }} />
         <Label>Council</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="debug">
+        <Icon sf={{ default: "ant", selected: "ant.fill" }} />
+        <Label>Debug</Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="settings">
         <Icon sf={{ default: "gearshape", selected: "gearshape.fill" }} />
         <Label>Settings</Label>
@@ -137,6 +141,18 @@ function ClassicTabLayout() {
               />
             ) : (
               <Feather name="users" size={20} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="debug"
+        options={{
+          title: "Debug",
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="ant" tintColor={color} size={22} />
+            ) : (
+              <Feather name="alert-triangle" size={20} color={color} />
             ),
         }}
       />

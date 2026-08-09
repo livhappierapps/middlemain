@@ -89,6 +89,18 @@ export default function DebugScreen() {
   const abortRef = useRef<boolean>(false);
   const resultScrollRef = useRef<ScrollView>(null);
 
+  // Dry run state
+  const [dryRunResult, setDryRunResult] = useState<{
+    pass: boolean;
+    verdict: 'CLEAN' | 'ERRORS' | 'WARNINGS_ONLY';
+    errors: { line: number; col: number; code: string; message: string; severity: 'error' | 'warning' }[];
+    summary: string;
+    rawOutput: string;
+    durationMs: number;
+  } | null>(null);
+  const [isDryRunning, setIsDryRunning] = useState(false);
+  const dryRunScrollRef = useRef<ScrollView>(null);
+
   // ── Analyse ────────────────────────────────────────────────────────────────
 
   const handleAnalyze = useCallback(async () => {
@@ -206,6 +218,68 @@ export default function DebugScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
   }, []);
+
+  // ── Dry Run (real TypeScript compiler) ────────────────────────────────────
+
+  const handleDryRun = useCallback(async () => {
+    if (!code.trim()) {
+      Alert.alert('Nothing to check', 'Paste some code first.');
+      return;
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    setIsDryRunning(true);
+    setDryRunResult(null);
+
+    const base = getServerBase();
+    if (!base) {
+      Alert.alert('Server offline', 'Make sure the API server is running.');
+      setIsDryRunning(false);
+      return;
+    }
+
+    try {
+      const resp = await fetch(`${base}/debug/typecheck`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, mode }),
+      });
+      const json = await resp.json() as any;
+      if (!resp.ok) {
+        Alert.alert('Check failed', json?.error ?? `Server error ${resp.status}`);
+        return;
+      }
+      setDryRunResult(json);
+      Haptics.notificationAsync(
+        json.pass
+          ? Haptics.NotificationFeedbackType.Success
+          : Haptics.NotificationFeedbackType.Error,
+      );
+      setTimeout(() => dryRunScrollRef.current?.scrollToEnd({ animated: true }), 100);
+    } catch (err: any) {
+      Alert.alert('Check failed', err?.message ?? 'Unknown error');
+    } finally {
+      setIsDryRunning(false);
+    }
+  }, [code, mode]);
+
+  const handleCopyDryRun = useCallback(async () => {
+    if (!dryRunResult) return;
+    const lines = dryRunResult.errors.map(
+      (e) => `${e.severity.toUpperCase()} ${e.code} line ${e.line}:${e.col} — ${e.message}`,
+    );
+    const text = [
+      `VERDICT: ${dryRunResult.verdict}`,
+      dryRunResult.summary,
+      '',
+      ...lines,
+      '',
+      '--- raw ---',
+      dryRunResult.rawOutput,
+    ].join('\n');
+    await Clipboard.setStringAsync(text);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Alert.alert('Copied', 'Dry run results copied to clipboard.');
+  }, [dryRunResult]);
 
   // ── Styles ─────────────────────────────────────────────────────────────────
 
@@ -436,24 +510,58 @@ export default function DebugScreen() {
             </View>
           </View>
 
-          {/* Analyze button */}
-          <TouchableOpacity
-            style={S.analyzeBtn}
-            onPress={isAnalyzing ? handleStop : handleAnalyze}
-            activeOpacity={0.8}
-          >
-            {isAnalyzing ? (
-              <>
-                <ActivityIndicator size="small" color="#fff" />
-                <Text style={S.analyzeBtnText}>Stop Analysis</Text>
-              </>
-            ) : (
-              <>
-                <Feather name="zap" size={16} color="#fff" />
-                <Text style={S.analyzeBtnText}>Analyze Code</Text>
-              </>
-            )}
-          </TouchableOpacity>
+          {/* Action buttons row */}
+          <View style={{ flexDirection: 'row', paddingHorizontal: 16, gap: 8, marginBottom: 12 }}>
+            {/* AI Analyze */}
+            <TouchableOpacity
+              style={[S.analyzeBtn, { flex: 1, marginHorizontal: 0, marginBottom: 0 }]}
+              onPress={isAnalyzing ? handleStop : handleAnalyze}
+              activeOpacity={0.8}
+            >
+              {isAnalyzing ? (
+                <>
+                  <ActivityIndicator size="small" color="#fff" />
+                  <Text style={S.analyzeBtnText}>Stop</Text>
+                </>
+              ) : (
+                <>
+                  <Feather name="zap" size={15} color="#fff" />
+                  <Text style={S.analyzeBtnText}>AI Analyze</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            {/* Dry Run — real tsc */}
+            <TouchableOpacity
+              style={{
+                flex: 1,
+                borderRadius: 10,
+                paddingVertical: 14,
+                alignItems: 'center',
+                flexDirection: 'row',
+                justifyContent: 'center',
+                gap: 7,
+                backgroundColor: isDryRunning ? '#f59e0b' : '#f59e0b22',
+                borderWidth: 1.5,
+                borderColor: '#f59e0b',
+              }}
+              onPress={isDryRunning ? undefined : handleDryRun}
+              activeOpacity={0.8}
+              disabled={isDryRunning}
+            >
+              {isDryRunning ? (
+                <>
+                  <ActivityIndicator size="small" color="#f59e0b" />
+                  <Text style={[S.analyzeBtnText, { color: '#f59e0b' }]}>Running…</Text>
+                </>
+              ) : (
+                <>
+                  <Feather name="cpu" size={15} color="#f59e0b" />
+                  <Text style={[S.analyzeBtnText, { color: '#f59e0b' }]}>Dry Run</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
 
           {/* Results */}
           <View style={S.resultCard}>
@@ -501,6 +609,78 @@ export default function DebugScreen() {
               <View style={{ height: 24 }} />
             </ScrollView>
           </View>
+
+          {/* Dry Run results */}
+          {dryRunResult && (
+            <View style={[S.resultCard, { marginBottom: 8, flexShrink: 1, maxHeight: 280 }]}>
+              <View style={S.resultHeader}>
+                {/* Verdict badge */}
+                <View style={{
+                  paddingHorizontal: 8,
+                  paddingVertical: 3,
+                  borderRadius: 6,
+                  backgroundColor:
+                    dryRunResult.verdict === 'CLEAN' ? '#34d39922' :
+                    dryRunResult.verdict === 'WARNINGS_ONLY' ? '#fbbf2422' : '#ff6b6b22',
+                  borderWidth: 1,
+                  borderColor:
+                    dryRunResult.verdict === 'CLEAN' ? '#34d399' :
+                    dryRunResult.verdict === 'WARNINGS_ONLY' ? '#fbbf24' : '#ff6b6b',
+                  marginRight: 4,
+                }}>
+                  <Text style={{
+                    fontFamily: 'Inter_700Bold',
+                    fontSize: 10,
+                    letterSpacing: 0.8,
+                    color:
+                      dryRunResult.verdict === 'CLEAN' ? '#34d399' :
+                      dryRunResult.verdict === 'WARNINGS_ONLY' ? '#fbbf24' : '#ff6b6b',
+                  }}>
+                    {dryRunResult.verdict === 'CLEAN' ? '✅ CLEAN' :
+                     dryRunResult.verdict === 'WARNINGS_ONLY' ? '⚠️ WARNINGS' : '🚫 ERRORS'}
+                  </Text>
+                </View>
+                <Text style={[S.resultHeaderText, { flex: 1 }]} numberOfLines={1}>
+                  tsc · {dryRunResult.errors.length} issue{dryRunResult.errors.length !== 1 ? 's' : ''} · {dryRunResult.durationMs}ms
+                </Text>
+                <TouchableOpacity onPress={handleCopyDryRun} style={{ padding: 4 }}>
+                  <Feather name="copy" size={14} color={theme.textMuted} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Summary line */}
+              <View style={{ paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: theme.border }}>
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: theme.text }}>
+                  {dryRunResult.summary}
+                </Text>
+              </View>
+
+              <ScrollView ref={dryRunScrollRef} style={S.resultScroll} showsVerticalScrollIndicator>
+                {dryRunResult.errors.length === 0 ? (
+                  <Text style={{ fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 12, color: '#34d399', lineHeight: 20 }}>
+                    No TypeScript errors found. Safe to build.
+                  </Text>
+                ) : (
+                  dryRunResult.errors.map((err, i) => (
+                    <View key={i} style={{ marginBottom: 10 }}>
+                      <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center', marginBottom: 2 }}>
+                        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 11, color: err.severity === 'error' ? '#ff6b6b' : '#fbbf24' }}>
+                          {err.severity === 'error' ? '🔴' : '🟡'} Line {err.line}:{err.col}
+                        </Text>
+                        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 10, color: theme.textMuted }}>
+                          {err.code}
+                        </Text>
+                      </View>
+                      <Text style={{ fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 12, color: theme.text, lineHeight: 18 }} selectable>
+                        {err.message}
+                      </Text>
+                    </View>
+                  ))
+                )}
+                <View style={{ height: 12 }} />
+              </ScrollView>
+            </View>
+          )}
 
         </View>
       </KeyboardAvoidingView>

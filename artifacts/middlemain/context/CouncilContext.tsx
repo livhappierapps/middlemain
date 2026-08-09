@@ -20,6 +20,7 @@ const STORAGE_MESSAGES_KEY = 'council_messages_v1';
 const MAX_STORED_MESSAGES = 200;
 const STORAGE_MANUAL_PARTICIPANTS_KEY = 'council_manual_participants_v1';
 const STORAGE_WEBHOOK_URL_KEY = 'council_webhook_url_v1';
+const STORAGE_HISTORY_LIMIT_KEY = 'council_history_limit_v1';
 
 // Number of AI exchanges between webhook digests
 const WEBHOOK_EXCHANGE_INTERVAL = 5;
@@ -104,6 +105,8 @@ interface CouncilContextValue {
   toggleCamera: (participantId: string) => void;
   toggleScreen: (participantId: string) => void;
   sendVisionFrameToAll: (imageData: string, source: 'camera' | 'screen', participantIds?: string[]) => Promise<void>;
+  historyLimit: number;
+  setHistoryLimit: (limit: number) => Promise<void>;
   clearMessages: () => void;
   /** Inject a system message directly into the council feed (no AI response triggered). */
   injectSystemMessage: (content: string) => void;
@@ -314,6 +317,8 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
   const [isAutoRunning, setIsAutoRunning] = useState(false);
   const [autoRound, setAutoRound] = useState(0);
   const [webhookUrl, setWebhookUrlState] = useState('');
+  const [historyLimit, setHistoryLimitState] = useState(MAX_STORED_MESSAGES);
+  const hasWarnedTrimRef = useRef(false);
 
   // Tracks whether we've finished loading from AsyncStorage; gates saves so
   // we don't overwrite stored data before hydration completes.
@@ -343,10 +348,11 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
     (async () => {
       try {
-        const [storedMessages, storedParticipants, storedWebhookUrl] = await Promise.all([
+        const [storedMessages, storedParticipants, storedWebhookUrl, storedHistoryLimit] = await Promise.all([
           AsyncStorage.getItem(STORAGE_MESSAGES_KEY),
           AsyncStorage.getItem(STORAGE_MANUAL_PARTICIPANTS_KEY),
           AsyncStorage.getItem(STORAGE_WEBHOOK_URL_KEY),
+          AsyncStorage.getItem(STORAGE_HISTORY_LIMIT_KEY),
         ]);
 
         if (cancelled) return;
@@ -384,6 +390,11 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
         if (storedWebhookUrl) {
           setWebhookUrlState(storedWebhookUrl);
         }
+
+        if (storedHistoryLimit !== null) {
+          const parsed = parseInt(storedHistoryLimit, 10);
+          if (!isNaN(parsed)) setHistoryLimitState(parsed);
+        }
       } catch {}
       if (!cancelled) {
         hydratedRef.current = true;
@@ -395,12 +406,34 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
   // ── Persist messages to AsyncStorage whenever they change ───────────────
   useEffect(() => {
     if (!hydratedRef.current) return;
-    // Don't persist any actively-streaming placeholders; cap to recent messages
+    const limit = historyLimit > 0 ? historyLimit : undefined;
     const toSave = messages
-      .slice(-MAX_STORED_MESSAGES)
+      .filter((m) => !m.streaming)
+      .slice(limit ? -limit : undefined)
       .map((m) => ({ ...m, streaming: false }));
     AsyncStorage.setItem(STORAGE_MESSAGES_KEY, JSON.stringify(toSave)).catch(() => {});
-  }, [messages]);
+  }, [messages, historyLimit]);
+
+  // ── Warn once when history limit is reached ──────────────────────────────
+  useEffect(() => {
+    if (!hydratedRef.current || historyLimit === 0) return;
+    const realCount = messages.filter((m) => !m.streaming && m.id !== 'trim-warning').length;
+    if (realCount >= historyLimit && !hasWarnedTrimRef.current) {
+      hasWarnedTrimRef.current = true;
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === 'trim-warning')) return prev;
+        return [
+          ...prev,
+          {
+            id: 'trim-warning',
+            role: 'system' as const,
+            content: `⚠️ History limit reached (${historyLimit} messages). Older messages will be dropped when you close the app. Change this in Settings → Council History.`,
+            timestamp: new Date().toLocaleTimeString(),
+          },
+        ];
+      });
+    }
+  }, [messages.length, historyLimit]);
 
   // ── Persist manual participants whenever they change ────────────────────
   useEffect(() => {
@@ -428,6 +461,13 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
   const setWebhookUrl = useCallback(async (url: string) => {
     setWebhookUrlState(url);
     await AsyncStorage.setItem(STORAGE_WEBHOOK_URL_KEY, url).catch(() => {});
+  }, []);
+
+  /** Update and persist the history limit. Resets the trim warning so it can fire again if needed. */
+  const setHistoryLimit = useCallback(async (limit: number) => {
+    hasWarnedTrimRef.current = false;
+    setHistoryLimitState(limit);
+    await AsyncStorage.setItem(STORAGE_HISTORY_LIMIT_KEY, String(limit)).catch(() => {});
   }, []);
 
   /**
@@ -1163,6 +1203,8 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
       webhookUrl,
       setWebhookUrl,
       testWebhook,
+      historyLimit,
+      setHistoryLimit,
       addParticipant,
       removeParticipant,
       sendUserMessage,

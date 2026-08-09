@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/council-room/"
+title = "Council Room"
+description = "A shareable real-time web portal for Middlemain council sessions. Anyone with the URL — human or AI — can join a live council room, read the conversation, and send messages. Dark-themed, mobile-friendly, and synced with the Middlemain app via WebSockets."
+version = "1.0.0"
+id = "artifacts/council-room"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/council-room/" ]
+localPort = 23048
+
+[services.development]
+run = "pnpm --filter @workspace/council-room run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/council-room", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/council-room/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23048"
+BASE_PATH = "/council-room/"

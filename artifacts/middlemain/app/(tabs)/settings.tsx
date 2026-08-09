@@ -120,7 +120,7 @@ function PricingCard({
 export default function SettingsScreen() {
   const { theme, themeKey } = useTheme();
   const { tier, hasRemovedAds, purchaseMonthly, purchaseAnnual, purchaseAdRemoval, restorePurchases } = usePurchase();
-  const { webhookUrl, setWebhookUrl, testWebhook } = useCouncil();
+  const { webhookUrl, setWebhookUrl, testWebhook, historyLimit, setHistoryLimit } = useCouncil();
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
 
@@ -334,6 +334,46 @@ export default function SettingsScreen() {
             </Text>
           </TouchableOpacity>
         </View>
+
+        {/* Council History Limit */}
+        <SectionHeader title="COUNCIL HISTORY" />
+        <NeonCard style={{ marginHorizontal: 16, marginBottom: 4 }} accentColor={theme.secondary}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <Feather name="archive" size={18} color={theme.secondary} />
+            <NeonText size={14} weight="600" color={theme.secondary} glow>
+              Message History Limit
+            </NeonText>
+          </View>
+          <Text style={{ color: theme.textMuted, fontSize: 12, fontFamily: 'Inter_400Regular', marginBottom: 14, lineHeight: 18 }}>
+            How many council messages Middlemain keeps between sessions. Older messages are dropped when the limit is reached — you'll get a warning before that happens.
+          </Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+            {([50, 100, 200, 500, 0] as const).map((opt) => (
+              <TouchableOpacity
+                key={opt}
+                onPress={() => { setHistoryLimit(opt); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                style={{
+                  paddingHorizontal: 14,
+                  paddingVertical: 8,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: historyLimit === opt ? theme.secondary : theme.border,
+                  backgroundColor: historyLimit === opt ? theme.secondary + '22' : theme.surface,
+                }}
+              >
+                <Text style={{ color: historyLimit === opt ? theme.secondary : theme.textMuted, fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>
+                  {opt === 0 ? 'Keep all' : `Last ${opt}`}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <Text style={{ color: theme.textMuted, fontSize: 11, fontFamily: 'Inter_400Regular', lineHeight: 16 }}>
+            💡 Currently keeping{' '}
+            <Text style={{ color: theme.secondary, fontFamily: 'Inter_600SemiBold' }}>
+              {historyLimit === 0 ? 'all messages' : `the last ${historyLimit} messages`}
+            </Text>.
+          </Text>
+        </NeonCard>
 
         {/* Executive Webhook */}
         <SectionHeader title="EXECUTIVE WEBHOOK" />

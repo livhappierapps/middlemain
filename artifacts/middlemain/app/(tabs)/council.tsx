@@ -488,6 +488,12 @@ function AutoModeModal({
 }
 
 // ─── Main Screen ─────────────────────────────────────────────────────────────
+function getApiBase(): string {
+  const domain = process.env.EXPO_PUBLIC_DOMAIN;
+  if (domain) return `https://${domain}/api`;
+  return '/api';
+}
+
 export default function CouncilScreen() {
   const { theme } = useTheme();
   const {
@@ -523,6 +529,12 @@ export default function CouncilScreen() {
   const [replyToMsgId, setReplyToMsgId] = useState<string | null>(null);
   const [replyToTargetId, setReplyToTargetId] = useState<string | null>(null);
 
+  // Live room state (Task #41)
+  const [liveRoomId, setLiveRoomId] = useState<string | null>(null);
+  const [liveRoomUrl, setLiveRoomUrl] = useState<string | null>(null);
+  const [isGoingLive, setIsGoingLive] = useState(false);
+  const broadcastedIdsRef = useRef<Set<string>>(new Set());
+
   const inputRef = useRef<TextInput>(null);
 
   const scrollRef = useRef<ScrollView>(null);
@@ -549,6 +561,77 @@ export default function CouncilScreen() {
     setCameraGranted(result.granted);
     return result.granted;
   }, []);
+
+  // ── Go Live ───────────────────────────────────────────────────────────────
+
+  const handleGoLive = useCallback(async () => {
+    if (liveRoomId) {
+      // Already live — show options
+      Alert.alert('🔴 Live Room Active', `Share this link:\n\n${liveRoomUrl}`, [
+        { text: 'Copy Link', onPress: () => { Clipboard.setString(liveRoomUrl!); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } },
+        { text: 'Share', onPress: () => Sharing.shareAsync(liveRoomUrl!) },
+        { text: 'Stop Room', style: 'destructive', onPress: () => { setLiveRoomId(null); setLiveRoomUrl(null); broadcastedIdsRef.current.clear(); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } },
+        { text: 'Done', style: 'cancel' },
+      ]);
+      return;
+    }
+
+    setIsGoingLive(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+
+    try {
+      const resp = await fetch(`${getApiBase()}/council/rooms`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Council Session' }),
+      });
+      if (!resp.ok) throw new Error(`Server error ${resp.status}`);
+      const json = await resp.json() as { roomId: string };
+      const domain = process.env.EXPO_PUBLIC_DOMAIN ?? '';
+      const url = domain
+        ? `https://${domain}/council-room/?room=${json.roomId}`
+        : `/council-room/?room=${json.roomId}`;
+
+      // Mark all current messages as already broadcast — don't replay history
+      messages.forEach((m) => broadcastedIdsRef.current.add(m.id));
+
+      setLiveRoomId(json.roomId);
+      setLiveRoomUrl(url);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      Alert.alert('🔴 You\'re Live!', `Anyone with this link can join the council:\n\n${url}`, [
+        { text: 'Copy Link', onPress: () => { Clipboard.setString(url); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } },
+        { text: 'Share', onPress: () => Sharing.shareAsync(url) },
+        { text: 'Done', style: 'cancel' },
+      ]);
+    } catch (err: any) {
+      Alert.alert('Failed to go live', err?.message ?? 'Could not create room. Is the API server running?');
+    } finally {
+      setIsGoingLive(false);
+    }
+  }, [liveRoomId, liveRoomUrl, messages]);
+
+  // Forward new non-streaming messages to the live room
+  useEffect(() => {
+    if (!liveRoomId) return;
+    const base = getApiBase();
+    const toSend = messages.filter((m) => !m.streaming && !broadcastedIdsRef.current.has(m.id));
+    for (const msg of toSend) {
+      broadcastedIdsRef.current.add(msg.id);
+      fetch(`${base}/council/rooms/${liveRoomId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: msg.id,
+          role: msg.role,
+          participantName: msg.participantName,
+          participantColor: msg.participantColor,
+          content: msg.content,
+          timestamp: msg.timestamp,
+        }),
+      }).catch(() => {});
+    }
+  }, [messages, liveRoomId]);
 
   const handleExport = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -984,6 +1067,18 @@ export default function CouncilScreen() {
                 style={{ padding: 7 }}
               >
                 <Feather name="bookmark" size={16} color={mcpStatus === 'connected' ? '#a78bfa' : theme.textMuted} />
+              </TouchableOpacity>
+              {/* Go Live */}
+              <TouchableOpacity
+                onPress={isGoingLive ? undefined : handleGoLive}
+                style={{ padding: 7 }}
+                disabled={isGoingLive}
+              >
+                <Feather
+                  name="radio"
+                  size={16}
+                  color={liveRoomId ? '#ff4444' : isGoingLive ? theme.textMuted : theme.textMuted}
+                />
               </TouchableOpacity>
               {/* Export session */}
               <TouchableOpacity

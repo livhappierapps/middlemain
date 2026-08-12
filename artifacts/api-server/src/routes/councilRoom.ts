@@ -22,12 +22,33 @@ interface RoomClient {
   isApp: boolean;
 }
 
+interface ActiveStream {
+  messageId: string;
+  participantName?: string;
+  participantColor?: string;
+  timestamp: string;
+  /** All content accumulated so far (buffered pre-start chunks + post-start chunks). */
+  content: string;
+  /**
+   * True once streaming_start has been broadcast to existing clients.
+   * Pre-start chunks are buffered and flushed on start; never broadcast before this.
+   */
+  started: boolean;
+  /**
+   * True once streaming_end has been processed. Acts as a tombstone so that
+   * out-of-order post-end chunks cannot recreate the entry.
+   */
+  terminated: boolean;
+}
+
 interface Room {
   id: string;
   name: string;
   createdAt: string;
   messages: RoomMessage[];
   clients: Map<WebSocket, RoomClient>;
+  /** In-memory only — never persisted. Keyed by messageId to support concurrent AI streams. */
+  activeStreams: Map<string, ActiveStream>;
 }
 
 // ─── In-memory store (seeded from disk on startup) ───────────────────────────
@@ -35,12 +56,13 @@ interface Room {
 const MAX_ROOM_MESSAGES = 200;
 const rooms = new Map<string, Room>();
 
-// Re-hydrate rooms from the persisted store. Clients start empty — WebSocket
-// connections are re-established by the clients themselves after a restart.
+// Re-hydrate rooms from the persisted store. Clients and activeStreams start
+// empty — WebSocket connections are re-established by clients after a restart.
 for (const persisted of loadRooms()) {
   rooms.set(persisted.id, {
     ...persisted,
     clients: new Map(),
+    activeStreams: new Map(),
   });
 }
 
@@ -71,6 +93,7 @@ councilRoomRouter.post("/council/rooms", (req: Request, res: Response) => {
     createdAt: new Date().toISOString(),
     messages: [],
     clients: new Map(),
+    activeStreams: new Map(),
   });
   saveRooms(rooms);
   logger.info({ roomId: id }, "Council room created");
@@ -133,13 +156,34 @@ councilRoomRouter.post(
   (req: Request, res: Response) => {
     const room = rooms.get(req.params.roomId as string);
     if (!room) { res.status(404).json({ error: "Room not found" }); return; }
-    broadcast(room, {
-      type: "streaming_start",
-      messageId: req.body?.messageId,
-      participantName: req.body?.participantName,
-      participantColor: req.body?.participantColor,
-      timestamp: req.body?.timestamp ?? new Date().toLocaleTimeString(),
+
+    const messageId = req.body?.messageId as string;
+    const participantName = req.body?.participantName as string | undefined;
+    const participantColor = req.body?.participantColor as string | undefined;
+    const timestamp = (req.body?.timestamp as string) ?? new Date().toLocaleTimeString();
+
+    const existing = room.activeStreams.get(messageId);
+    // If already terminated (end raced before start), ignore entirely.
+    if (existing?.terminated) { res.json({ ok: true }); return; }
+
+    // Preserve content buffered by out-of-order pre-start chunks.
+    const bufferedContent = existing?.content ?? "";
+
+    room.activeStreams.set(messageId, {
+      messageId, participantName, participantColor, timestamp,
+      content: bufferedContent,
+      started: true,
+      terminated: false,
     });
+
+    // Broadcast start to all existing connected clients.
+    broadcast(room, { type: "streaming_start", messageId, participantName, participantColor, timestamp });
+
+    // Flush any pre-start buffered chunks so existing clients don't miss them.
+    if (bufferedContent) {
+      broadcast(room, { type: "streaming_chunk", messageId, content: bufferedContent });
+    }
+
     res.json({ ok: true });
   }
 );
@@ -150,11 +194,35 @@ councilRoomRouter.post(
   (req: Request, res: Response) => {
     const room = rooms.get(req.params.roomId as string);
     if (!room) { res.status(404).json({ error: "Room not found" }); return; }
-    broadcast(room, {
-      type: "streaming_chunk",
-      messageId: req.body?.messageId,
-      content: req.body?.content ?? "",
-    });
+
+    const chunk = (req.body?.content as string) ?? "";
+    const chunkMsgId = req.body?.messageId as string;
+    const entry = room.activeStreams.get(chunkMsgId);
+
+    if (entry?.terminated) {
+      // Post-end chunk due to race — discard; don't recreate a zombie entry.
+      res.json({ ok: true }); return;
+    }
+
+    if (!entry) {
+      // Chunk arrived before start — buffer it; do NOT broadcast yet.
+      // start handler will flush buffered content to all clients when it arrives.
+      room.activeStreams.set(chunkMsgId, {
+        messageId: chunkMsgId,
+        timestamp: new Date().toLocaleTimeString(),
+        content: chunk,
+        started: false,
+        terminated: false,
+      });
+    } else if (!entry.started) {
+      // Still waiting for start — keep accumulating, still don't broadcast.
+      entry.content += chunk;
+    } else {
+      // Normal path: start already broadcast; accumulate and forward.
+      entry.content += chunk;
+      broadcast(room, { type: "streaming_chunk", messageId: chunkMsgId, content: chunk });
+    }
+
     res.json({ ok: true });
   }
 );
@@ -165,10 +233,28 @@ councilRoomRouter.post(
   (req: Request, res: Response) => {
     const room = rooms.get(req.params.roomId as string);
     if (!room) { res.status(404).json({ error: "Room not found" }); return; }
-    broadcast(room, {
-      type: "streaming_end",
-      messageId: req.body?.messageId,
-    });
+
+    const messageId = req.body?.messageId as string;
+    const entry = room.activeStreams.get(messageId);
+
+    if (!entry) {
+      // End arrived with no record — store a tombstone to block late post-end chunks.
+      room.activeStreams.set(messageId, {
+        messageId,
+        timestamp: new Date().toLocaleTimeString(),
+        content: "",
+        started: false,
+        terminated: true,
+      });
+    } else {
+      entry.terminated = true;
+    }
+
+    // Only broadcast end if start was already sent; otherwise clients have no open bubble.
+    if (entry?.started) {
+      broadcast(room, { type: "streaming_end", messageId });
+    }
+
     res.json({ ok: true });
   }
 );
@@ -223,6 +309,27 @@ export function attachCouncilWs(server: HttpServer): void {
         participantCount: room.clients.size,
       })
     );
+
+    // Replay every in-progress AI stream so late-joiners see the live typing bubble(s).
+    // Only streams that have been started (start was broadcast to existing clients)
+    // and not yet terminated are relevant; pre-start-buffered or ended entries are skipped.
+    for (const stream of room.activeStreams.values()) {
+      if (!stream.started || stream.terminated) continue;
+      ws.send(JSON.stringify({
+        type: "streaming_start",
+        messageId: stream.messageId,
+        participantName: stream.participantName,
+        participantColor: stream.participantColor,
+        timestamp: stream.timestamp,
+      }));
+      if (stream.content) {
+        ws.send(JSON.stringify({
+          type: "streaming_chunk",
+          messageId: stream.messageId,
+          content: stream.content,
+        }));
+      }
+    }
 
     // Notify others
     broadcast(room, { type: "presence", participantCount: room.clients.size }, ws);

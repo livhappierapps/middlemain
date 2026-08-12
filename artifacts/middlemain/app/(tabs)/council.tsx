@@ -402,6 +402,120 @@ function MessageBubble({
   );
 }
 
+// ─── Live Room Sheet ──────────────────────────────────────────────────────────
+function LiveRoomSheet({
+  visible,
+  onClose,
+  url,
+  viewerCount,
+  onCopy,
+  onShare,
+  onStop,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  url: string;
+  viewerCount: number;
+  onCopy: () => void;
+  onShare: () => void;
+  onStop: () => void;
+}) {
+  const { theme } = useTheme();
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <TouchableOpacity
+        style={{ flex: 1, backgroundColor: '#00000066' }}
+        activeOpacity={1}
+        onPress={onClose}
+      />
+      <View style={{
+        position: 'absolute', bottom: 0, left: 0, right: 0,
+        backgroundColor: theme.background,
+        borderTopLeftRadius: 20, borderTopRightRadius: 20,
+        paddingHorizontal: 20, paddingTop: 20,
+        paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+      }}>
+        {/* Handle bar */}
+        <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: theme.border, alignSelf: 'center', marginBottom: 18 }} />
+
+        {/* Title row */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#ff4444' }} />
+            <NeonText size={16} weight="700" letterSpacing={2}>LIVE ROOM</NeonText>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Feather name="users" size={13} color={theme.textMuted} />
+            <Text style={{ color: theme.textMuted, fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>
+              {viewerCount} viewer{viewerCount !== 1 ? 's' : ''}
+            </Text>
+          </View>
+        </View>
+
+        {/* URL display */}
+        <View style={{
+          backgroundColor: theme.surface,
+          borderWidth: 1, borderColor: theme.border,
+          borderRadius: theme.radius,
+          paddingHorizontal: 14, paddingVertical: 12,
+          marginBottom: 16,
+        }}>
+          <Text style={{ color: theme.textMuted, fontSize: 9, fontFamily: 'Inter_600SemiBold', letterSpacing: 1.5, marginBottom: 4 }}>
+            SHARE LINK
+          </Text>
+          <Text
+            selectable
+            style={{ color: theme.text, fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 18 }}
+            numberOfLines={2}
+          >
+            {url}
+          </Text>
+        </View>
+
+        {/* Action buttons */}
+        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+          <TouchableOpacity
+            onPress={onCopy}
+            style={{
+              flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+              paddingVertical: 13, borderRadius: theme.radius, borderWidth: 1,
+              borderColor: theme.primary, backgroundColor: theme.primary + '18',
+            }}
+          >
+            <Feather name="copy" size={15} color={theme.primary} />
+            <Text style={{ color: theme.primary, fontSize: 13, fontFamily: 'Inter_600SemiBold' }}>Copy Link</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={onShare}
+            style={{
+              flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+              paddingVertical: 13, borderRadius: theme.radius, borderWidth: 1,
+              borderColor: theme.secondary, backgroundColor: theme.secondary + '18',
+            }}
+          >
+            <Feather name="share-2" size={15} color={theme.secondary} />
+            <Text style={{ color: theme.secondary, fontSize: 13, fontFamily: 'Inter_600SemiBold' }}>Share</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Stop Room */}
+        <TouchableOpacity
+          onPress={onStop}
+          style={{
+            flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+            paddingVertical: 13, borderRadius: theme.radius, borderWidth: 1,
+            borderColor: '#ff4444', backgroundColor: '#ff444418',
+          }}
+        >
+          <Feather name="radio" size={15} color="#ff4444" />
+          <Text style={{ color: '#ff4444', fontSize: 13, fontFamily: 'Inter_600SemiBold' }}>Stop Room</Text>
+        </TouchableOpacity>
+      </View>
+    </Modal>
+  );
+}
+
 // ─── Auto Mode Modal ─────────────────────────────────────────────────────────
 function AutoModeModal({
   visible,
@@ -533,6 +647,8 @@ export default function CouncilScreen() {
   const [liveRoomId, setLiveRoomId] = useState<string | null>(null);
   const [liveRoomUrl, setLiveRoomUrl] = useState<string | null>(null);
   const [isGoingLive, setIsGoingLive] = useState(false);
+  const [liveViewerCount, setLiveViewerCount] = useState(0);
+  const [showLiveSheet, setShowLiveSheet] = useState(false);
   const broadcastedIdsRef = useRef<Set<string>>(new Set());
   // WS connection from Middlemain → live room (inbound web messages)
   const liveRoomWsRef = useRef<WebSocket | null>(null);
@@ -571,15 +687,20 @@ export default function CouncilScreen() {
 
   // ── Go Live ───────────────────────────────────────────────────────────────
 
+  const handleStopRoom = useCallback(() => {
+    setLiveRoomId(null);
+    setLiveRoomUrl(null);
+    setLiveViewerCount(0);
+    setShowLiveSheet(false);
+    broadcastedIdsRef.current.clear();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, []);
+
   const handleGoLive = useCallback(async () => {
     if (liveRoomId) {
-      // Already live — show options
-      Alert.alert('🔴 Live Room Active', `Share this link:\n\n${liveRoomUrl}`, [
-        { text: 'Copy Link', onPress: () => { Clipboard.setString(liveRoomUrl!); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } },
-        { text: 'Share', onPress: () => Sharing.shareAsync(liveRoomUrl!) },
-        { text: 'Stop Room', style: 'destructive', onPress: () => { setLiveRoomId(null); setLiveRoomUrl(null); broadcastedIdsRef.current.clear(); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } },
-        { text: 'Done', style: 'cancel' },
-      ]);
+      // Already live — open the sheet
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setShowLiveSheet(true);
       return;
     }
 
@@ -605,18 +726,14 @@ export default function CouncilScreen() {
       setLiveRoomId(json.roomId);
       setLiveRoomUrl(url);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-      Alert.alert('🔴 You\'re Live!', `Anyone with this link can join the council:\n\n${url}`, [
-        { text: 'Copy Link', onPress: () => { Clipboard.setString(url); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } },
-        { text: 'Share', onPress: () => Sharing.shareAsync(url) },
-        { text: 'Done', style: 'cancel' },
-      ]);
+      // Open the share sheet immediately so the user can copy/share the link
+      setShowLiveSheet(true);
     } catch (err: any) {
       Alert.alert('Failed to go live', err?.message ?? 'Could not create room. Is the API server running?');
     } finally {
       setIsGoingLive(false);
     }
-  }, [liveRoomId, liveRoomUrl, messages]);
+  }, [liveRoomId, messages]);
 
   // ── Inbound WS bridge: receive web user messages and route into council ──────
   useEffect(() => {
@@ -650,6 +767,7 @@ export default function CouncilScreen() {
         try {
           const data = JSON.parse(typeof ev.data === 'string' ? ev.data : '') as {
             type: string;
+            participantCount?: number;
             message?: {
               id: string;
               role: string;
@@ -657,6 +775,15 @@ export default function CouncilScreen() {
               content: string;
             };
           };
+
+          // Track viewer count from presence / join / leave events
+          if (
+            (data.type === 'presence' || data.type === 'join' || data.type === 'leave' || data.type === 'history') &&
+            typeof data.participantCount === 'number'
+          ) {
+            setLiveViewerCount(data.participantCount);
+          }
+
           // Only handle new user messages from web participants
           // (web messages always have a participantName; Middlemain re-broadcasts don't)
           if (
@@ -1209,17 +1336,31 @@ export default function CouncilScreen() {
                 <Feather name="bookmark" size={16} color={mcpStatus === 'connected' ? '#a78bfa' : theme.textMuted} />
               </TouchableOpacity>
               {/* Go Live */}
-              <TouchableOpacity
-                onPress={isGoingLive ? undefined : handleGoLive}
-                style={{ padding: 7 }}
-                disabled={isGoingLive}
-              >
-                <Feather
-                  name="radio"
-                  size={16}
-                  color={liveRoomId ? '#ff4444' : isGoingLive ? theme.textMuted : theme.textMuted}
-                />
-              </TouchableOpacity>
+              {liveRoomId ? (
+                <TouchableOpacity
+                  onPress={() => setShowLiveSheet(true)}
+                  style={{
+                    flexDirection: 'row', alignItems: 'center', gap: 5,
+                    paddingHorizontal: 9, paddingVertical: 6, borderRadius: 8,
+                    borderWidth: 1, borderColor: '#ff4444', backgroundColor: '#ff444422',
+                  }}
+                >
+                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#ff4444' }} />
+                  <Text style={{ color: '#ff4444', fontSize: 9, fontFamily: 'Inter_700Bold', letterSpacing: 1.5 }}>LIVE</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  onPress={isGoingLive ? undefined : handleGoLive}
+                  style={{ padding: 7 }}
+                  disabled={isGoingLive}
+                >
+                  <Feather
+                    name="radio"
+                    size={16}
+                    color={isGoingLive ? theme.textMuted : theme.textMuted}
+                  />
+                </TouchableOpacity>
+              )}
               {/* Export session */}
               <TouchableOpacity
                 onPress={handleExport}
@@ -1292,6 +1433,31 @@ export default function CouncilScreen() {
               </TouchableOpacity>
             </View>
           </View>
+
+          {/* Live room banner — visible whenever a room is active */}
+          {liveRoomId && (
+            <TouchableOpacity
+              onPress={() => setShowLiveSheet(true)}
+              activeOpacity={0.8}
+              style={{
+                flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                backgroundColor: '#ff444412', borderWidth: 1, borderColor: '#ff444455',
+                borderRadius: 8, paddingHorizontal: 12, paddingVertical: 7, marginBottom: 10,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+                <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#ff4444' }} />
+                <Text style={{ color: '#ff4444', fontSize: 11, fontFamily: 'Inter_700Bold', letterSpacing: 1.5 }}>LIVE</Text>
+                <Text style={{ color: theme.textMuted, fontSize: 11, fontFamily: 'Inter_400Regular' }}>
+                  · {liveViewerCount} viewer{liveViewerCount !== 1 ? 's' : ''}
+                </Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Text style={{ color: theme.textMuted, fontSize: 10, fontFamily: 'Inter_400Regular' }}>tap to share</Text>
+                <Feather name="chevron-right" size={12} color={theme.textMuted} />
+              </View>
+            </TouchableOpacity>
+          )}
 
           {/* Participant strip */}
           {participants.length > 0 ? (
@@ -1495,6 +1661,27 @@ export default function CouncilScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      <LiveRoomSheet
+        visible={showLiveSheet}
+        onClose={() => setShowLiveSheet(false)}
+        url={liveRoomUrl ?? ''}
+        viewerCount={liveViewerCount}
+        onCopy={() => {
+          if (!liveRoomUrl) return;
+          Clipboard.setString(liveRoomUrl);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          setShowLiveSheet(false);
+        }}
+        onShare={() => {
+          if (!liveRoomUrl) return;
+          Sharing.shareAsync(liveRoomUrl);
+        }}
+        onStop={() => {
+          setShowLiveSheet(false);
+          handleStopRoom();
+        }}
+      />
 
       <AddParticipantModal
         visible={showAddModal}

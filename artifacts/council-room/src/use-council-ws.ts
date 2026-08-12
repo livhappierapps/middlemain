@@ -12,6 +12,7 @@ export type RoomMessage = {
 export function useCouncilWs(roomId: string, name: string | null) {
   const [messages, setMessages] = useState<RoomMessage[]>([]);
   const [participantCount, setParticipantCount] = useState(0);
+  const [viewers, setViewers] = useState<string[]>([]);
   const [roomName, setRoomName] = useState('');
   const [status, setStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
   const wsRef = useRef<WebSocket | null>(null);
@@ -47,10 +48,18 @@ export function useCouncilWs(roomId: string, name: string | null) {
             setMessages(data.messages || []);
             setParticipantCount(data.participantCount || 0);
             if (data.roomName) setRoomName(data.roomName);
+            // Server sends current participant list; include ourselves since we just joined
+            const serverList: string[] = data.participants || [];
+            setViewers(serverList.includes(name!) ? serverList : [...serverList, name!]);
           } else if (data.type === 'message') {
             setMessages((prev) => [...prev, data.message]);
           } else if (data.type === 'join') {
             setParticipantCount(data.participantCount);
+            if (data.participants) {
+              setViewers(data.participants);
+            } else {
+              setViewers((prev) => prev.includes(data.name) ? prev : [...prev, data.name]);
+            }
             setMessages((prev) => [...prev, {
               id: Math.random().toString(),
               role: 'system',
@@ -59,6 +68,11 @@ export function useCouncilWs(roomId: string, name: string | null) {
             }]);
           } else if (data.type === 'leave') {
             setParticipantCount(data.participantCount);
+            if (data.participants) {
+              setViewers(data.participants);
+            } else {
+              setViewers((prev) => prev.filter((v) => v !== data.name));
+            }
             setMessages((prev) => [...prev, {
               id: Math.random().toString(),
               role: 'system',
@@ -67,6 +81,9 @@ export function useCouncilWs(roomId: string, name: string | null) {
             }]);
           } else if (data.type === 'presence') {
             setParticipantCount(data.participantCount);
+            if (data.participants) {
+              setViewers(data.participants);
+            }
           }
         } catch (e) {
           console.error('Failed to parse WS message', e);
@@ -101,5 +118,5 @@ export function useCouncilWs(roomId: string, name: string | null) {
     }
   }, []);
 
-  return { messages, participantCount, roomName, status, sendMessage };
+  return { messages, participantCount, viewers, roomName, status, sendMessage };
 }

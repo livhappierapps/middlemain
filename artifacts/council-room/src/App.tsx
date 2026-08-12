@@ -4,6 +4,11 @@ import { ErrorBoundary } from '@/components/error-boundary';
 import { Router as WouterRouter, useSearch } from 'wouter';
 import { Terminal, Users, ShieldAlert, ArrowLeft, Send } from 'lucide-react';
 import { useCouncilWs, type RoomMessage } from './use-council-ws';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 
 const queryClient = new QueryClient();
 
@@ -177,7 +182,7 @@ function NamePrompt({ onJoin, roomName }: { onJoin: (name: string) => void, room
 // ==========================================
 
 function ActiveRoom({ roomId, name, initialRoomName }: { roomId: string, name: string, initialRoomName: string }) {
-  const { messages, participantCount, roomName, status, sendMessage } = useCouncilWs(roomId, name);
+  const { messages, participantCount, viewers, roomName, status, sendMessage } = useCouncilWs(roomId, name);
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
   
@@ -213,10 +218,43 @@ function ActiveRoom({ roomId, name, initialRoomName }: { roomId: string, name: s
         </div>
         
         <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2 text-sm text-primary font-bold bg-primary/10 px-3 py-1 border border-primary/20">
-            <Users className="w-4 h-4" />
-            <span>{participantCount}</span>
-          </div>
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                className="flex items-center gap-2 text-sm text-primary font-bold bg-primary/10 px-3 py-1 border border-primary/20 hover:bg-primary/20 hover:border-primary/40 transition-colors cursor-pointer"
+                title="View watchers"
+              >
+                <Users className="w-4 h-4" />
+                <span>{participantCount} watching</span>
+              </button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="end"
+              className="w-56 p-0 bg-black/95 border border-primary/30 shadow-[0_0_20px_rgba(0,255,136,0.1)] rounded-none"
+            >
+              <div className="px-4 py-2.5 border-b border-primary/20">
+                <p className="text-[10px] font-bold text-primary/60 uppercase tracking-widest">Live Watchers</p>
+              </div>
+              <ul className="py-2 max-h-60 overflow-y-auto">
+                {viewers.length === 0 ? (
+                  <li className="px-4 py-2 text-xs text-muted-foreground italic">No names yet…</li>
+                ) : (
+                  viewers.map((v, i) => (
+                    <li
+                      key={i}
+                      className="flex items-center gap-2.5 px-4 py-2 text-sm text-white/90 hover:bg-primary/5"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-none bg-primary shadow-[0_0_4px_rgba(0,255,136,0.8)] shrink-0" />
+                      <span className="font-mono truncate">{v}</span>
+                      {v === name && (
+                        <span className="ml-auto text-[9px] text-primary/60 uppercase tracking-wider shrink-0">you</span>
+                      )}
+                    </li>
+                  ))
+                )}
+              </ul>
+            </PopoverContent>
+          </Popover>
           <a href="?" title="Leave Session" className="text-muted-foreground hover:text-white transition-colors">
             <ArrowLeft className="w-5 h-5" />
           </a>

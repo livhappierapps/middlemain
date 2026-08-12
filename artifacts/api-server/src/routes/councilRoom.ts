@@ -307,6 +307,7 @@ export function attachCouncilWs(server: HttpServer): void {
         roomName: room.name,
         messages: room.messages,
         participantCount: room.clients.size,
+        participants: [...room.clients.values()].map((c) => c.name),
       })
     );
 
@@ -332,7 +333,11 @@ export function attachCouncilWs(server: HttpServer): void {
     }
 
     // Notify others
-    broadcast(room, { type: "presence", participantCount: room.clients.size }, ws);
+    broadcast(room, {
+      type: "presence",
+      participantCount: room.clients.size,
+      participants: [...room.clients.values()].map((c) => c.name),
+    }, ws);
 
     ws.on("message", (raw) => {
       try {
@@ -341,7 +346,12 @@ export function attachCouncilWs(server: HttpServer): void {
         if (data.type === "join") {
           clientName = (data.name as string) || "Guest";
           room.clients.set(ws, { name: clientName, isApp: false });
-          broadcast(room, { type: "join", name: clientName, participantCount: room.clients.size }, ws);
+          broadcast(room, {
+            type: "join",
+            name: clientName,
+            participantCount: room.clients.size,
+            participants: [...room.clients.values()].map((c) => c.name),
+          }, ws);
           logger.info({ roomId, name: clientName }, "Client joined room");
         }
 
@@ -374,6 +384,7 @@ export function attachCouncilWs(server: HttpServer): void {
         type: "leave",
         name,
         participantCount: room.clients.size,
+        participants: [...room.clients.values()].map((c) => c.name),
       });
       logger.info({ roomId, name, remaining: room.clients.size }, "WS client disconnected");
     });

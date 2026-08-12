@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Feather } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Haptics from 'expo-haptics';
@@ -601,6 +602,9 @@ function AutoModeModal({
   );
 }
 
+// ─── Live room persistence key ────────────────────────────────────────────────
+const LIVE_ROOM_STORAGE_KEY = '@middlemain/liveRoom';
+
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 function getApiBase(): string {
   const domain = process.env.EXPO_PUBLIC_DOMAIN;
@@ -687,12 +691,18 @@ export default function CouncilScreen() {
 
   // ── Go Live ───────────────────────────────────────────────────────────────
 
+  // Guard: set to true whenever the user explicitly creates or stops a room.
+  // Prevents a late-resolving rehydration fetch from overwriting explicit user intent.
+  const liveRoomSetByUserRef = useRef(false);
+
   const handleStopRoom = useCallback(() => {
+    liveRoomSetByUserRef.current = true;
     setLiveRoomId(null);
     setLiveRoomUrl(null);
     setLiveViewerCount(0);
     setShowLiveSheet(false);
     broadcastedIdsRef.current.clear();
+    AsyncStorage.removeItem(LIVE_ROOM_STORAGE_KEY).catch(() => {});
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, []);
 
@@ -723,8 +733,11 @@ export default function CouncilScreen() {
       // Mark all current messages as already broadcast — don't replay history
       messages.forEach((m) => broadcastedIdsRef.current.add(m.id));
 
+      liveRoomSetByUserRef.current = true;
       setLiveRoomId(json.roomId);
       setLiveRoomUrl(url);
+      // Persist so the room can be recovered if the app is killed mid-session
+      AsyncStorage.setItem(LIVE_ROOM_STORAGE_KEY, JSON.stringify({ roomId: json.roomId, url })).catch(() => {});
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       // Open the share sheet immediately so the user can copy/share the link
       setShowLiveSheet(true);
@@ -734,6 +747,48 @@ export default function CouncilScreen() {
       setIsGoingLive(false);
     }
   }, [liveRoomId, messages]);
+
+  // ── Rehydrate live room from AsyncStorage on mount ───────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const stored = await AsyncStorage.getItem(LIVE_ROOM_STORAGE_KEY);
+        if (!stored || cancelled) return;
+        const { roomId, url } = JSON.parse(stored) as { roomId: string; url: string };
+        if (!roomId || !url) return;
+        // Verify the room still exists on the server before restoring
+        const resp = await fetch(`${getApiBase()}/council/rooms/${roomId}`);
+        if (cancelled || liveRoomSetByUserRef.current) return;
+        if (!resp.ok) {
+          // Only discard the persisted entry on a confirmed 404 (room expired/deleted).
+          // Transient server errors (5xx, network failure) leave the entry intact so the
+          // host can recover on the next launch.
+          if (resp.status === 404) {
+            await AsyncStorage.removeItem(LIVE_ROOM_STORAGE_KEY);
+          }
+          return;
+        }
+        // Final check: user may have tapped Go Live during the fetch
+        if (liveRoomSetByUserRef.current) return;
+        // Pre-populate broadcastedIdsRef from the server's room history so the
+        // forwarding effect doesn't re-POST messages that are already in the room.
+        try {
+          const roomData = (await resp.json()) as { messages?: { id: string }[] };
+          (roomData.messages ?? []).forEach((m) => broadcastedIdsRef.current.add(m.id));
+        } catch {
+          // JSON parse failure — proceed without pre-seeding; worst case is duplicate
+          // messages (acceptable degradation, the room still recovers)
+        }
+        setLiveRoomId(roomId);
+        setLiveRoomUrl(url);
+      } catch {
+        // Network or parse error — silently skip; don't disrupt the app
+      }
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // mount only
 
   // ── Inbound WS bridge: receive web user messages and route into council ──────
   useEffect(() => {

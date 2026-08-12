@@ -21,6 +21,11 @@ const MAX_STORED_MESSAGES = 200;
 const STORAGE_MANUAL_PARTICIPANTS_KEY = 'council_manual_participants_v1';
 const STORAGE_WEBHOOK_URL_KEY = 'council_webhook_url_v1';
 const STORAGE_HISTORY_LIMIT_KEY = 'council_history_limit_v1';
+const STORAGE_API_URL_KEY = '@middlemain/apiUrl';
+
+// Module-level cache kept in sync by CouncilProvider so async callbacks
+// (which capture stale closures) always see the current API base URL.
+let _cachedApiUrl = '';
 
 // Number of AI exchanges between webhook digests
 const WEBHOOK_EXCHANGE_INTERVAL = 5;
@@ -107,6 +112,9 @@ interface CouncilContextValue {
   sendVisionFrameToAll: (imageData: string, source: 'camera' | 'screen', participantIds?: string[]) => Promise<void>;
   historyLimit: number;
   setHistoryLimit: (limit: number) => Promise<void>;
+  /** The base API URL (e.g. https://xxx.replit.dev/api). Persisted in AsyncStorage. */
+  apiUrl: string;
+  setApiUrl: (url: string) => Promise<void>;
   clearMessages: () => void;
   /** Inject a system message directly into the council feed (no AI response triggered). */
   injectSystemMessage: (content: string) => void;
@@ -126,6 +134,7 @@ function genId(): string {
 }
 
 function getServerBase(): string {
+  if (_cachedApiUrl) return _cachedApiUrl;
   const domain = process.env.EXPO_PUBLIC_DOMAIN;
   if (domain) return `https://${domain}/api`;
   return '/api';
@@ -318,6 +327,7 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
   const [autoRound, setAutoRound] = useState(0);
   const [webhookUrl, setWebhookUrlState] = useState('');
   const [historyLimit, setHistoryLimitState] = useState(MAX_STORED_MESSAGES);
+  const [apiUrl, setApiUrlState] = useState('');
   const hasWarnedTrimRef = useRef(false);
 
   // Tracks whether we've finished loading from AsyncStorage; gates saves so
@@ -348,11 +358,12 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
     (async () => {
       try {
-        const [storedMessages, storedParticipants, storedWebhookUrl, storedHistoryLimit] = await Promise.all([
+        const [storedMessages, storedParticipants, storedWebhookUrl, storedHistoryLimit, storedApiUrl] = await Promise.all([
           AsyncStorage.getItem(STORAGE_MESSAGES_KEY),
           AsyncStorage.getItem(STORAGE_MANUAL_PARTICIPANTS_KEY),
           AsyncStorage.getItem(STORAGE_WEBHOOK_URL_KEY),
           AsyncStorage.getItem(STORAGE_HISTORY_LIMIT_KEY),
+          AsyncStorage.getItem(STORAGE_API_URL_KEY),
         ]);
 
         if (cancelled) return;
@@ -394,6 +405,11 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
         if (storedHistoryLimit !== null) {
           const parsed = parseInt(storedHistoryLimit, 10);
           if (!isNaN(parsed)) setHistoryLimitState(parsed);
+        }
+
+        if (storedApiUrl) {
+          _cachedApiUrl = storedApiUrl;
+          setApiUrlState(storedApiUrl);
         }
       } catch {}
       if (!cancelled) {
@@ -468,6 +484,14 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
     hasWarnedTrimRef.current = false;
     setHistoryLimitState(limit);
     await AsyncStorage.setItem(STORAGE_HISTORY_LIMIT_KEY, String(limit)).catch(() => {});
+  }, []);
+
+  /** Update and persist the API base URL. */
+  const setApiUrl = useCallback(async (url: string) => {
+    const trimmed = url.trim().replace(/\/$/, '');
+    _cachedApiUrl = trimmed;
+    setApiUrlState(trimmed);
+    await AsyncStorage.setItem(STORAGE_API_URL_KEY, trimmed).catch(() => {});
   }, []);
 
   /**
@@ -1205,6 +1229,8 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
       testWebhook,
       historyLimit,
       setHistoryLimit,
+      apiUrl,
+      setApiUrl,
       addParticipant,
       removeParticipant,
       sendUserMessage,

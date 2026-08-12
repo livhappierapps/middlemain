@@ -8,6 +8,14 @@ import { loadRooms, saveRooms } from "../lib/roomStore";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+/** Per-room map of agentKey → agent name for external bot participants. */
+const roomAgentKeys = new Map<string, Map<string, string>>();
+
+function getOrCreateAgentKeyMap(roomId: string): Map<string, string> {
+  if (!roomAgentKeys.has(roomId)) roomAgentKeys.set(roomId, new Map());
+  return roomAgentKeys.get(roomId)!;
+}
+
 export interface RoomMessage {
   id: string;
   role: "user" | "ai" | "system";
@@ -256,6 +264,76 @@ councilRoomRouter.post(
     }
 
     res.json({ ok: true });
+  }
+);
+
+/**
+ * POST /api/council/rooms/:roomId/agent
+ *
+ * Lets an external agent (e.g. a Replit agent) join a room under a chosen name
+ * and post messages without needing a WebSocket connection.
+ *
+ * First call: omit agentKey → server mints one and returns it.
+ * Subsequent calls: supply agentKey to authenticate.
+ *
+ * Body: { name: string, message: string, agentKey?: string }
+ * Response: { ok: true, agentKey: string, agentName: string }
+ */
+councilRoomRouter.post(
+  "/council/rooms/:roomId/agent",
+  (req: Request, res: Response) => {
+    const room = rooms.get(req.params.roomId as string);
+    if (!room) { res.status(404).json({ error: "Room not found" }); return; }
+
+    const name = ((req.body?.name as string) ?? "").trim();
+    const content = ((req.body?.message as string) ?? "").trim();
+    const suppliedKey = (req.body?.agentKey as string | undefined)?.trim();
+
+    if (!name) { res.status(400).json({ error: "name is required" }); return; }
+    if (!content) { res.status(400).json({ error: "message is required" }); return; }
+
+    const keyMap = getOrCreateAgentKeyMap(req.params.roomId as string);
+
+    let agentKey: string;
+
+    if (suppliedKey) {
+      // Verify the key matches the claimed name
+      const registeredName = keyMap.get(suppliedKey);
+      if (!registeredName) {
+        res.status(401).json({ error: "Unknown agentKey — omit it to register a new agent" });
+        return;
+      }
+      if (registeredName !== name) {
+        res.status(403).json({ error: `agentKey belongs to "${registeredName}", not "${name}"` });
+        return;
+      }
+      agentKey = suppliedKey;
+    } else {
+      // First call — mint a new key for this name (names can share a room; each gets a unique key)
+      agentKey = genId() + genId();
+      keyMap.set(agentKey, name);
+      logger.info({ roomId: req.params.roomId, agentName: name }, "Agent registered");
+    }
+
+    // Build and store the message
+    const msg: RoomMessage = {
+      id: genId(),
+      role: "ai",
+      participantName: name,
+      participantColor: "#00e5ff", // cyan — visually distinct from app participants
+      content,
+      timestamp: new Date().toLocaleTimeString(),
+    };
+
+    room.messages.push(msg);
+    if (room.messages.length > MAX_ROOM_MESSAGES) {
+      room.messages = room.messages.slice(-MAX_ROOM_MESSAGES);
+    }
+    saveRooms(rooms);
+    broadcast(room, { type: "message", message: msg });
+
+    logger.info({ roomId: req.params.roomId, agentName: name }, "Agent message posted");
+    res.json({ ok: true, agentKey, agentName: name });
   }
 );
 

@@ -29,7 +29,8 @@ const APP_VERSION = '0.1.0 (Beta)';
 
 const EXEC_KEY_STORAGE = '@middlemain_executive_key';
 
-function getApiBase(): string {
+function resolveApiBase(stored: string): string {
+  if (stored) return stored;
   const domain = process.env.EXPO_PUBLIC_DOMAIN;
   if (domain) return `https://${domain}/api`;
   return '/api';
@@ -120,7 +121,7 @@ function PricingCard({
 export default function SettingsScreen() {
   const { theme, themeKey } = useTheme();
   const { tier, hasRemovedAds, purchaseMonthly, purchaseAnnual, purchaseAdRemoval, restorePurchases } = usePurchase();
-  const { webhookUrl, setWebhookUrl, testWebhook, historyLimit, setHistoryLimit } = useCouncil();
+  const { webhookUrl, setWebhookUrl, testWebhook, historyLimit, setHistoryLimit, apiUrl, setApiUrl } = useCouncil();
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
 
@@ -131,6 +132,9 @@ export default function SettingsScreen() {
   const [webhookInput, setWebhookInput] = useState(webhookUrl);
   const [webhookSaving, setWebhookSaving] = useState(false);
   const [webhookTesting, setWebhookTesting] = useState(false);
+
+  const [apiUrlInput, setApiUrlInput] = useState(apiUrl);
+  const [apiUrlSaving, setApiUrlSaving] = useState(false);
 
   // Executive API card
   const [execCardOpen, setExecCardOpen] = useState(false);
@@ -200,7 +204,7 @@ export default function SettingsScreen() {
     setXaiKeyStatus('idle');
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
-      const resp = await fetch(`${getApiBase()}/executive/set-xai-key`, {
+      const resp = await fetch(`${resolveApiBase(apiUrl)}/executive/set-xai-key`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Executive-Key': execKey },
         body: JSON.stringify({ key: xaiKeyInput.trim() }),
@@ -334,6 +338,62 @@ export default function SettingsScreen() {
             </Text>
           </TouchableOpacity>
         </View>
+
+        {/* API Server URL */}
+        <SectionHeader title="API SERVER" />
+        <NeonCard style={{ marginHorizontal: 16, marginBottom: 4 }} accentColor={theme.primary}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <Feather name="server" size={18} color={theme.primary} />
+            <NeonText size={14} weight="600" color={theme.primary} glow>
+              API Base URL
+            </NeonText>
+          </View>
+          <Text style={{ color: theme.textMuted, fontSize: 12, fontFamily: 'Inter_400Regular', marginBottom: 14, lineHeight: 18 }}>
+            The base URL for your Middlemain API server. Set this if Go Live or Leo are showing network errors on this device.
+          </Text>
+          <TextInput
+            value={apiUrlInput}
+            onChangeText={setApiUrlInput}
+            placeholder="https://your-repl.replit.dev/api"
+            placeholderTextColor={theme.textMuted}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+            style={{
+              backgroundColor: theme.surface + 'CC',
+              borderWidth: 1,
+              borderColor: theme.border,
+              borderRadius: theme.radius,
+              paddingHorizontal: 14,
+              paddingVertical: 10,
+              color: theme.text,
+              fontSize: 12,
+              fontFamily: 'Inter_400Regular',
+              marginBottom: 12,
+            }}
+          />
+          <NeonButton
+            label={apiUrlSaving ? 'Saving…' : 'Save URL'}
+            onPress={async () => {
+              setApiUrlSaving(true);
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              await setApiUrl(apiUrlInput.trim());
+              setApiUrlSaving(false);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert('Saved', 'API URL updated. Go Live will use this address.');
+            }}
+            disabled={apiUrlSaving}
+            accentColor={theme.primary}
+          />
+          {!!resolveApiBase(apiUrl) && (
+            <Text style={{ color: theme.textMuted, fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 10, lineHeight: 16 }}>
+              💡 Currently using{' '}
+              <Text style={{ color: theme.primary, fontFamily: 'Inter_600SemiBold' }}>
+                {resolveApiBase(apiUrl)}
+              </Text>
+            </Text>
+          )}
+        </NeonCard>
 
         {/* Council History Limit */}
         <SectionHeader title="COUNCIL HISTORY" />
@@ -474,7 +534,7 @@ export default function SettingsScreen() {
             </Text>
             <TouchableOpacity
               onPress={async () => {
-                const base = getApiBase();
+                const base = resolveApiBase(apiUrl);
                 await Clipboard.setStringAsync(base);
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                 Alert.alert('Copied', base);
@@ -483,7 +543,7 @@ export default function SettingsScreen() {
               activeOpacity={0.7}
             >
               <Text style={{ flex: 1, color: theme.text, fontSize: 12, fontFamily: 'Inter_400Regular' }} numberOfLines={1}>
-                {getApiBase()}
+                {resolveApiBase(apiUrl)}
               </Text>
               <Feather name="copy" size={14} color={theme.textMuted} />
             </TouchableOpacity>
@@ -493,7 +553,7 @@ export default function SettingsScreen() {
               ENDPOINTS
             </Text>
             {EXEC_ENDPOINTS.map((ep) => {
-              const full = `${getApiBase()}${ep.path.replace(/^\/api/, '')}`;
+              const full = `${resolveApiBase(apiUrl)}${ep.path.replace(/^\/api/, '')}`;
               return (
                 <TouchableOpacity
                   key={ep.path}

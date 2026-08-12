@@ -605,8 +605,11 @@ function AutoModeModal({
 // ─── Live room persistence key ────────────────────────────────────────────────
 const LIVE_ROOM_STORAGE_KEY = '@middlemain/liveRoom';
 
-// ─── Main Screen ─────────────────────────────────────────────────────────────
-function getApiBase(): string {
+// ─── API base helper ─────────────────────────────────────────────────────────
+// Prefers the user-configured URL from context (AsyncStorage-backed), falls
+// back to the baked-in env var, then to a relative path as a last resort.
+function resolveApiBase(stored: string): string {
+  if (stored) return stored;
   const domain = process.env.EXPO_PUBLIC_DOMAIN;
   if (domain) return `https://${domain}/api`;
   return '/api';
@@ -631,7 +634,12 @@ export default function CouncilScreen() {
     sendVisionFrameToAll,
     clearMessages,
     injectSystemMessage,
+    apiUrl,
   } = useCouncil();
+
+  // Keep a stable ref so async callbacks and effects always see the latest URL
+  const apiUrlRef = useRef(apiUrl);
+  useEffect(() => { apiUrlRef.current = apiUrl; }, [apiUrl]);
   const { callTool, status: mcpStatus } = useMCP();
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
@@ -718,16 +726,18 @@ export default function CouncilScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
     try {
-      const resp = await fetch(`${getApiBase()}/council/rooms`, {
+      const apiBase = resolveApiBase(apiUrlRef.current);
+      const resp = await fetch(`${apiBase}/council/rooms`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: 'Council Session' }),
       });
       if (!resp.ok) throw new Error(`Server error ${resp.status}`);
       const json = await resp.json() as { roomId: string };
-      const domain = process.env.EXPO_PUBLIC_DOMAIN ?? '';
-      const url = domain
-        ? `https://${domain}/council-room/?room=${json.roomId}`
+      // Derive the Council Room web URL from the API base (strip /api, add /council-room/)
+      const webBase = apiBase.replace(/\/api$/, '');
+      const url = webBase
+        ? `${webBase}/council-room/?room=${json.roomId}`
         : `/council-room/?room=${json.roomId}`;
 
       // Mark all current messages as already broadcast — don't replay history
@@ -758,7 +768,7 @@ export default function CouncilScreen() {
         const { roomId, url } = JSON.parse(stored) as { roomId: string; url: string };
         if (!roomId || !url) return;
         // Verify the room still exists on the server before restoring
-        const resp = await fetch(`${getApiBase()}/council/rooms/${roomId}`);
+        const resp = await fetch(`${resolveApiBase(apiUrlRef.current)}/council/rooms/${roomId}`);
         if (cancelled || liveRoomSetByUserRef.current) return;
         if (!resp.ok) {
           // Only discard the persisted entry on a confirmed 404 (room expired/deleted).
@@ -883,7 +893,7 @@ export default function CouncilScreen() {
   // Broadcast streaming events (start / chunk / end) to the live room
   useEffect(() => {
     if (!liveRoomId) return;
-    const base = getApiBase();
+    const base = resolveApiBase(apiUrlRef.current);
 
     for (const msg of messages) {
       if (msg.role !== 'ai') continue;
@@ -930,7 +940,7 @@ export default function CouncilScreen() {
   // Forward new non-streaming messages to the live room
   useEffect(() => {
     if (!liveRoomId) return;
-    const base = getApiBase();
+    const base = resolveApiBase(apiUrlRef.current);
     const toSend = messages.filter((m) => !m.streaming && !broadcastedIdsRef.current.has(m.id));
     for (const msg of toSend) {
       broadcastedIdsRef.current.add(msg.id);

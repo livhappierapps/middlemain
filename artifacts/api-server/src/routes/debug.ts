@@ -170,4 +170,54 @@ debugRouter.post("/debug/typecheck", async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * GET /api/debug/build-status
+ * Returns the latest EAS Android + iOS build status so council agents can check it.
+ */
+debugRouter.get("/debug/build-status", async (_req: Request, res: Response) => {
+  try {
+    const { stdout } = await execAsync(
+      "cd /home/runner/workspace/artifacts/middlemain && npx eas build:list --limit 4 --json --non-interactive 2>/dev/null",
+      { timeout: 20_000 }
+    );
+
+    // eas build:list outputs a JSON array, possibly with leading npm notices
+    const jsonStart = stdout.indexOf("[");
+    if (jsonStart === -1) {
+      res.status(502).json({ error: "Could not parse EAS response" });
+      return;
+    }
+
+    const builds = JSON.parse(stdout.slice(jsonStart)) as Array<{
+      id: string;
+      status: string;
+      platform: string;
+      appVersion?: string;
+      buildProfile?: string;
+      createdAt?: string;
+      completedAt?: string;
+      expirationDate?: string;
+      artifacts?: { buildUrl?: string; applicationArchiveUrl?: string };
+    }>;
+
+    const summary = builds.map((b) => ({
+      id: b.id,
+      platform: b.platform,
+      status: b.status,
+      profile: b.buildProfile,
+      version: b.appVersion,
+      createdAt: b.createdAt,
+      completedAt: b.completedAt,
+      expires: b.expirationDate,
+      downloadUrl: b.artifacts?.applicationArchiveUrl ?? b.artifacts?.buildUrl ?? null,
+    }));
+
+    logger.info({ count: summary.length }, "debug/build-status fetched");
+    res.json({ builds: summary, fetchedAt: new Date().toISOString() });
+  } catch (err: any) {
+    logger.error({ err }, "debug/build-status failed");
+    res.status(500).json({ error: err?.message ?? "Failed to fetch build status" });
+  }
+});
+
 export default debugRouter;

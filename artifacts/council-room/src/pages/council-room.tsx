@@ -246,6 +246,7 @@ function RoomView({ roomId }: { roomId: string }) {
   const [input, setInput] = useState('');
   const [status, setStatus] = useState<'connecting' | 'connected' | 'reconnecting' | 'error'>('connecting');
   const [errorMsg, setErrorMsg] = useState('');
+  const [roomExpired, setRoomExpired] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -360,9 +361,10 @@ function RoomView({ roomId }: { roomId: string }) {
     ws.onclose = (ev) => {
       if (unmountedRef.current) return;
       if (ev.code === 1008) {
-        // Policy violation — room not found
+        // Policy violation — room not found / expired
         setStatus('error');
-        setErrorMsg('Room not found or has expired.');
+        setRoomExpired(true);
+        setErrorMsg('This room no longer exists on the server.');
         return;
       }
       const attempt = reconnectAttemptRef.current;
@@ -428,16 +430,39 @@ function RoomView({ roomId }: { roomId: string }) {
   if (status === 'error') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-background text-center gap-4">
-        <div className="text-5xl mb-2">⚡</div>
-        <h2 className="text-xl font-bold text-foreground">Can't reach room</h2>
-        <p className="text-sm text-muted-foreground max-w-xs">{errorMsg}</p>
-        <button
-          className="mt-4 px-6 py-2.5 rounded-lg text-sm font-semibold tracking-wider"
-          style={{ color: '#00ff88', border: '1px solid #00ff88', backgroundColor: '#00ff8818' }}
-          onClick={() => window.location.reload()}
-        >
-          Refresh
-        </button>
+        {roomExpired ? (
+          <>
+            <div className="text-5xl mb-2">🔒</div>
+            <h2 className="text-xl font-bold text-foreground">This room has expired</h2>
+            <p className="text-sm text-muted-foreground max-w-xs">
+              The council session ended or the server was restarted. Open Middlemain and tap{' '}
+              <span className="text-primary font-semibold">🔴 Go Live</span> to start a new session.
+            </p>
+            <button
+              className="mt-4 px-6 py-2.5 rounded-lg text-sm font-semibold tracking-wider"
+              style={{ color: '#00ff88', border: '1px solid #00ff88', backgroundColor: '#00ff8818' }}
+              onClick={() => {
+                // Go back to the landing page (strip the ?room= param)
+                window.location.href = window.location.pathname;
+              }}
+            >
+              Back to Home
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="text-5xl mb-2">⚡</div>
+            <h2 className="text-xl font-bold text-foreground">Can't reach room</h2>
+            <p className="text-sm text-muted-foreground max-w-xs">{errorMsg}</p>
+            <button
+              className="mt-4 px-6 py-2.5 rounded-lg text-sm font-semibold tracking-wider"
+              style={{ color: '#00ff88', border: '1px solid #00ff88', backgroundColor: '#00ff8818' }}
+              onClick={() => window.location.reload()}
+            >
+              Refresh
+            </button>
+          </>
+        )}
       </div>
     );
   }

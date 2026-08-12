@@ -4,6 +4,7 @@ import type { Server as HttpServer } from "http";
 import type { Duplex } from "stream";
 import { WebSocket, WebSocketServer } from "ws";
 import { logger } from "../lib/logger";
+import { loadRooms, saveRooms } from "../lib/roomStore";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -29,10 +30,19 @@ interface Room {
   clients: Map<WebSocket, RoomClient>;
 }
 
-// ─── In-memory store ─────────────────────────────────────────────────────────
+// ─── In-memory store (seeded from disk on startup) ───────────────────────────
 
 const MAX_ROOM_MESSAGES = 200;
 const rooms = new Map<string, Room>();
+
+// Re-hydrate rooms from the persisted store. Clients start empty — WebSocket
+// connections are re-established by the clients themselves after a restart.
+for (const persisted of loadRooms()) {
+  rooms.set(persisted.id, {
+    ...persisted,
+    clients: new Map(),
+  });
+}
 
 function genId(): string {
   return Math.random().toString(36).slice(2, 9);
@@ -62,6 +72,7 @@ councilRoomRouter.post("/council/rooms", (req: Request, res: Response) => {
     messages: [],
     clients: new Map(),
   });
+  saveRooms(rooms);
   logger.info({ roomId: id }, "Council room created");
   res.json({ roomId: id, wsPath: `/api/council/ws/${id}` });
 });
@@ -110,6 +121,7 @@ councilRoomRouter.post(
       room.messages = room.messages.slice(-MAX_ROOM_MESSAGES);
     }
 
+    saveRooms(rooms);
     broadcast(room, { type: "message", message: msg });
     res.json({ ok: true });
   }
@@ -240,6 +252,7 @@ export function attachCouncilWs(server: HttpServer): void {
           if (room.messages.length > MAX_ROOM_MESSAGES) {
             room.messages = room.messages.slice(-MAX_ROOM_MESSAGES);
           }
+          saveRooms(rooms);
           broadcast(room, { type: "message", message: msg });
         }
       } catch {

@@ -115,6 +115,52 @@ councilRoomRouter.post(
   }
 );
 
+/** POST /api/council/rooms/:roomId/streaming/start — AI begins streaming */
+councilRoomRouter.post(
+  "/council/rooms/:roomId/streaming/start",
+  (req: Request, res: Response) => {
+    const room = rooms.get(req.params.roomId as string);
+    if (!room) { res.status(404).json({ error: "Room not found" }); return; }
+    broadcast(room, {
+      type: "streaming_start",
+      messageId: req.body?.messageId,
+      participantName: req.body?.participantName,
+      participantColor: req.body?.participantColor,
+      timestamp: req.body?.timestamp ?? new Date().toLocaleTimeString(),
+    });
+    res.json({ ok: true });
+  }
+);
+
+/** POST /api/council/rooms/:roomId/streaming/chunk — token chunk */
+councilRoomRouter.post(
+  "/council/rooms/:roomId/streaming/chunk",
+  (req: Request, res: Response) => {
+    const room = rooms.get(req.params.roomId as string);
+    if (!room) { res.status(404).json({ error: "Room not found" }); return; }
+    broadcast(room, {
+      type: "streaming_chunk",
+      messageId: req.body?.messageId,
+      content: req.body?.content ?? "",
+    });
+    res.json({ ok: true });
+  }
+);
+
+/** POST /api/council/rooms/:roomId/streaming/end — AI done streaming */
+councilRoomRouter.post(
+  "/council/rooms/:roomId/streaming/end",
+  (req: Request, res: Response) => {
+    const room = rooms.get(req.params.roomId as string);
+    if (!room) { res.status(404).json({ error: "Room not found" }); return; }
+    broadcast(room, {
+      type: "streaming_end",
+      messageId: req.body?.messageId,
+    });
+    res.json({ ok: true });
+  }
+);
+
 // ─── WebSocket handler ───────────────────────────────────────────────────────
 
 /**

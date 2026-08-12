@@ -694,6 +694,57 @@ export default function CouncilScreen() {
     };
   }, [liveRoomId]);
 
+  // Tracks streaming messages we've already announced to the live room
+  // Map<messageId, lastBroadcastContent>
+  const streamingTrackerRef = useRef<Map<string, string>>(new Map());
+
+  // Broadcast streaming events (start / chunk / end) to the live room
+  useEffect(() => {
+    if (!liveRoomId) return;
+    const base = getApiBase();
+
+    for (const msg of messages) {
+      if (msg.role !== 'ai') continue;
+
+      if (msg.streaming) {
+        if (!streamingTrackerRef.current.has(msg.id)) {
+          // New streaming message — announce start
+          streamingTrackerRef.current.set(msg.id, msg.content);
+          fetch(`${base}/council/rooms/${liveRoomId}/streaming/start`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              messageId: msg.id,
+              participantName: msg.participantName,
+              participantColor: msg.participantColor,
+              timestamp: msg.timestamp,
+            }),
+          }).catch(() => {});
+        } else {
+          const lastContent = streamingTrackerRef.current.get(msg.id) ?? '';
+          if (msg.content.length > lastContent.length) {
+            // New chunk arrived — send the delta
+            const delta = msg.content.slice(lastContent.length);
+            streamingTrackerRef.current.set(msg.id, msg.content);
+            fetch(`${base}/council/rooms/${liveRoomId}/streaming/chunk`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ messageId: msg.id, content: delta }),
+            }).catch(() => {});
+          }
+        }
+      } else if (streamingTrackerRef.current.has(msg.id)) {
+        // Was streaming, now done — announce end
+        streamingTrackerRef.current.delete(msg.id);
+        fetch(`${base}/council/rooms/${liveRoomId}/streaming/end`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messageId: msg.id }),
+        }).catch(() => {});
+      }
+    }
+  }, [messages, liveRoomId]);
+
   // Forward new non-streaming messages to the live room
   useEffect(() => {
     if (!liveRoomId) return;

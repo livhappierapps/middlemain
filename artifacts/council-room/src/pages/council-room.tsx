@@ -9,6 +9,7 @@ interface RoomMessage {
   participantColor?: string;
   content: string;
   timestamp: string;
+  streaming?: boolean;
 }
 
 type WsEvent =
@@ -16,7 +17,10 @@ type WsEvent =
   | { type: 'message'; message: RoomMessage }
   | { type: 'join'; name: string; participantCount: number }
   | { type: 'leave'; name: string; participantCount: number }
-  | { type: 'presence'; participantCount: number };
+  | { type: 'presence'; participantCount: number }
+  | { type: 'streaming_start'; messageId: string; participantName?: string; participantColor?: string; timestamp: string }
+  | { type: 'streaming_chunk'; messageId: string; content: string }
+  | { type: 'streaming_end'; messageId: string };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -28,6 +32,26 @@ function getWsUrl(roomId: string): string {
 function getRoomIdFromUrl(): string | null {
   const params = new URLSearchParams(window.location.search);
   return params.get('room');
+}
+
+// ─── Typing dots ─────────────────────────────────────────────────────────────
+
+function TypingDots({ color }: { color: string }) {
+  return (
+    <span className="inline-flex gap-1 items-center py-1">
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          className="inline-block w-1.5 h-1.5 rounded-full animate-bounce"
+          style={{
+            backgroundColor: color,
+            animationDelay: `${i * 0.15}s`,
+            animationDuration: '0.9s',
+          }}
+        />
+      ))}
+    </span>
+  );
 }
 
 // ─── Message bubble ──────────────────────────────────────────────────────────
@@ -91,7 +115,16 @@ function MessageBubble({ msg }: { msg: RoomMessage }) {
             wordBreak: 'break-word',
           }}
         >
-          {msg.content}
+          {msg.streaming && msg.content === '' ? (
+            <TypingDots color={accentColor} />
+          ) : (
+            <>
+              {msg.content}
+              {msg.streaming && (
+                <span style={{ color: accentColor }} className="animate-pulse">▍</span>
+              )}
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -287,6 +320,35 @@ function RoomView({ roomId }: { roomId: string }) {
           ]);
         } else if (data.type === 'presence') {
           setParticipantCount(data.participantCount);
+        } else if (data.type === 'streaming_start') {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: data.messageId,
+              role: 'ai',
+              participantName: data.participantName,
+              participantColor: data.participantColor,
+              content: '',
+              timestamp: data.timestamp,
+              streaming: true,
+            },
+          ]);
+          scrollToBottom();
+        } else if (data.type === 'streaming_chunk') {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === data.messageId
+                ? { ...m, content: m.content + data.content }
+                : m
+            )
+          );
+          scrollToBottom();
+        } else if (data.type === 'streaming_end') {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === data.messageId ? { ...m, streaming: false } : m
+            )
+          );
         }
       } catch {}
     };

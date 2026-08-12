@@ -1,4 +1,4 @@
-import { type ReactNode, useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Router as WouterRouter, useSearch } from 'wouter';
@@ -31,9 +31,15 @@ function Join() {
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (roomId.trim()) {
-      window.location.search = `?room=${roomId.trim()}`;
-    }
+    const trimmed = roomId.trim();
+    if (!trimmed) return;
+    // Support pasting a full URL — extract the room param
+    try {
+      const url = new URL(trimmed);
+      const r = url.searchParams.get('room');
+      if (r) { window.location.search = `?room=${r}`; return; }
+    } catch {}
+    window.location.search = `?room=${trimmed}`;
   };
 
   return (
@@ -47,12 +53,13 @@ function Join() {
         
         <form onSubmit={onSubmit} className="space-y-8">
           <div className="space-y-3">
-            <label className="text-xs text-primary/70 uppercase tracking-widest block font-bold">Session ID</label>
+            <label className="text-xs text-primary/70 uppercase tracking-widest block font-bold">Session ID or Link</label>
             <input 
               type="text" 
               value={roomId}
               onChange={e => setRoomId(e.target.value)}
-              placeholder="Enter Room ID"
+              placeholder="Enter Room ID or paste link"
+              autoFocus
               className="w-full bg-primary/5 border-b-2 border-primary/30 px-3 py-4 text-white focus:outline-none focus:border-primary focus:bg-primary/10 transition-colors placeholder:text-muted-foreground/40 font-mono text-lg"
             />
           </div>
@@ -65,6 +72,9 @@ function Join() {
           </button>
         </form>
       </div>
+      <p className="mt-10 text-[11px] text-muted-foreground text-center max-w-xs uppercase tracking-wider">
+        Room IDs are created in the Middlemain app. Tap 🔴 Go Live to generate a shareable link.
+      </p>
     </div>
   );
 }
@@ -255,7 +265,12 @@ function ActiveRoom({ roomId, name, initialRoomName }: { roomId: string, name: s
 function MessageBubble({ msg }: { msg: RoomMessage }) {
   const isSystem = msg.role === 'system';
   const isAi = msg.role === 'ai';
-  const timeStr = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  // msg.timestamp may be a locale display string (e.g. "4:12 PM") or an ISO string;
+  // render it directly to avoid "Invalid Date" when Middlemain sends display strings.
+  const parsedDate = new Date(msg.timestamp);
+  const timeStr = isNaN(parsedDate.getTime())
+    ? msg.timestamp
+    : parsedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   
   if (isSystem) {
     return (
@@ -274,7 +289,7 @@ function MessageBubble({ msg }: { msg: RoomMessage }) {
         <span className="text-[10px] text-muted-foreground/70 tracking-wider">[{timeStr}]</span>
         
         <span 
-          className="text-xs font-bold uppercase tracking-widest drop-shadow-[0_0_4px_rgba(currentColor,0.5)]" 
+          className="text-xs font-bold uppercase tracking-widest" 
           style={{ color: isAi ? aiColor : 'var(--color-primary)' }}
         >
           {msg.participantName || (isAi ? 'SYS.AI' : 'OPERATIVE')}
@@ -297,7 +312,6 @@ function MessageBubble({ msg }: { msg: RoomMessage }) {
           backgroundColor: isAi ? `${aiColor}10` : 'transparent' 
         }}
       >
-        {/* subtle gradient flare on the border */}
         <div 
           className="absolute left-[-2px] top-0 bottom-0 w-[2px] opacity-50 blur-[2px]"
           style={{ backgroundColor: isAi ? aiColor : 'hsl(var(--primary))' }}

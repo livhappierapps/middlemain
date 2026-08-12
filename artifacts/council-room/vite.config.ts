@@ -72,6 +72,14 @@ export default defineConfig({
     fs: {
       strict: true,
     },
+    // Forward /api requests (including WS upgrades) to the API server
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        ws: true,
+      },
+    },
   },
   preview: {
     port,

@@ -10,7 +10,7 @@ Universal AI Development Bridge — a native mobile developer tool that acts as 
 
 - `pnpm --filter @workspace/middlemain run dev` — Expo dev server
 - `pnpm --filter @workspace/api-server run dev` — API server (uses `PORT` env var)
-- `pnpm --filter @workspace/council-room run dev` — Council Room web app (scaffold, not yet built)
+- `pnpm --filter @workspace/council-room run dev` — Council Room web app (live; join via `?room=<roomId>`)
 - `pnpm run typecheck` — full typecheck across all packages
 
 ---
@@ -21,7 +21,7 @@ Universal AI Development Bridge — a native mobile developer tool that acts as 
 |---|---|---|
 | `artifacts/middlemain` | Expo mobile app | — |
 | `artifacts/api-server` | Express API server | `/api` |
-| `artifacts/council-room` | Web app (scaffold) | `/council-room` |
+| `artifacts/council-room` | Web app (live) | `/council-room` |
 
 ---
 
@@ -32,7 +32,7 @@ Universal AI Development Bridge — a native mobile developer tool that acts as 
 - **AI:** Grok (xAI), OpenAI, Anthropic, Custom (OpenAI-compatible), Dev Server proxy
 - **Streaming:** `expo/fetch` with SSE parsing (NOT global fetch — ReadableStream requirement)
 - **Vision:** grok-2-vision-1212 / gpt-4o / claude-3-5-sonnet
-- **Backend:** Express 5 + `ws` (WebSocket support installed, rooms not yet wired)
+- **Backend:** Express 5 + `ws` (WebSocket rooms live — council room manager in `api-server/src/routes/councilRoom.ts`)
 - **Build:** EAS Build (production profile, `image: "latest"` for Xcode 26+)
 
 ---

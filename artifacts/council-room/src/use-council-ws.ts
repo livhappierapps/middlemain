@@ -15,7 +15,7 @@ export function useCouncilWs(roomId: string, name: string | null) {
   const [roomName, setRoomName] = useState('');
   const [status, setStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeout = useRef<NodeJS.Timeout>();
+  const reconnectTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!name) return;

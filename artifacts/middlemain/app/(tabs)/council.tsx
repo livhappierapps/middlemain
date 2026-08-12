@@ -534,6 +534,13 @@ export default function CouncilScreen() {
   const [liveRoomUrl, setLiveRoomUrl] = useState<string | null>(null);
   const [isGoingLive, setIsGoingLive] = useState(false);
   const broadcastedIdsRef = useRef<Set<string>>(new Set());
+  // WS connection from Middlemain → live room (inbound web messages)
+  const liveRoomWsRef = useRef<WebSocket | null>(null);
+  // Contents of user messages that were injected from web input — skip re-broadcasting these
+  const pendingWebContentsRef = useRef<Set<string>>(new Set());
+  // Stable ref to sendUserMessage so the WS handler closure doesn't go stale
+  const sendUserMessageRef = useRef(sendUserMessage);
+  useEffect(() => { sendUserMessageRef.current = sendUserMessage; }, [sendUserMessage]);
 
   const inputRef = useRef<TextInput>(null);
 
@@ -611,6 +618,82 @@ export default function CouncilScreen() {
     }
   }, [liveRoomId, liveRoomUrl, messages]);
 
+  // ── Inbound WS bridge: receive web user messages and route into council ──────
+  useEffect(() => {
+    if (!liveRoomId) {
+      // Clean up any open WS when room is stopped
+      if (liveRoomWsRef.current) {
+        liveRoomWsRef.current.close();
+        liveRoomWsRef.current = null;
+      }
+      return;
+    }
+
+    const domain = process.env.EXPO_PUBLIC_DOMAIN ?? '';
+    const wsUrl = domain
+      ? `wss://${domain}/api/council/ws/${liveRoomId}`
+      : `ws://localhost:8080/api/council/ws/${liveRoomId}`;
+
+    let ws: WebSocket;
+    let closed = false;
+
+    const open = () => {
+      if (closed) return;
+      ws = new WebSocket(wsUrl);
+      liveRoomWsRef.current = ws;
+
+      ws.onopen = () => {
+        ws.send(JSON.stringify({ type: 'join', name: 'Middlemain (app)' }));
+      };
+
+      ws.onmessage = (ev) => {
+        try {
+          const data = JSON.parse(typeof ev.data === 'string' ? ev.data : '') as {
+            type: string;
+            message?: {
+              id: string;
+              role: string;
+              participantName?: string;
+              content: string;
+            };
+          };
+          // Only handle new user messages from web participants
+          // (web messages always have a participantName; Middlemain re-broadcasts don't)
+          if (
+            data.type === 'message' &&
+            data.message?.role === 'user' &&
+            data.message.participantName &&
+            !broadcastedIdsRef.current.has(data.message.id)
+          ) {
+            broadcastedIdsRef.current.add(data.message.id);
+            const content = `🌐 ${data.message.participantName}: ${data.message.content}`;
+            // Track this content so the broadcast effect skips re-posting it to the room
+            pendingWebContentsRef.current.add(content);
+            // Route through the council — AI agents will respond
+            sendUserMessageRef.current(content, []).catch(() => {});
+          }
+        } catch {}
+      };
+
+      ws.onclose = () => {
+        if (!closed) {
+          // Reconnect after a brief pause
+          setTimeout(open, 3000);
+        }
+      };
+
+      ws.onerror = () => { ws.close(); };
+    };
+
+    open();
+
+    return () => {
+      closed = true;
+      ws?.close();
+      liveRoomWsRef.current = null;
+    };
+  }, [liveRoomId]);
+
   // Forward new non-streaming messages to the live room
   useEffect(() => {
     if (!liveRoomId) return;
@@ -618,6 +701,12 @@ export default function CouncilScreen() {
     const toSend = messages.filter((m) => !m.streaming && !broadcastedIdsRef.current.has(m.id));
     for (const msg of toSend) {
       broadcastedIdsRef.current.add(msg.id);
+      // Skip re-posting user messages that were injected from web input
+      // (the room already has them from the web client's direct WS send)
+      if (msg.role === 'user' && pendingWebContentsRef.current.has(msg.content)) {
+        pendingWebContentsRef.current.delete(msg.content);
+        continue;
+      }
       fetch(`${base}/council/rooms/${liveRoomId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

@@ -4,6 +4,7 @@ import { getXaiKey, hasXaiKey } from "../lib/xaiKey";
 
 const grokRouter = Router();
 const XAI_BASE = "https://api.x.ai/v1";
+const DEFAULT_MODEL = "grok-4.7";
 
 interface MessageContent {
   type: "text" | "image_url";
@@ -19,12 +20,13 @@ interface ChatMessage {
  * POST /api/grok/chat
  * Proxy streaming (or non-streaming) chat completions to xAI.
  * Supports multimodal (vision) messages — pass imageBase64 in body.
+ * Default model is grok-4.7 (current coding / agent model). Callers may override.
  */
 grokRouter.post("/grok/chat", async (req: Request, res: Response) => {
   const apiKey = getXaiKey();
   if (!apiKey) { res.status(503).json({ error: "XAI_API_KEY not configured on server" }); return; }
 
-  const { model = "grok-3", messages, stream = true, systemPrompt } = req.body as {
+  const { model = DEFAULT_MODEL, messages, stream = true, systemPrompt } = req.body as {
     model?: string;
     messages: ChatMessage[];
     stream?: boolean;
@@ -89,8 +91,13 @@ grokRouter.get("/grok/status", (_req: Request, res: Response) => {
   res.json({
     configured: hasXaiKey(),
     models: {
-      text: "grok-3",
+      text: DEFAULT_MODEL,
+      coding: "grok-4.7",
       vision: "grok-2-vision-1212",
+    },
+    cli: {
+      install: "bash scripts/install-grok-cli.sh",
+      package: "@xai-official/grok",
     },
     features: {
       streaming: true,

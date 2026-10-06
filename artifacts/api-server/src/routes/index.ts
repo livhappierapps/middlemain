@@ -1,9 +1,10 @@
 import { Router, type IRouter } from "express";
-import healthRouter from "./health";
-import grokRouter from "./grok";
-import executiveRouter from "./executive";
-import debugRouter from "./debug";
-import { councilRoomRouter } from "./councilRoom";
+import healthRouter from "./";
+import grokRouter from "./";
+import executiveRouter from "./";
+import debugRouter from "./";
+import debugRepoRouter from "./";
+import { councilRoomRouter } from "./";
 
 const router: IRouter = Router();
 
@@ -11,6 +12,7 @@ router.use(healthRouter);
 router.use(grokRouter);
 router.use(executiveRouter);
 router.use(debugRouter);
+router.use(debugRepoRouter);
 router.use(councilRoomRouter);
 
 export default router;

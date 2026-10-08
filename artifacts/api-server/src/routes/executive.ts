@@ -5,6 +5,15 @@ import { getXaiKey, hasXaiKey, setXaiKey } from "../lib/xaiKey";
 const executiveRouter = Router();
 const XAI_BASE = "https://api.x.ai/v1";
 
+function sendXaiError(
+  res: Response,
+  status: number,
+  code: string,
+  message: string,
+): void {
+  res.status(status).json({ error: { code, message } });
+}
+
 // ─── Webhook inbox ────────────────────────────────────────────────────────────
 // In-memory ring buffer of council digests received from Middlemain.
 // Survives until the process restarts; Leo reads them via /executive/webhook/inbox.
@@ -30,6 +39,36 @@ interface InboxEntry {
 
 const webhookInbox: InboxEntry[] = [];
 const MAX_INBOX = 30;
+let memoryAuthFailureLogged = false;
+
+class MemoryAuthUnavailableError extends Error {}
+
+function logMemoryAuthFailureOnce(reason: "not_configured" | "rejected"): void {
+  if (memoryAuthFailureLogged) return;
+  memoryAuthFailureLogged = true;
+  logger.warn(
+    { reason },
+    "Memory Machine credentials unavailable; memory calls will be skipped",
+  );
+}
+
+function isMemoryAuthRejection(message: string): boolean {
+  return /unauthori[sz]ed|invalid token|token.*(invalid|expired|reject)|authentication failed|forbidden/i.test(
+    message,
+  );
+}
+
+function respondMemoryUnavailable(
+  res: Response,
+  includeSaved = false,
+): void {
+  res.json({
+    result: "",
+    available: false,
+    skipped: true,
+    ...(includeSaved ? { saved: false } : {}),
+  });
+}
 
 function getMcpUrl(): string {
   return (
@@ -64,7 +103,7 @@ async function mcpToolCall(
   args: Record<string, unknown>
 ): Promise<string> {
   const token = process.env["LEO_MEMORY_TOKEN"];
-  if (!token) throw new Error("LEO_MEMORY_TOKEN not configured");
+  if (!token) throw new MemoryAuthUnavailableError("Memory Machine token not configured");
 
   const resp = await fetch(getMcpUrl(), {
     method: "POST",
@@ -81,17 +120,22 @@ async function mcpToolCall(
   });
 
   if (!resp.ok) {
-    const text = await resp.text().catch(() => "");
-    throw new Error(
-      `MCP ${resp.status}${text ? ": " + text.slice(0, 200) : ""}`
-    );
+    if (resp.status === 401 || resp.status === 403) {
+      throw new MemoryAuthUnavailableError("Memory Machine token rejected");
+    }
+    throw new Error(`Memory Machine request failed (${resp.status})`);
   }
 
   const json = (await resp.json()) as {
     result?: { content?: { text?: string }[] };
     error?: { message?: string };
   };
-  if (json.error) throw new Error(json.error.message ?? "MCP error");
+  if (json.error) {
+    const message =
+      typeof json.error.message === "string" ? json.error.message : "Memory Machine request failed";
+    if (isMemoryAuthRejection(message)) throw new MemoryAuthUnavailableError("Memory Machine token rejected");
+    throw new Error("Memory Machine request failed");
+  }
 
   const content = json.result?.content;
   if (Array.isArray(content)) {
@@ -126,7 +170,7 @@ executiveRouter.get("/executive/status", (req: Request, res: Response) => {
   res.json({
     status: "online",
     memoryMachineUrl: getMcpUrl(),
-    memoryConfigured: !!process.env["LEO_MEMORY_TOKEN"],
+    memoryConfigured: !!process.env["LEO_MEMORY_TOKEN"] && !memoryAuthFailureLogged,
     grokConfigured: hasXaiKey(),
     capabilities: ["chat", "memory/search", "memory/save", "memory/recent"],
   });
@@ -142,7 +186,12 @@ executiveRouter.post("/executive/chat", async (req: Request, res: Response) => {
 
   const apiKey = getXaiKey();
   if (!apiKey) {
-    res.status(503).json({ error: "XAI_API_KEY not configured on server" });
+    sendXaiError(
+      res,
+      503,
+      "XAI_KEY_MISSING",
+      "Server Grok is not configured. Add an xAI key in Settings → Middlemain Executive API.",
+    );
     return;
   }
 
@@ -184,12 +233,19 @@ executiveRouter.post("/executive/chat", async (req: Request, res: Response) => {
     });
 
     if (!upstream.ok) {
-      const text = await upstream.text();
-      logger.warn(
-        { status: upstream.status, body: text.slice(0, 300) },
-        "xAI upstream error (executive)"
-      );
-      res.status(upstream.status).json({ error: text });
+      logger.warn({ status: upstream.status }, "xAI executive request failed");
+      if (upstream.status === 401 || upstream.status === 403) {
+        sendXaiError(
+          res,
+          503,
+          "XAI_KEY_REJECTED",
+          "The xAI key configured for this server was rejected. Update it in Settings → Middlemain Executive API.",
+        );
+      } else if (upstream.status === 429) {
+        sendXaiError(res, 429, "XAI_RATE_LIMITED", "Grok is busy right now. Try again shortly.");
+      } else {
+        sendXaiError(res, 502, "XAI_UPSTREAM_ERROR", "Grok is temporarily unavailable. Try again shortly.");
+      }
       return;
     }
 
@@ -218,7 +274,7 @@ executiveRouter.post("/executive/chat", async (req: Request, res: Response) => {
     }
   } catch (err) {
     logger.error({ err }, "Executive chat error");
-    res.status(500).json({ error: "Request failed" });
+    sendXaiError(res, 502, "XAI_UPSTREAM_ERROR", "Could not reach Grok. Check your connection and try again.");
   }
 });
 
@@ -242,9 +298,15 @@ executiveRouter.post(
       const result = await mcpToolCall("search_memories", { query });
       res.json({ result });
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Memory search failed";
+      if (err instanceof MemoryAuthUnavailableError) {
+        logMemoryAuthFailureOnce(
+          process.env["LEO_MEMORY_TOKEN"] ? "rejected" : "not_configured",
+        );
+        respondMemoryUnavailable(res);
+        return;
+      }
       logger.error({ err }, "Executive memory search error");
-      res.status(500).json({ error: msg });
+      res.status(502).json({ error: { code: "MEMORY_MACHINE_UNAVAILABLE", message: "Memory search is unavailable right now." } });
     }
   }
 );
@@ -273,9 +335,15 @@ executiveRouter.post(
       const result = await mcpToolCall("save_memory", { title, content, tags });
       res.json({ result, saved: true });
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Memory save failed";
+      if (err instanceof MemoryAuthUnavailableError) {
+        logMemoryAuthFailureOnce(
+          process.env["LEO_MEMORY_TOKEN"] ? "rejected" : "not_configured",
+        );
+        respondMemoryUnavailable(res, true);
+        return;
+      }
       logger.error({ err }, "Executive memory save error");
-      res.status(500).json({ error: msg });
+      res.status(502).json({ error: { code: "MEMORY_MACHINE_UNAVAILABLE", message: "Memory save is unavailable right now." } });
     }
   }
 );
@@ -298,10 +366,15 @@ executiveRouter.post(
       });
       res.json({ result });
     } catch (err: unknown) {
-      const msg =
-        err instanceof Error ? err.message : "Memory fetch failed";
+      if (err instanceof MemoryAuthUnavailableError) {
+        logMemoryAuthFailureOnce(
+          process.env["LEO_MEMORY_TOKEN"] ? "rejected" : "not_configured",
+        );
+        respondMemoryUnavailable(res);
+        return;
+      }
       logger.error({ err }, "Executive memory recent error");
-      res.status(500).json({ error: msg });
+      res.status(502).json({ error: { code: "MEMORY_MACHINE_UNAVAILABLE", message: "Recent conversations are unavailable right now." } });
     }
   }
 );

@@ -140,6 +140,25 @@ function getServerBase(): string {
   return '/api';
 }
 
+async function getParticipantErrorHint(response: Response): Promise<string> {
+  const payload = await response.json().catch(() => ({}));
+  const errorCode = payload?.error?.code ?? payload?.code;
+
+  if (errorCode === 'XAI_KEY_MISSING') {
+    return 'Server Grok is not set up yet. Add your xAI key in Settings → Middlemain Executive API.';
+  }
+  if (errorCode === 'XAI_KEY_REJECTED') {
+    return 'The server xAI key was rejected. Update it in Settings → Middlemain Executive API.';
+  }
+  if (response.status === 401 || response.status === 403) {
+    return 'API key invalid or unauthorized — check your key in Connect settings.';
+  }
+  if (response.status === 404) return 'Endpoint not found — check the base URL in Connect settings.';
+  if (response.status === 429) return 'Rate limited — slow down or check your quota.';
+  if (response.status >= 500) return 'The AI provider is temporarily unavailable. Try again shortly.';
+  return 'The request failed. Check your connection settings and try again.';
+}
+
 const CHUNK_MS = 2500;
 const WS_MAX_RECONNECT_ATTEMPTS = 5;
 const WS_BASE_RECONNECT_DELAY_MS = 1000;
@@ -958,16 +977,7 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
         try {
           const resp = await callParticipantAI(participant, historyMessages);
           if (!resp.ok) {
-            const errHint =
-              resp.status === 401 || resp.status === 403
-                ? 'API key invalid or unauthorized — check your key in Connect settings.'
-                : resp.status === 404
-                ? 'Endpoint not found — check the base URL in Connect settings.'
-                : resp.status === 429
-                ? 'Rate limited — slow down or check your quota.'
-                : resp.status >= 500
-                ? `Server error (${resp.status}) — the AI provider is having issues, try again.`
-                : `Request failed (${resp.status}) — check your connection settings.`;
+            const errHint = await getParticipantErrorHint(resp);
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === streamId
@@ -1058,10 +1068,7 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
     try {
       const resp = await callParticipantAI(participant, historyMessages);
       if (!resp.ok) {
-        const hint = resp.status === 401 || resp.status === 403
-          ? 'API key invalid.'
-          : resp.status === 429 ? 'Rate limited — slow down.'
-          : `Error ${resp.status}`;
+        const hint = await getParticipantErrorHint(resp);
         setMessages((prev) =>
           prev.map((m) => m.id === streamId ? { ...m, content: `⚠️ ${hint}`, streaming: false } : m),
         );

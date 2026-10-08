@@ -52,6 +52,8 @@ export interface GuideSource {
   uri: string;
 }
 
+export type ServerGrokStatus = 'checking' | 'available' | 'missing' | 'offline';
+
 export const PROVIDER_DEFAULTS: Record<AIProvider, { baseUrl: string; model: string; visionModel: string; label: string }> = {
   xai:       { baseUrl: 'https://api.x.ai/v1',             model: 'grok-4.7',                     visionModel: 'grok-4.7',                 label: 'Grok (xAI)' },
   openai:    { baseUrl: 'https://api.openai.com/v1',       model: 'gpt-5-mini',                   visionModel: 'gpt-5-mini',               label: 'OpenAI' },
@@ -78,6 +80,8 @@ interface AIContextValue {
   connections: AIConnection[];
   activeConnection: AIConnection | null;
   serverGrokAvailable: boolean;
+  serverGrokStatus: ServerGrokStatus;
+  refreshServerGrokStatus: () => Promise<void>;
   addConnection: (conn: Omit<AIConnection, 'id'>) => string;
   updateConnection: (id: string, updates: Partial<AIConnection>) => void;
   deleteConnection: (id: string) => void;
@@ -123,6 +127,8 @@ const AIContext = createContext<AIContextValue>({
   connections: [],
   activeConnection: null,
   serverGrokAvailable: false,
+  serverGrokStatus: 'checking',
+  refreshServerGrokStatus: async () => {},
   addConnection: () => '',
   updateConnection: () => {},
   deleteConnection: () => {},
@@ -295,16 +301,28 @@ async function streamSSE(
 export function AIProvider({ children }: { children: React.ReactNode }) {
   const [connections, setConnections] = useState<AIConnection[]>([]);
   const [serverGrokAvailable, setServerGrokAvailable] = useState(false);
+  const [serverGrokStatus, setServerGrokStatus] = useState<ServerGrokStatus>('checking');
+
+  const refreshServerGrokStatus = useCallback(async () => {
+    try {
+      const response = await fetch(`${getServerBase()}/grok/status`);
+      if (!response.ok) throw new Error('Grok status unavailable');
+      const json = await response.json();
+      const configured = json?.configured === true;
+      setServerGrokAvailable(configured);
+      setServerGrokStatus(configured ? 'available' : 'missing');
+    } catch {
+      setServerGrokAvailable(false);
+      setServerGrokStatus('offline');
+    }
+  }, []);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((data) => {
       if (data) { try { setConnections(JSON.parse(data)); } catch {} }
     });
-    fetch(`${getServerBase()}/grok/status`)
-      .then((r) => r.json())
-      .then((json: any) => setServerGrokAvailable(json?.configured === true))
-      .catch(() => setServerGrokAvailable(false));
-  }, []);
+    void refreshServerGrokStatus();
+  }, [refreshServerGrokStatus]);
 
   const persist = useCallback((conns: AIConnection[]) => {
     setConnections(conns);
@@ -391,7 +409,14 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
       try {
         const resp = await callAI(effectiveConn, messages, true, imageBase64);
         if (!resp.ok) {
+          const payload = await resp.json().catch(() => ({}));
+          const errorCode = payload?.error?.code ?? payload?.code;
           const errHint =
+            errorCode === 'XAI_KEY_MISSING'
+              ? 'Server Grok is not set up yet. Add your xAI key in Settings → Middlemain Executive API.'
+              : errorCode === 'XAI_KEY_REJECTED'
+              ? 'The server xAI key was rejected. Update it in Settings → Middlemain Executive API.'
+              :
             resp.status === 401 || resp.status === 403
               ? 'API key invalid or unauthorized — check your key in Connect settings.'
               : resp.status === 404
@@ -644,7 +669,7 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AIContext.Provider value={{
-      connections, activeConnection, serverGrokAvailable,
+      connections, activeConnection, serverGrokAvailable, serverGrokStatus, refreshServerGrokStatus,
       addConnection, updateConnection, deleteConnection,
       setActiveConnection, addServerGrokConnection,
       testConnection, sendMessage, sendGuideMessage, sendMessageWithTools,

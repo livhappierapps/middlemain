@@ -5,3 +5,4 @@
 - [Expo E2E testing skip](expo-e2e-skip.md) — Playwright-based runTest() cannot reach the Expo mobile build via browser proxy; skip with documented reason.
 - [EAS Build from main agent](eas-build-restriction.md) — EAS CLI acquires a git index lock which Replit's sandbox blocks in the main agent. Must use a project_tasks background task to trigger EAS builds. Workaround env var: EAS_SKIP_AUTO_FINGERPRINT=1 still needed alongside the task approach.
 - [Cost transparency](cost-transparency.md) — Warn Dev before any action that may create charges; do not initiate paid API usage or builds without clear notice.
+- [Task ownership](task-ownership.md) — Review already-running work before implementing the same feature; separate main edits from queued merges.

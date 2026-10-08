@@ -383,7 +383,6 @@ export default function SettingsScreen() {
               Alert.alert('Saved', 'API URL updated. Go Live will use this address.');
             }}
             disabled={apiUrlSaving}
-            accentColor={theme.primary}
           />
           {!!resolveApiBase(apiUrl) && (
             <Text style={{ color: theme.textMuted, fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 10, lineHeight: 16 }}>

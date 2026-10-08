@@ -135,6 +135,11 @@ Auth header: `X-Executive-Key: <LEO_EXECUTIVE_KEY>`
 
 ## Gotchas
 
+- Repository debugging: see `docs/repository-debugging.md`. Debug imports a selected GitHub source/config file, pinned to a commit; it is not a complete native-build test.
+- Private repo access requires a customer-authorized, read-only GitHub App with device flow enabled and a public client ID in the native build. Never reuse the workspace's owner token for consumers.
+- Debug AI analysis requires explicit cost/data-sharing consent, uses a customer connection, and never automatically retries. Source checks do not trigger EAS.
+- The compiler is a runtime dependency of the API server. Isolated checks do not follow user-supplied imports/reference paths or run repository code.
+
 - `expo-clipboard` must be `~8.0.8` (Expo SDK 54 compatible)
 - Streaming uses `fetch` from `expo/fetch` — NOT global fetch (ReadableStream requirement)
 - `ThemeProvider` must be above `ErrorBoundary` in `_layout.tsx` for `ErrorFallback` theming

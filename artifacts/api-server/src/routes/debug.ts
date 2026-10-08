@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
-import { exec } from "child_process";
+import { exec, execFile } from "child_process";
+import { createRequire } from "module";
 import { writeFile, rm, mkdir } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -7,11 +8,13 @@ import { promisify } from "util";
 import { logger } from "../lib/logger";
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
+const require = createRequire(import.meta.url);
 const debugRouter = Router();
+let activeChecks = 0;
 
 // Use the workspace-root tsc and middlemain's @types for full React Native awareness
-const TSC_BIN = "/home/runner/workspace/node_modules/.bin/tsc";
-const TYPE_ROOTS = "/home/runner/workspace/artifacts/middlemain/node_modules/@types";
+const TYPE_ROOTS = join(process.cwd(), "../middlemain/node_modules/@types");
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -59,11 +62,11 @@ function parseTscOutput(raw: string, tempFile: string): DiagnosticEntry[] {
 function buildSummary(errors: DiagnosticEntry[]): string {
   const errCount = errors.filter((e) => e.severity === "error").length;
   const warnCount = errors.filter((e) => e.severity === "warning").length;
-  if (errCount === 0 && warnCount === 0) return "No issues found — safe to build.";
+  if (errCount === 0 && warnCount === 0) return "No issues found in this isolated file check. Project dependencies and native builds are not verified.";
   const parts: string[] = [];
   if (errCount > 0) parts.push(`${errCount} error${errCount > 1 ? "s" : ""}`);
   if (warnCount > 0) parts.push(`${warnCount} warning${warnCount > 1 ? "s" : ""}`);
-  return parts.join(", ") + (errCount > 0 ? " — build will fail." : " — build may succeed.");
+  return parts.join(", ") + " in this isolated source check. This is not a complete project or native build.";
 }
 
 // ── Route ─────────────────────────────────────────────────────────────────────
@@ -86,10 +89,12 @@ debugRouter.post("/debug/typecheck", async (req: Request, res: Response) => {
     res.status(400).json({ error: "No code provided" });
     return;
   }
-  if (code.length > 300_000) {
+  if (Buffer.byteLength(code, "utf8") > 300_000) {
     res.status(400).json({ error: "Code too large — max 300 KB" });
     return;
   }
+  if (activeChecks >= 2) { res.status(429).json({ error: "Two source checks are already running. Try again after they finish." }); return; }
+  activeChecks++;
 
   const isJS = mode === "javascript";
   const ext = isJS ? ".jsx" : ".tsx";
@@ -105,34 +110,40 @@ debugRouter.post("/debug/typecheck", async (req: Request, res: Response) => {
 
     const flags = [
       "--noEmit",
+      // Never follow user-supplied imports or triple-slash paths into server files.
+      "--noResolve",
       "--allowJs",
-      `--jsx ${jsxMode}`,
+      "--checkJs",
+      "--jsx", jsxMode,
       "--esModuleInterop",
       "--allowSyntheticDefaultImports",
       "--skipLibCheck",
-      "--target ES2020",
-      "--lib ES2020,DOM",
-      "--moduleResolution node",
-      `--typeRoots "${TYPE_ROOTS}"`,
+      "--target", "ES2020",
+      "--lib", "ES2020,DOM",
+      "--moduleResolution", "node",
+      "--typeRoots", TYPE_ROOTS,
       // Permissive — we want real errors, not strict-mode noise
-      "--strict false",
-      "--noImplicitAny false",
-      "--noUnusedLocals false",
-      "--noUnusedParameters false",
-    ].join(" ");
+      "--strict", "false",
+      "--noImplicitAny", "false",
+      "--noUnusedLocals", "false",
+      "--noUnusedParameters", "false",
+    ];
 
-    const cmd = `"${TSC_BIN}" ${flags} "${tempFile}"`;
     let rawOutput = "";
+    let compilerFailed = false;
 
     try {
-      const { stdout, stderr } = await execAsync(cmd, { timeout: 30_000 });
+      const { stdout, stderr } = await execFileAsync(process.execPath, [require.resolve("typescript/bin/tsc"), ...flags, tempFile], { timeout: 30_000, maxBuffer: 1_000_000 });
       rawOutput = (stdout + stderr).trim();
     } catch (err: any) {
       // tsc exits non-zero when errors found — that's expected
       rawOutput = ((err.stdout ?? "") + (err.stderr ?? "")).trim();
+      compilerFailed = true;
+      if (err.killed || !rawOutput) rawOutput = "The compiler could not complete this check (unavailable, timed out, or output limit reached).";
     }
 
     const errors = parseTscOutput(rawOutput, tempFile);
+    if (compilerFailed && errors.length === 0) errors.push({ line: 0, col: 0, code: "CHECK_FAILED", severity: "error", message: "The compiler did not complete a verifiable check. See the output; do not treat this as a pass." });
     const hasErrors = errors.some((e) => e.severity === "error");
     const hasWarnings = errors.some((e) => e.severity === "warning");
 
@@ -166,6 +177,7 @@ debugRouter.post("/debug/typecheck", async (req: Request, res: Response) => {
     logger.error({ err }, "debug/typecheck failed");
     res.status(500).json({ error: err?.message ?? "Typecheck failed" });
   } finally {
+    activeChecks--;
     rm(tempDir, { recursive: true, force: true }).catch(() => {});
   }
 });

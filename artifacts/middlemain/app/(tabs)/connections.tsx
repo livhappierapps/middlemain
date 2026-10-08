@@ -28,6 +28,7 @@ const PROVIDERS: { key: AIProvider; label: string }[] = [
   { key: 'xai', label: 'Grok (xAI)' },
   { key: 'openai', label: 'OpenAI' },
   { key: 'anthropic', label: 'Anthropic' },
+  { key: 'gemini', label: 'Gemini' },
   { key: 'custom', label: 'Custom' },
 ];
 

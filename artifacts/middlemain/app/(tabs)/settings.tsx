@@ -37,9 +37,9 @@ function resolveApiBase(stored: string): string {
 }
 
 const EXEC_ENDPOINTS = [
-  { method: 'POST', path: '/api/executive/chat', desc: 'Send a message to Leo' },
-  { method: 'POST', path: '/api/executive/memory/search', desc: 'Search Leo\'s memory' },
-  { method: 'POST', path: '/api/executive/memory/save', desc: 'Save a memory for Leo' },
+  { method: 'POST', path: '/api/executive/chat', desc: 'Send a message to the executive assistant' },
+  { method: 'POST', path: '/api/executive/memory/search', desc: 'Search saved memories' },
+  { method: 'POST', path: '/api/executive/memory/save', desc: 'Save a memory for the assistant' },
 ];
 
 function SectionHeader({ title }: { title: string }) {
@@ -197,7 +197,7 @@ export default function SettingsScreen() {
       return;
     }
     if (!execKey) {
-      Alert.alert('No executive key', 'Open the LEO EXECUTIVE API section and save your executive key first.');
+      Alert.alert('No executive key', 'Open the Middlemain Executive API section and save your key first.');
       return;
     }
     setXaiKeySaving(true);
@@ -213,7 +213,7 @@ export default function SettingsScreen() {
         setXaiKeyStatus('ok');
         setXaiKeyInput('');
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Alert.alert('✅ Key updated', 'xAI key is live on the server. AI Analyze and Leo chat will use it immediately.');
+        Alert.alert('✅ Key updated', 'xAI key is live on the server. AI Analyze and the executive assistant will use it immediately.');
       } else {
         const json = await resp.json().catch(() => ({})) as any;
         setXaiKeyStatus('error');
@@ -251,7 +251,7 @@ export default function SettingsScreen() {
     setWebhookTesting(false);
     if (result.ok) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert('✅ Webhook reachable', 'Test digest was accepted by your URL. Leo can now receive council updates.');
+      Alert.alert('✅ Webhook reachable', 'Test digest was accepted by your URL. It can now receive council updates.');
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('⚠️ Webhook failed', result.error ?? 'Could not reach the URL. Check it is correct and publicly accessible.');
@@ -349,7 +349,7 @@ export default function SettingsScreen() {
             </NeonText>
           </View>
           <Text style={{ color: theme.textMuted, fontSize: 12, fontFamily: 'Inter_400Regular', marginBottom: 14, lineHeight: 18 }}>
-            The base URL for your Middlemain API server. Set this if Go Live or Leo are showing network errors on this device.
+            The base URL for your Middlemain API server. Set this if Go Live or assistant features are showing network errors on this device.
           </Text>
           <TextInput
             value={apiUrlInput}
@@ -440,11 +440,11 @@ export default function SettingsScreen() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             <Feather name="radio" size={18} color={theme.accent} />
             <NeonText size={14} weight="600" color={theme.accent} glow>
-              Leo's Inbound Webhook
+              Council Update Webhook
             </NeonText>
           </View>
           <Text style={{ color: theme.textMuted, fontSize: 12, fontFamily: 'Inter_400Regular', marginBottom: 14, lineHeight: 18 }}>
-            The council will POST a digest to this URL every 5 exchanges and after each auto session ends — letting Leo monitor and join from outside.
+            The council will send a digest to this URL every 5 exchanges and after each automatic session ends.
           </Text>
 
           <Text style={{ color: theme.textMuted, fontSize: 10, fontFamily: 'Inter_600SemiBold', letterSpacing: 1.5, marginBottom: 6 }}>
@@ -477,7 +477,7 @@ export default function SettingsScreen() {
             <Text style={{ color: theme.accent, fontFamily: 'Inter_600SemiBold' }}>
               /api/executive/webhook/council
             </Text>
-            {' '}endpoint as the URL, or any URL Leo controls.
+            {' '}endpoint as the URL, or another webhook URL you control.
           </Text>
 
           <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -507,7 +507,7 @@ export default function SettingsScreen() {
           activeOpacity={0.7}
         >
           <Text style={{ flex: 1, color: theme.textMuted, fontSize: 10, fontFamily: 'Inter_600SemiBold', letterSpacing: 2 }}>
-            LEO EXECUTIVE API
+            MIDDLEMAIN EXECUTIVE API
           </Text>
           <Feather name={execCardOpen ? 'chevron-up' : 'chevron-down'} size={14} color={theme.textMuted} />
         </TouchableOpacity>
@@ -518,11 +518,11 @@ export default function SettingsScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
               <Feather name="terminal" size={18} color={theme.primary} />
               <NeonText size={14} weight="600" color={theme.primary} glow>
-                Leo Executive API
+                Middlemain Executive API
               </NeonText>
             </View>
             <Text style={{ color: theme.textMuted, fontSize: 12, fontFamily: 'Inter_400Regular', marginBottom: 16, lineHeight: 18 }}>
-              Call Leo's Executive API from outside Middlemain. Include the{' '}
+              Call Middlemain's Executive API from outside the app. Include the{' '}
               <Text style={{ color: theme.primary, fontFamily: 'Inter_600SemiBold' }}>X-Executive-Key</Text>
               {' '}header on every request.
             </Text>
@@ -616,9 +616,7 @@ export default function SettingsScreen() {
               <View style={{ backgroundColor: theme.surface + 'E6', borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 6 }}>
                 <Text style={{ color: theme.textMuted, fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 18 }}>
                   No key saved on this device.{'\n'}
-                  <Text style={{ fontSize: 11 }}>Set{' '}
-                    <Text style={{ color: theme.primary, fontFamily: 'Inter_600SemiBold' }}>LEO_EXECUTIVE_KEY</Text>
-                    {' '}on the API server, then add the key below.
+                  <Text style={{ fontSize: 11 }}>Add the executive key to your API server's Secrets, then paste its value below.
                   </Text>
                 </Text>
                 <TextInput

@@ -3,7 +3,7 @@ import { resilientFetch } from '@/utils/resilientFetch';
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { fetch } from 'expo/fetch';
 
-export type AIProvider = 'xai' | 'openai' | 'anthropic' | 'custom' | 'server';
+export type AIProvider = 'xai' | 'openai' | 'anthropic' | 'gemini' | 'custom' | 'server';
 
 export interface AIConnection {
   id: string;
@@ -47,12 +47,18 @@ export interface OpenAITool {
   };
 }
 
+export interface GuideSource {
+  title: string;
+  uri: string;
+}
+
 export const PROVIDER_DEFAULTS: Record<AIProvider, { baseUrl: string; model: string; visionModel: string; label: string }> = {
-  xai:       { baseUrl: 'https://api.x.ai/v1',             model: 'grok-3',                       visionModel: 'grok-2-vision-1212',      label: 'Grok (xAI)' },
-  openai:    { baseUrl: 'https://api.openai.com/v1',       model: 'gpt-4o',                       visionModel: 'gpt-4o',                  label: 'OpenAI' },
-  anthropic: { baseUrl: 'https://api.anthropic.com/v1',    model: 'claude-3-5-sonnet-20241022',   visionModel: 'claude-3-5-sonnet-20241022', label: 'Anthropic' },
+  xai:       { baseUrl: 'https://api.x.ai/v1',             model: 'grok-4.7',                     visionModel: 'grok-4.7',                 label: 'Grok (xAI)' },
+  openai:    { baseUrl: 'https://api.openai.com/v1',       model: 'gpt-5-mini',                   visionModel: 'gpt-5-mini',               label: 'OpenAI' },
+  anthropic: { baseUrl: 'https://api.anthropic.com/v1',    model: 'claude-sonnet-5-5',            visionModel: 'claude-sonnet-5-5',        label: 'Anthropic' },
+  gemini:    { baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-3.8-flash', visionModel: 'gemini-3.8-flash', label: 'Gemini' },
   custom:    { baseUrl: '',                                 model: '',                             visionModel: '',                        label: 'Custom API' },
-  server:    { baseUrl: '',                                 model: 'grok-3',                       visionModel: 'grok-2-vision-1212',      label: 'Dev Server (Grok)' },
+  server:    { baseUrl: '',                                 model: 'grok-4.7',                     visionModel: 'grok-4.7',                 label: 'Middlemain server (xAI)' },
 };
 
 function getServerBase(): string {
@@ -87,6 +93,16 @@ interface AIContextValue {
     imageBase64?: string,
     systemPromptOverride?: string,
   ) => Promise<void>;
+  sendGuideMessage: (
+    connectionId: string,
+    messages: ChatMessage[],
+    useGoogleSearch: boolean,
+    onSources: (sources: GuideSource[]) => void,
+    onChunk: (chunk: string) => void,
+    onDone: () => void,
+    onError: (err: string) => void,
+    systemPromptOverride?: string,
+  ) => Promise<void>;
   sendMessageWithTools: (
     connectionId: string,
     messages: ChatMessage[],
@@ -114,6 +130,7 @@ const AIContext = createContext<AIContextValue>({
   addServerGrokConnection: () => '',
   testConnection: async () => false,
   sendMessage: async () => {},
+  sendGuideMessage: async () => {},
   sendMessageWithTools: async () => {},
 });
 
@@ -181,6 +198,10 @@ async function callAnthropic(
         ],
       }
     : last;
+  const systemMessages = messages
+    .filter((message) => message.role === 'system' && typeof message.content === 'string')
+    .map((message) => message.content as string);
+  const system = [conn.systemPrompt, ...systemMessages].filter(Boolean).join('\n\n');
   return resilientFetch(
     `${baseUrl}/messages`,
     {
@@ -190,7 +211,8 @@ async function callAnthropic(
         model: pickModel(conn, !!imageBase64),
         max_tokens: 2048,
         stream,
-        messages: [...messages.slice(0, -1), augmentedLast],
+        ...(system ? { system } : {}),
+        messages: [...messages.filter((message) => message.role !== 'system').slice(0, -1), augmentedLast],
       }),
     },
     { timeoutMs: stream ? 60_000 : 30_000, retries: 3, retryBaseMs: 1_200 },
@@ -522,6 +544,102 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
     [connections],
   );
 
+  const sendGuideMessage = useCallback(
+    async (
+      connectionId: string,
+      messages: ChatMessage[],
+      useGoogleSearch: boolean,
+      onSources: (sources: GuideSource[]) => void,
+      onChunk: (chunk: string) => void,
+      onDone: () => void,
+      onError: (err: string) => void,
+      systemPromptOverride?: string,
+    ) => {
+      const conn = connections.find((connection) => connection.id === connectionId);
+      if (!conn) {
+        onError('Choose an AI connection before asking a general question.');
+        return;
+      }
+
+      if (!useGoogleSearch) {
+        onSources([]);
+        await sendMessage(
+          connectionId,
+          messages,
+          onChunk,
+          onDone,
+          onError,
+          undefined,
+          systemPromptOverride,
+        );
+        return;
+      }
+
+      if (conn.provider !== 'gemini') {
+        onError('Google Search grounding in this guide requires a Gemini connection.');
+        return;
+      }
+
+      try {
+        const contents = messages
+          .filter((message) => message.role === 'user' || message.role === 'assistant')
+          .map((message) => ({
+            role: message.role === 'assistant' ? 'model' : 'user',
+            parts: [{ text: typeof message.content === 'string' ? message.content : '' }],
+          }));
+        const systemPrompt = systemPromptOverride || conn.systemPrompt;
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(conn.model)}:generateContent`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-goog-api-key': conn.apiKey,
+            },
+            body: JSON.stringify({
+              contents,
+              ...(systemPrompt ? { systemInstruction: { parts: [{ text: systemPrompt }] } } : {}),
+              tools: [{ google_search: {} }],
+            }),
+          },
+        );
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload?.error?.message ?? `Gemini request failed (${response.status}).`);
+        }
+
+        const candidate = payload?.candidates?.[0];
+        const answer = candidate?.content?.parts
+          ?.map((part: { text?: string }) => part.text ?? '')
+          .filter(Boolean)
+          .join('\n')
+          ?? '';
+        if (!answer) throw new Error('Gemini returned no answer. Try again or turn off web search.');
+
+        const groundingChunks = candidate?.groundingMetadata?.groundingChunks ?? [];
+        const seenSources = new Set<string>();
+        const sources: GuideSource[] = groundingChunks
+          .map((chunk: { web?: { uri?: string; title?: string } }) => chunk.web)
+          .filter((web: { uri?: string } | undefined): web is { uri: string; title?: string } => {
+            if (!web?.uri || seenSources.has(web.uri)) return false;
+            seenSources.add(web.uri);
+            return true;
+          })
+          .map((web: { uri: string; title?: string }) => ({
+            title: web.title || web.uri,
+            uri: web.uri,
+          }));
+
+        onSources(sources);
+        onChunk(answer);
+        onDone();
+      } catch (error: any) {
+        onError(error?.message ?? 'Could not reach Gemini. Check the connection and try again.');
+      }
+    },
+    [connections, sendMessage],
+  );
+
   const activeConnection = connections.find((c) => c.isActive) ?? connections[0] ?? null;
 
   return (
@@ -529,7 +647,7 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
       connections, activeConnection, serverGrokAvailable,
       addConnection, updateConnection, deleteConnection,
       setActiveConnection, addServerGrokConnection,
-      testConnection, sendMessage, sendMessageWithTools,
+      testConnection, sendMessage, sendGuideMessage, sendMessageWithTools,
     }}>
       {children}
     </AIContext.Provider>

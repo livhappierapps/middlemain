@@ -144,7 +144,7 @@ export function AICursorOverlay({ visible, action, containerWidth, containerHeig
           minWidth: 50,
         }}>
           <Text style={{ color: theme.primary, fontSize: 9, fontFamily: 'Inter_600SemiBold', textAlign: 'center' }}>
-            LEO
+            AI
           </Text>
         </View>
       )}

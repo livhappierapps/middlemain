@@ -334,7 +334,7 @@ export function AisAndEarsProvider({ children }: { children: React.ReactNode }) 
       emit({ type: 'bridge_status', content: '🎤 Hearing off.' });
     } else {
       setHearingOn(true);
-      emit({ type: 'bridge_status', content: '🎤 Hearing on — sending audio to Leo.' });
+      emit({ type: 'bridge_status', content: '🎤 Microphone on — audio is being sent to the selected AI.' });
       await startAudioChunks();
     }
   }, [hearingOn, session, stopAudio, startAudioChunks, emit]);
@@ -343,7 +343,7 @@ export function AisAndEarsProvider({ children }: { children: React.ReactNode }) 
     if (!session) { emit({ type: 'bridge_error', content: 'Connect to AIs & Ears first.' }); return; }
     setCameraOn((v) => {
       const next = !v;
-      emit({ type: 'bridge_status', content: next ? '👁 Camera on — Leo can see you.' : '👁 Camera off.' });
+      emit({ type: 'bridge_status', content: next ? '👁 Camera on — images are being shared with the selected AI.' : '👁 Camera off.' });
       return next;
     });
   }, [session, emit]);
@@ -352,7 +352,7 @@ export function AisAndEarsProvider({ children }: { children: React.ReactNode }) 
     if (!session) { emit({ type: 'bridge_error', content: 'Connect to AIs & Ears first.' }); return; }
     setScreenOn((v) => {
       const next = !v;
-      emit({ type: 'bridge_status', content: next ? '🖥 Screen share on — Leo can see your screen.' : '🖥 Screen share off.' });
+      emit({ type: 'bridge_status', content: next ? '🖥 Screen share on — the selected AI can view your screen.' : '🖥 Screen share off.' });
       return next;
     });
   }, [session, emit]);

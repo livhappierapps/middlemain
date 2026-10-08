@@ -43,7 +43,7 @@ function genId() {
 const VISION_INTERVAL_MS = 3000;
 const CONTROL_INTERVAL_MS = 1500;
 
-const CURSOR_CONTROL_SYSTEM_PROMPT = `You are Leo, an AI with live cursor control over the Middlemain screen. When you receive screen share frames:
+const CURSOR_CONTROL_SYSTEM_PROMPT = `You are Middlemain's screen-control assistant. When you receive screen share frames:
 1. Briefly describe what you see and offer help or observations
 2. Optionally move your cursor to something interesting by including EXACTLY this block at the end of your response:
 \`\`\`cursor
@@ -105,9 +105,9 @@ export default function TerminalScreen() {
   useEffect(() => {
     const unsub = subscribe((msg) => {
       if (msg.type === 'vision_response') {
-        appendLine({ type: 'vision', content: `[Leo sees ${msg.source}] ${msg.content}`, source: msg.source });
+        appendLine({ type: 'vision', content: `[AI sees ${msg.source}] ${msg.content}`, source: msg.source });
       } else if (msg.type === 'transcript') {
-        appendLine({ type: 'transcript', content: `[Leo hears] ${msg.content}` });
+        appendLine({ type: 'transcript', content: `[Audio transcript] ${msg.content}` });
       } else if (msg.type === 'bridge_status') {
         appendLine({ type: 'system', content: msg.content });
       } else if (msg.type === 'bridge_error') {
@@ -179,7 +179,7 @@ export default function TerminalScreen() {
               }
               const stripped = stripCursorBlock(fullResponse).trim();
               if (stripped) {
-                appendLine({ type: 'vision', content: `[Leo cursor] ${stripped}`, source: 'screen' });
+                appendLine({ type: 'vision', content: `[AI cursor] ${stripped}`, source: 'screen' });
                 setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 30);
               }
             },
@@ -438,7 +438,7 @@ export default function TerminalScreen() {
   const handleToggleControl = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (!selectedConn) {
-      appendLine({ type: 'error', content: 'Connect an AI first — Leo needs a Vision connection to use cursor control.' });
+      appendLine({ type: 'error', content: 'Connect an AI first, then choose a model that can interpret images to use cursor control.' });
       return;
     }
     const next = !controlOn;
@@ -447,8 +447,8 @@ export default function TerminalScreen() {
     appendLine({
       type: 'system',
       content: next
-        ? '>>> Leo cursor control ACTIVE — Leo will see your screen and move the cursor'
-        : '>>> Leo cursor control deactivated',
+        ? '>>> Cursor control active — the selected AI can view your screen and move the cursor'
+        : '>>> Cursor control deactivated',
     });
   };
 
@@ -500,10 +500,10 @@ export default function TerminalScreen() {
           </View>
         </View>
 
-        {/* Leo's Senses Toggle Strip */}
+        {/* Live input controls */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
           <Text style={{ color: theme.textMuted, fontSize: 9, fontFamily: 'Inter_600SemiBold', letterSpacing: 1, marginRight: 2 }}>
-            LEO'S SENSES
+            LIVE INPUTS
           </Text>
 
           {/* Hearing */}

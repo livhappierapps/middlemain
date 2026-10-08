@@ -1,7 +1,7 @@
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import React, { useState } from 'react';
-import { ActivityIndicator, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Modal, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useMCP } from '@/context/MCPContext';
 import { useTheme } from '@/context/ThemeContext';
 
@@ -9,10 +9,51 @@ const MEMORY_COLOR = '#a78bfa';
 const MEMORY_DIM = '#a78bfa33';
 const MEMORY_GLOW = '#a78bfa66';
 
+type ToolInputProperty = {
+  type?: string;
+  description?: string;
+  enum?: unknown[];
+  example?: unknown;
+  default?: unknown;
+};
+
+function exampleValue(name: string, schema: ToolInputProperty): unknown {
+  if (schema.example !== undefined) return schema.example;
+  if (schema.default !== undefined) return schema.default;
+  if (schema.enum?.length) return schema.enum[0];
+  switch (schema.type) {
+    case 'string': return `<${name}>`;
+    case 'integer':
+    case 'number': return 0;
+    case 'boolean': return false;
+    case 'array': return [];
+    case 'object': return {};
+    default: return `<${name}>`;
+  }
+}
+
 export function MemoryMachineCard() {
   const { theme } = useTheme();
   const { config, updateConfig, status, errorMsg, tools, connect, disconnect } = useMCP();
   const [showToken, setShowToken] = useState(false);
+  const [helpToolName, setHelpToolName] = useState<string | null>(null);
+  const helpTool = tools.find((tool) => tool.name === helpToolName) ?? null;
+  const helpProperties = Object.entries(
+    (helpTool?.inputSchema?.properties ?? {}) as Record<string, ToolInputProperty>,
+  );
+  const requiredInputs = helpTool?.inputSchema?.required ?? [];
+  const exampleInput = Object.fromEntries(
+    requiredInputs.map((name) => {
+      const schema = helpProperties.find(([propertyName]) => propertyName === name)?.[1];
+      return [name, schema ? exampleValue(name, schema) : `<${name}>`];
+    }),
+  );
+  const documentedProperties = [
+    ...helpProperties,
+    ...requiredInputs
+      .filter((requiredName) => !helpProperties.some(([name]) => name === requiredName))
+      .map((name) => [name, {} as ToolInputProperty] as [string, ToolInputProperty]),
+  ];
 
   const statusColor = {
     idle: theme.textMuted,
@@ -108,8 +149,16 @@ export function MemoryMachineCard() {
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={{ flexDirection: 'row', gap: 6 }}>
               {tools.map((t) => (
-                <View key={t.name} style={{ backgroundColor: MEMORY_DIM, borderWidth: 1, borderColor: MEMORY_GLOW, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 4 }}>
+                <View key={t.name} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: MEMORY_DIM, borderWidth: 1, borderColor: MEMORY_GLOW, borderRadius: 4, paddingLeft: 8, paddingRight: 4, gap: 4 }}>
                   <Text style={{ color: MEMORY_COLOR, fontSize: 10, fontFamily: 'Inter_400Regular' }}>{t.name}</Text>
+                  <TouchableOpacity
+                    onPress={() => setHelpToolName(t.name)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`How to use ${t.name}`}
+                    style={{ padding: 5 }}
+                  >
+                    <Feather name="help-circle" size={14} color={MEMORY_COLOR} />
+                  </TouchableOpacity>
                 </View>
               ))}
             </View>
@@ -159,8 +208,88 @@ export function MemoryMachineCard() {
       )}
 
       <Text style={{ color: theme.textMuted, fontSize: 10, fontFamily: 'Inter_400Regular', marginTop: 12, lineHeight: 16 }}>
-        Gives Leo persistent memory across all conversations. Token from Memory Machine → Settings → Memory Bridge.
+        Connects the memory tools listed above. Each tool's help shows the description and inputs advertised by that service.
       </Text>
+
+      <Modal
+        visible={!!helpTool}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setHelpToolName(null)}
+      >
+        <View style={{ flex: 1, justifyContent: 'center', padding: 20, backgroundColor: '#000000AA' }}>
+          <View style={{ maxHeight: '82%', backgroundColor: theme.background, borderColor: theme.border, borderWidth: 1, borderRadius: theme.radius, padding: 18 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+              <Text accessibilityRole="header" style={{ flex: 1, color: theme.text, fontFamily: 'Inter_700Bold', fontSize: 16 }}>
+                {helpTool?.name ?? 'Tool help'}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setHelpToolName(null)}
+                accessibilityRole="button"
+                accessibilityLabel="Close tool help"
+                hitSlop={10}
+              >
+                <Feather name="x" size={21} color={theme.textMuted} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator>
+              <Text style={{ color: theme.text, fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 19, marginBottom: 14 }}>
+                {helpTool?.description || 'This tool did not provide a description.'}
+              </Text>
+              <Text style={{ color: MEMORY_COLOR, fontFamily: 'Inter_600SemiBold', fontSize: 11, letterSpacing: 1, marginBottom: 8 }}>
+                INPUTS FROM THE TOOL SCHEMA
+              </Text>
+              {documentedProperties.length ? documentedProperties.map(([name, schema]) => (
+                <View key={name} style={{ marginBottom: 10 }}>
+                  <Text style={{ color: theme.text, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>
+                    {name} · {requiredInputs.includes(name) ? 'required' : 'optional'}
+                    {schema.type ? ` · ${schema.type}` : ''}
+                    {!schema.type && requiredInputs.includes(name) ? ' · type not provided' : ''}
+                  </Text>
+                  {schema.description ? (
+                    <Text style={{ color: theme.textMuted, fontFamily: 'Inter_400Regular', fontSize: 11, lineHeight: 16, marginTop: 2 }}>
+                      {schema.description}
+                    </Text>
+                  ) : null}
+                </View>
+              )) : (
+                <Text style={{ color: theme.textMuted, fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 18, marginBottom: 12 }}>
+                  No input fields are listed in this tool's schema.
+                </Text>
+              )}
+              <Text style={{ color: theme.textMuted, fontFamily: 'Inter_400Regular', fontSize: 10, lineHeight: 15, marginBottom: 8 }}>
+                Required by the advertised schema: {requiredInputs.length ? requiredInputs.join(', ') : 'none listed'}
+              </Text>
+              {helpTool?.inputSchema ? (
+                <>
+                  <Text style={{ color: MEMORY_COLOR, fontFamily: 'Inter_600SemiBold', fontSize: 10, letterSpacing: 1, marginBottom: 5 }}>
+                    FULL ADVERTISED SCHEMA
+                  </Text>
+                  <Text selectable style={{ color: theme.textMuted, backgroundColor: theme.surface, borderRadius: 6, padding: 9, fontFamily: 'monospace', fontSize: 9, lineHeight: 14, marginBottom: 8 }}>
+                    {JSON.stringify(helpTool.inputSchema, null, 2)}
+                  </Text>
+                </>
+              ) : null}
+              <Text style={{ color: MEMORY_COLOR, fontFamily: 'Inter_600SemiBold', fontSize: 11, letterSpacing: 1, marginTop: 8, marginBottom: 6 }}>
+                EXAMPLE INPUT
+              </Text>
+              <Text selectable style={{ color: theme.text, backgroundColor: theme.surface, borderRadius: 6, padding: 10, fontFamily: 'monospace', fontSize: 11, lineHeight: 17 }}>
+                {JSON.stringify(exampleInput, null, 2)}
+              </Text>
+              <Text style={{ color: theme.textMuted, fontFamily: 'Inter_400Regular', fontSize: 10, lineHeight: 15, marginTop: 7 }}>
+                Example values are placeholders based on the schema. Replace them with values that fit your request.
+              </Text>
+            </ScrollView>
+            <TouchableOpacity
+              onPress={() => setHelpToolName(null)}
+              accessibilityRole="button"
+              style={{ alignSelf: 'flex-end', marginTop: 14, paddingVertical: 8, paddingHorizontal: 14, borderWidth: 1, borderColor: MEMORY_COLOR, borderRadius: 7 }}
+            >
+              <Text style={{ color: MEMORY_COLOR, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

@@ -171,7 +171,7 @@ export function AisAndEarsBridgeCard() {
       )}
 
       <Text style={{ color: theme.textMuted, fontSize: 10, fontFamily: 'Inter_400Regular', marginTop: 12, lineHeight: 16 }}>
-        Bridges Leo's senses (camera · screen · hearing) through AIs & Ears. Toggle senses in the Bridge Terminal after connecting.
+        Sends camera, screen, or microphone input through AIs & Ears. Connect here, then choose which inputs to share in Bridge.
       </Text>
     </View>
   );

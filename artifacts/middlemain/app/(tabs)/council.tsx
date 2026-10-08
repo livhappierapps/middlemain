@@ -42,6 +42,7 @@ const PROVIDERS: { key: AIProvider; label: string }[] = [
   { key: 'xai', label: 'Grok (xAI)' },
   { key: 'openai', label: 'OpenAI' },
   { key: 'anthropic', label: 'Anthropic' },
+  { key: 'gemini', label: 'Gemini' },
   { key: 'server', label: 'Dev Server' },
   { key: 'custom', label: 'Custom' },
 ];
@@ -157,7 +158,7 @@ function AddParticipantModal({
             <TouchableOpacity onPress={onClose}><Feather name="x" size={22} color={theme.textMuted} /></TouchableOpacity>
           </View>
           <Text style={{ color: theme.textMuted, fontSize: 11, fontFamily: 'Inter_400Regular', marginBottom: 12 }}>
-            Same model + different system prompt = different agent
+            The same model can take different roles when you change its instructions.
           </Text>
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             <Text style={labelStyle}>PROVIDER</Text>
@@ -178,7 +179,7 @@ function AddParticipantModal({
             </View>
 
             <Text style={labelStyle}>DISPLAY NAME</Text>
-            <TextInput style={inputStyle} value={name} onChangeText={setName} placeholder="Boss, Whiz, Dev Agent…" placeholderTextColor={theme.textMuted} />
+            <TextInput style={inputStyle} value={name} onChangeText={setName} placeholder="Engineering reviewer, Research helper…" placeholderTextColor={theme.textMuted} />
 
             <Text style={labelStyle}>API KEY</Text>
             <TextInput style={inputStyle} value={apiKey} onChangeText={setApiKey} placeholder="sk-ant-… / sk-… / xai-…" placeholderTextColor={theme.textMuted} secureTextEntry autoCapitalize="none" autoCorrect={false} />
@@ -217,14 +218,14 @@ function AddParticipantModal({
               style={[inputStyle, { height: 110, textAlignVertical: 'top', paddingTop: 12 }]}
               value={systemPrompt}
               onChangeText={(t) => { setSystemPrompt(t); setActivePreset(null); }}
-              placeholder="Define this agent's role, personality, and focus…"
+              placeholder="Describe what this AI should focus on and how it should respond…"
               placeholderTextColor={theme.textMuted}
               multiline
               autoCapitalize="sentences"
               autoCorrect
             />
             <Text style={{ color: theme.textMuted, fontSize: 10, fontFamily: 'Inter_400Regular', marginTop: 4 }}>
-              💡 This is what makes two Claude instances behave as completely different agents.
+              💡 These instructions guide this participant's responses.
             </Text>
 
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 24, marginBottom: 8 }}>
@@ -566,7 +567,7 @@ function AutoModeModal({
             style={[inputStyle, { height: 90, textAlignVertical: 'top', paddingTop: 12 }]}
             value={kickoff}
             onChangeText={setKickoff}
-            placeholder={`Tell all agents the goal. e.g. "Boss — tell Whiz and Vhiz exactly what you need from them to complete 2WAI. All three of you work it out together."`}
+            placeholder={`Describe the goal and the result you need. For example: "Review this feature, find risks, and suggest a practical next step."`}
             placeholderTextColor={theme.textMuted}
             multiline
             autoCapitalize="sentences"
@@ -1029,26 +1030,26 @@ export default function CouncilScreen() {
     ]);
   }, [messages]);
 
-  // ── Leo's Memory Machine integration ─────────────────────────────────────
+  // ── Memory Machine integration ────────────────────────────────────────────
 
-  /** Pull Leo's relevant memories and inject them as a system message. */
+  /** Pull relevant saved memories and inject them as a system message. */
   const handleMemoryRecall = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (mcpStatus !== 'connected') {
       Alert.alert('Memory Not Connected', 'Connect the Memory Machine in Settings → Memory Bridge first, then try again.');
       return;
     }
-    injectSystemMessage('🧠 Recalling Leo\'s memories…');
+    injectSystemMessage('🧠 Recalling saved memories…');
     try {
       const result = await callTool('search_memories', { query: 'Middlemain council agents tasks directives' });
-      injectSystemMessage(`🧠 LEO'S MEMORY:\n\n${result}`);
+      injectSystemMessage(`🧠 SAVED MEMORIES:\n\n${result}`);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (err: any) {
       injectSystemMessage(`⚠️ Memory recall failed: ${err?.message ?? 'Unknown error'}`);
     }
   }, [mcpStatus, callTool, injectSystemMessage]);
 
-  /** Save the current council session to Leo's Memory Machine. */
+  /** Save the current council session to Memory Machine. */
   const handleMemorySave = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (mcpStatus !== 'connected') {
@@ -1070,8 +1071,8 @@ export default function CouncilScreen() {
     }).join('\n\n');
 
     Alert.alert(
-      'Save to Leo\'s Memory',
-      `Save last ${recentMessages.length} messages to Leo's Memory Machine?`,
+      'Save to Memory Machine',
+      `Save the last ${recentMessages.length} messages to Memory Machine?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -1080,7 +1081,7 @@ export default function CouncilScreen() {
             try {
               await callTool('save_memory', { title, content, tags: ['middlemain', 'council'] });
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              injectSystemMessage('✅ Session saved to Leo\'s Memory Machine.');
+              injectSystemMessage('✅ Session saved to Memory Machine.');
             } catch (err: any) {
               Alert.alert('Save Failed', err?.message ?? 'Could not save to Memory Machine.');
             }
@@ -1091,7 +1092,7 @@ export default function CouncilScreen() {
   }, [mcpStatus, messages, callTool, injectSystemMessage]);
 
   /**
-   * Silently save the current council session to Leo's Memory Machine.
+   * Silently save the current council session to Memory Machine.
    * Used for auto-saves (clear + background) — no Alert dialogs.
    * Returns true if saved, false if skipped/failed.
    */
@@ -1132,23 +1133,24 @@ export default function CouncilScreen() {
     return () => subscription.remove();
   }, [performAutoSave]);
 
-  /** Quick-add Leo as Executive participant using the server Grok proxy. */
-  const handleAddLeo = useCallback(() => {
+  /** Quick-add an executive assistant using the server AI proxy. */
+  const handleAddExecutive = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const alreadyHasLeo = participants.some(
-      (p) => p.displayName.toLowerCase().includes('leo'),
+    const alreadyHasExecutive = participants.some(
+      (p) => p.displayName.toLowerCase().includes('executive assistant')
+        || p.displayName.toLowerCase().includes('leo'),
     );
-    if (alreadyHasLeo) {
-      Alert.alert('Leo is Already Here', 'Leo is already in the council.');
+    if (alreadyHasExecutive) {
+      Alert.alert('Already added', 'The executive assistant is already in the Council.');
       return;
     }
     addParticipant({
-      displayName: 'Leo',
+      displayName: 'Executive assistant',
       provider: 'server',
       apiKey: '',
       model: 'grok-3',
       systemPrompt:
-        'You are Leo, the Executive AI overseeing Middlemain\'s AI agent council. You have authority over all agents in this session. Be direct and decisive. Give clear directives, track what agents have done, hold them accountable, and remember context across rounds. When things go off-track, correct course immediately.',
+        'You are the executive assistant coordinating this AI Council. Be direct and decisive. Help participants stay focused on the user’s goal, track the work across rounds, and suggest a practical next step when the discussion loses focus.',
       color: '#a78bfa',
     });
   }, [participants, addParticipant]);
@@ -1169,7 +1171,7 @@ export default function CouncilScreen() {
       apiKey: '',
       model: 'grok-3',
       systemPrompt:
-        'You are Ash, an EdenMux AI agent specializing in systems architecture, debugging, and build quality. You are a core member of the EdenMux council alongside Leo, Whiz, and Vhiz.\n\nYou have access to the following live API tools on the Middlemain server. When the user needs debugging help, tell them exactly which endpoint to call or what to paste — do not guess, use the tools.\n\n## Debug Tools (base URL: /api)\n\n**POST /api/debug/typecheck**\nBody: { code: string, mode: "expo" | "typescript" | "javascript" }\nRuns the real TypeScript compiler on pasted code. Returns: { pass, verdict, errors[], summary }. Use when the user pastes code and wants to know if it will compile.\n\n**GET /api/debug/build-status**\nNo body. Returns the latest EAS build list: { builds: [{ platform, status, version, expires, downloadUrl }] }. Use to check if the Android/iOS build finished, is still running, or has expired.\n\n**GET /api/healthz**\nNo body. Returns server health. Use to confirm the API server is alive.\n\n**GET /api/grok/status**\nNo body. Returns { configured: bool } — whether the XAI key is set and Grok is ready.\n\n## How to use them\nWhen the user says "check the build" → tell them to hit GET /api/debug/build-status and paste the JSON back.\nWhen the user pastes code → offer to typecheck it via POST /api/debug/typecheck.\nAlways interpret the raw JSON for them. Be concise, precise, and action-oriented.\n\nYou defer to Leo on executive decisions but own the technical debugging domain fully. When something is broken, you diagnose it and propose a fix — you do not wait for permission.',
+        'You are a technical reviewer specializing in systems architecture, debugging, and build quality. Help the Council work through code and engineering questions. Ask for the relevant code or error details when needed; do not guess.\n\nYou can use these Middlemain API tools when relevant:\n\n**POST /api/debug/typecheck**\nBody: { code: string, mode: "expo" | "typescript" | "javascript" }\nChecks pasted code with the TypeScript compiler. Returns: { pass, verdict, errors[], summary }.\n\n**GET /api/debug/build-status**\nNo body. Returns recent iOS and Android build status.\n\n**GET /api/healthz**\nNo body. Returns server health.\n\n**GET /api/grok/status**\nNo body. Returns whether xAI is configured on the server.\n\nUse a tool only when its documented purpose fits the request. Explain its result in plain language, and state when information is unavailable or uncertain.',
       color: '#34d399',
     });
   }, [participants, addParticipant]);
@@ -1386,16 +1388,18 @@ export default function CouncilScreen() {
               </View>
             </View>
             <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
-              {/* Leo memory recall */}
               <TouchableOpacity
                 onPress={handleMemoryRecall}
+                accessibilityRole="button"
+                accessibilityLabel="Recall saved memories"
                 style={{ padding: 7 }}
               >
                 <Feather name="cpu" size={16} color={mcpStatus === 'connected' ? '#a78bfa' : theme.textMuted} />
               </TouchableOpacity>
-              {/* Leo memory save */}
               <TouchableOpacity
                 onPress={handleMemorySave}
+                accessibilityRole="button"
+                accessibilityLabel="Save this Council session to Memory Machine"
                 style={{ padding: 7 }}
               >
                 <Feather name="bookmark" size={16} color={mcpStatus === 'connected' ? '#a78bfa' : theme.textMuted} />
@@ -1444,7 +1448,7 @@ export default function CouncilScreen() {
                   Alert.alert(
                     'Clear History',
                     willAutoSave
-                      ? 'Session will be auto-saved to Leo\'s Memory before clearing. Participants will remain.'
+                      ? 'Session will be saved to Memory Machine before clearing. Participants will remain.'
                       : 'This will permanently remove all council messages. Participants will remain.',
                     [
                       { text: 'Cancel', style: 'cancel' },
@@ -1559,14 +1563,13 @@ export default function CouncilScreen() {
                   Add AI participants
                 </Text>
               </TouchableOpacity>
-              {/* Leo Executive quick-add */}
               <TouchableOpacity
-                onPress={handleAddLeo}
+                onPress={handleAddExecutive}
                 style={{ borderWidth: 1.5, borderColor: '#a78bfa', borderRadius: 10, paddingVertical: 12, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8, backgroundColor: '#a78bfa11' }}
               >
                 <Feather name="star" size={15} color="#a78bfa" />
                 <Text style={{ color: '#a78bfa', fontSize: 13, fontFamily: 'Inter_600SemiBold', letterSpacing: 0.5 }}>
-                  ⚡ Add Leo (Executive)
+                  ⚡ Add executive assistant
                 </Text>
               </TouchableOpacity>
               {/* Ash EdenMux quick-add */}

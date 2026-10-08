@@ -6,3 +6,4 @@
 - [EAS Build from main agent](eas-build-restriction.md) — EAS CLI acquires a git index lock which Replit's sandbox blocks in the main agent. Must use a project_tasks background task to trigger EAS builds. Workaround env var: EAS_SKIP_AUTO_FINGERPRINT=1 still needed alongside the task approach.
 - [Cost transparency](cost-transparency.md) — Warn Dev before any action that may create charges; do not initiate paid API usage or builds without clear notice.
 - [Task ownership](task-ownership.md) — Review already-running work before implementing the same feature; separate main edits from queued merges.
+- [Git provider authorization](git-provider-authorization.md) — Healthy account status can coexist with rejected Git credentials; connector reconnect cards may not apply.

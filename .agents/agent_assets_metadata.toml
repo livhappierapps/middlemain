@@ -17,9 +17,11 @@ id = "7keZ4vZQpDUP2AR4a0DOE"
 uri = "file://artifacts/middlemain/assets/images/icon.png"
 type = "image"
 title = "Middlemain App Icon (1024×1024 PNG)"
+logical_id = "bdb72c71-bdde-46a8-b3bb-b52733cd59ea"
 
 [[outputs]]
 id = "u52rUPCBzQt3taosN5OUr"
 uri = "file://artifacts/middlemain/assets/images/splash.png"
 type = "image"
 title = "Middlemain Splash Screen"
+logical_id = "7bbb773d-d8d7-4ae2-944f-ee4c1ac301fb"

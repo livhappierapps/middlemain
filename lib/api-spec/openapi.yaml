@@ -10,6 +10,10 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: council
+    description: Shared Council rooms and scoped Grok connector access
+  - name: mcp
+    description: Model Context Protocol endpoint for Grok
 paths:
   /healthz:
     get:
@@ -24,7 +28,95 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /council/rooms:
+    post:
+      operationId: createCouncilRoom
+      tags: [council]
+      summary: Create a shared Council room
+      description: Creates a room and returns its MCP access token once. The room link remains shareable by anyone who has it.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  maxLength: 80
+      responses:
+        "200":
+          description: Council room created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CouncilRoomCreated"
+  /council/rooms/{roomId}/mcp-token:
+    parameters:
+      - name: roomId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: rotateCouncilRoomMcpToken
+      tags: [council]
+      summary: Rotate a Council room MCP token
+      description: Invalidates the current room token and returns its replacement once.
+      security:
+        - CouncilRoomBearer: []
+      responses:
+        "200":
+          description: Token rotated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CouncilRoomMcpToken"
+        "401":
+          description: Missing, invalid, or incorrectly scoped token
+    delete:
+      operationId: revokeCouncilRoomMcpToken
+      tags: [council]
+      summary: Revoke a Council room MCP token
+      security:
+        - CouncilRoomBearer: []
+      responses:
+        "204":
+          description: Token revoked
+        "401":
+          description: Missing, invalid, or incorrectly scoped token
+  /mcp:
+    post:
+      operationId: handleMiddlemainMcpRequest
+      tags: [mcp]
+      summary: Handle a stateless MCP Streamable HTTP request
+      description: Requires a room-scoped Bearer token. The MCP tools expose only the room covered by that token.
+      security:
+        - CouncilRoomBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: MCP JSON-RPC response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          description: Missing or invalid room-scoped token
+        "400":
+          description: Invalid MCP request
 components:
+  securitySchemes:
+    CouncilRoomBearer:
+      type: http
+      scheme: bearer
   schemas:
     HealthStatus:
       type: object
@@ -33,4 +125,22 @@ components:
           type: string
       required:
         - status
+    CouncilRoomCreated:
+      type: object
+      properties:
+        roomId:
+          type: string
+        wsPath:
+          type: string
+        mcpAccessToken:
+          type: string
+          description: Secret returned only when the room is created. Store securely; never place in a URL.
+      required: [roomId, wsPath, mcpAccessToken]
+    CouncilRoomMcpToken:
+      type: object
+      properties:
+        mcpAccessToken:
+          type: string
+          description: Replacement room-scoped secret returned once.
+      required: [mcpAccessToken]
 

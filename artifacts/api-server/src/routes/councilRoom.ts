@@ -1,4 +1,5 @@
 import { Router, type Request, type Response } from "express";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage } from "http";
 import type { Server as HttpServer } from "http";
 import type { Duplex } from "stream";
@@ -54,6 +55,7 @@ interface Room {
   name: string;
   createdAt: string;
   messages: RoomMessage[];
+  mcpTokenHash: string | null;
   clients: Map<WebSocket, RoomClient>;
   /** In-memory only — never persisted. Keyed by messageId to support concurrent AI streams. */
   activeStreams: Map<string, ActiveStream>;
@@ -69,6 +71,7 @@ const rooms = new Map<string, Room>();
 for (const persisted of loadRooms()) {
   rooms.set(persisted.id, {
     ...persisted,
+    mcpTokenHash: persisted.mcpTokenHash ?? null,
     clients: new Map(),
     activeStreams: new Map(),
   });
@@ -76,6 +79,69 @@ for (const persisted of loadRooms()) {
 
 function genId(): string {
   return Math.random().toString(36).slice(2, 9);
+}
+
+function generateMcpToken(): string {
+  return `mmcp_${randomBytes(32).toString("base64url")}`;
+}
+
+function hashMcpToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+function requestBearerToken(req: Request): string {
+  const match = req.header("authorization")?.match(/^Bearer\s+(\S+)$/i);
+  return match?.[1] ?? "";
+}
+
+/** Returns the single room authorized by a high-entropy connector token. */
+export function getRoomIdFromMcpToken(token: string): string | null {
+  if (!/^mmcp_[A-Za-z0-9_-]{43}$/.test(token)) return null;
+  const candidate = Buffer.from(hashMcpToken(token), "hex");
+  for (const room of rooms.values()) {
+    if (!room.mcpTokenHash || !/^[a-f0-9]{64}$/.test(room.mcpTokenHash)) continue;
+    const stored = Buffer.from(room.mcpTokenHash, "hex");
+    if (timingSafeEqual(candidate, stored)) return room.id;
+  }
+  return null;
+}
+
+export function getMcpRoomHistory(roomId: string, limit: number): {
+  id: string;
+  name: string;
+  messages: RoomMessage[];
+} | null {
+  const room = rooms.get(roomId);
+  if (!room) return null;
+  return {
+    id: room.id,
+    name: room.name,
+    messages: room.messages.slice(-limit),
+  };
+}
+
+export function postMcpRoomMessage(
+  roomId: string,
+  participantName: string,
+  content: string,
+): RoomMessage | null {
+  const room = rooms.get(roomId);
+  if (!room) return null;
+  const message: RoomMessage = {
+    id: genId(),
+    role: "ai",
+    participantName,
+    participantColor: "#35D7C4",
+    content,
+    timestamp: new Date().toLocaleTimeString(),
+  };
+  room.messages.push(message);
+  if (room.messages.length > MAX_ROOM_MESSAGES) {
+    room.messages = room.messages.slice(-MAX_ROOM_MESSAGES);
+  }
+  saveRooms(rooms);
+  broadcast(room, { type: "message", message });
+  return message;
 }
 
 function broadcast(room: Room, payload: unknown, exclude?: WebSocket): void {
@@ -94,19 +160,67 @@ export const councilRoomRouter = Router();
 /** POST /api/council/rooms — create a room */
 councilRoomRouter.post("/council/rooms", (req: Request, res: Response) => {
   const id = genId();
-  const name = (req.body?.name as string) || "Council Session";
+  const name =
+    typeof req.body?.name === "string" && req.body.name.trim()
+      ? req.body.name.trim().slice(0, 80)
+      : "Council Session";
+  const mcpAccessToken = generateMcpToken();
   rooms.set(id, {
     id,
     name,
     createdAt: new Date().toISOString(),
     messages: [],
+    mcpTokenHash: hashMcpToken(mcpAccessToken),
     clients: new Map(),
     activeStreams: new Map(),
   });
   saveRooms(rooms);
   logger.info({ roomId: id }, "Council room created");
-  res.json({ roomId: id, wsPath: `/api/council/ws/${id}` });
+  res.json({ roomId: id, wsPath: `/api/council/ws/${id}`, mcpAccessToken });
 });
+
+/** Rotate the room-scoped MCP secret; the old token stops working immediately. */
+councilRoomRouter.post(
+  "/council/rooms/:roomId/mcp-token",
+  (req: Request, res: Response) => {
+    const roomId = req.params.roomId as string;
+    const room = rooms.get(roomId);
+    if (!room) {
+      res.status(404).json({ error: "Room not found" });
+      return;
+    }
+    if (getRoomIdFromMcpToken(requestBearerToken(req)) !== roomId) {
+      res.setHeader("WWW-Authenticate", 'Bearer realm="Middlemain Council MCP"');
+      res.status(401).json({ error: "A valid token for this room is required" });
+      return;
+    }
+    const mcpAccessToken = generateMcpToken();
+    room.mcpTokenHash = hashMcpToken(mcpAccessToken);
+    saveRooms(rooms);
+    res.json({ mcpAccessToken });
+  },
+);
+
+/** Revoke connector access without deleting the room or its shared-link history. */
+councilRoomRouter.delete(
+  "/council/rooms/:roomId/mcp-token",
+  (req: Request, res: Response) => {
+    const roomId = req.params.roomId as string;
+    const room = rooms.get(roomId);
+    if (!room) {
+      res.status(404).json({ error: "Room not found" });
+      return;
+    }
+    if (getRoomIdFromMcpToken(requestBearerToken(req)) !== roomId) {
+      res.setHeader("WWW-Authenticate", 'Bearer realm="Middlemain Council MCP"');
+      res.status(401).json({ error: "A valid token for this room is required" });
+      return;
+    }
+    room.mcpTokenHash = null;
+    saveRooms(rooms);
+    res.status(204).end();
+  },
+);
 
 /** GET /api/council/rooms/:roomId — room info + history */
 councilRoomRouter.get(

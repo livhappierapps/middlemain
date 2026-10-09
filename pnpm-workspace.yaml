@@ -28,7 +28,7 @@ catalog:
   tsx: ^4.22.4
   vite: ^7.3.5
   wouter: ^3.3.5
-  zod: ^3.25.76
+  zod: 3.25.76
 
 minimumReleaseAge: 1440
 
@@ -64,18 +64,10 @@ overrides:
   '@tailwindcss/oxide>@tailwindcss/oxide-linux-x64-musl': '-'
   '@tailwindcss/oxide>@tailwindcss/oxide-win32-arm64-msvc': '-'
   '@tailwindcss/oxide>@tailwindcss/oxide-win32-x64-msvc': '-'
-  esbuild: 0.28.1
-  node-forge: ^1.4.0
-  tar: ^7.5.16
-  minimatch: ^9.0.9
   '@xmldom/xmldom': ^0.9.10
-  postcss: ^8.5.15
-  uuid: ^11.1.1
-  joi: ^17.13.4
-  yaml: ^2.9.0
-  js-yaml: ^4.2.0
   ajv: ^8.20.0
   diff: ^8.0.3
+  esbuild: 0.28.1
   esbuild>@esbuild/aix-ppc64: '-'
   esbuild>@esbuild/android-arm: '-'
   esbuild>@esbuild/android-arm64: '-'
@@ -101,6 +93,8 @@ overrides:
   esbuild>@esbuild/win32-arm64: '-'
   esbuild>@esbuild/win32-ia32: '-'
   esbuild>@esbuild/win32-x64: '-'
+  joi: ^17.13.4
+  js-yaml: ^4.2.0
   lightningcss>lightningcss-android-arm64: '-'
   lightningcss>lightningcss-darwin-arm64: '-'
   lightningcss>lightningcss-darwin-x64: '-'
@@ -111,6 +105,9 @@ overrides:
   lightningcss>lightningcss-linux-x64-musl: '-'
   lightningcss>lightningcss-win32-arm64-msvc: '-'
   lightningcss>lightningcss-win32-x64-msvc: '-'
+  minimatch: ^9.0.9
+  node-forge: ^1.4.0
+  postcss: ^8.5.15
   rollup>@rollup/rollup-android-arm-eabi: '-'
   rollup>@rollup/rollup-android-arm64: '-'
   rollup>@rollup/rollup-darwin-arm64: '-'
@@ -135,3 +132,6 @@ overrides:
   rollup>@rollup/rollup-win32-ia32-msvc: '-'
   rollup>@rollup/rollup-win32-x64-gnu: '-'
   rollup>@rollup/rollup-win32-x64-msvc: '-'
+  tar: ^7.5.16
+  uuid: ^11.1.1
+  yaml: ^2.9.0

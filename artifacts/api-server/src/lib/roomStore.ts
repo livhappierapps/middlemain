@@ -18,6 +18,8 @@ export interface PersistedRoom {
   name: string;
   createdAt: string;
   messages: RoomMessage[];
+  /** SHA-256 digest only; the raw MCP token is returned once to the host device. */
+  mcpTokenHash?: string | null;
 }
 
 // ─── Storage path ─────────────────────────────────────────────────────────────
@@ -55,7 +57,7 @@ export function loadRooms(): PersistedRoom[] {
 }
 
 /** Persist the current room list to disk. Silently swallows write errors. */
-export function saveRooms(rooms: Map<string, { id: string; name: string; createdAt: string; messages: RoomMessage[] }>): void {
+export function saveRooms(rooms: Map<string, { id: string; name: string; createdAt: string; messages: RoomMessage[]; mcpTokenHash?: string | null }>): void {
   ensureDataDir();
   const payload: PersistedRoom[] = [];
   for (const room of rooms.values()) {
@@ -64,6 +66,7 @@ export function saveRooms(rooms: Map<string, { id: string; name: string; created
       name: room.name,
       createdAt: room.createdAt,
       messages: room.messages,
+      mcpTokenHash: room.mcpTokenHash ?? null,
     });
   }
   try {

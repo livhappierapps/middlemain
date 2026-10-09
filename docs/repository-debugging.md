@@ -19,7 +19,7 @@ This requires a **GitHub App**, not a shared owner token and not the workspace's
 3. Set the public build-time variable `EXPO_PUBLIC_GITHUB_APP_CLIENT_ID` to that app's **client ID**, not its app ID. Optionally set `EXPO_PUBLIC_GITHUB_APP_SLUG` so users can open its installation page directly.
 4. Install the app only on the repositories the user chooses. In the installed Middlemain app, tap **Sign in for private repos**, copy the verification code, authorize it on GitHub, and return to Debug.
 
-The public client ID must be present in the eventual native build. This document does not authorize a paid rebuild. Until configuration exists, the app explicitly states that private-repo sign-in is unavailable; public imports and pasted code still work.
+The public client ID must be present when the eventual native app bundle is built. The Replit shared environment variable enables the development preview, but does not prove that a separate remote EAS build environment has it. This document does not authorize a paid rebuild. Without the ID in a build, the app explicitly states that private-repo sign-in is unavailable; public repositories and pasted code still work.
 
 Customer authorization is stored only in memory for this session, expires after at most eight hours, and is discarded on disconnect, expiry, or app restart. When it expires, the private-repository listing is cleared and the user must sign in again; source already copied into the Debug editor remains until the user clears it. Disconnect forgets the token; **Revoke GitHub access in GitHub settings** removes the authorization at GitHub. No refresh token is stored.
 
@@ -47,4 +47,4 @@ The separately queued help-and-guide task is not duplicated here. Final source Z
 ### Rechecked on October 9, 2026
 
 - The eight mocked tests and Middlemain TypeScript check pass.
-- The GitHub App client ID is still not configured. No native private-repository authorization, selected-private-repository import, GitHub revocation, or live paid AI request was performed.
+- The Replit shared GitHub App client ID was saved and the Expo development preview was restarted. No native private-repository authorization, selected-private-repository import, GitHub revocation, or live paid AI request was performed.

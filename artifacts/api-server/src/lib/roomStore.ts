@@ -25,8 +25,11 @@ export interface PersistedRoom {
 // ─── Storage path ─────────────────────────────────────────────────────────────
 
 // Resolve relative to the package root so the path works regardless of cwd.
-const DATA_DIR = path.resolve(__dirname, "..", "..", "data");
-const STORE_PATH = path.join(DATA_DIR, "rooms.json");
+// The optional override lets local integration tests use an isolated room file.
+const STORE_PATH = process.env.MIDDLEMAIN_ROOM_STORE_PATH
+  ? path.resolve(process.env.MIDDLEMAIN_ROOM_STORE_PATH)
+  : path.resolve(__dirname, "..", "..", "data", "rooms.json");
+const DATA_DIR = path.dirname(STORE_PATH);
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 

@@ -53,3 +53,10 @@ Add `EAS_SKIP_AUTO_FINGERPRINT=1` to the env -i command when running `eas build`
 - Wants native app only — no webapp fallback
 - Name for agent: Dev
 - App is in open beta; store submission is next milestone
+
+## Grok MCP connector
+Middlemain's Grok connector is intended for the owner's Replit agent and future users. Access is scoped to one shared Council room with a key that can be rotated or revoked; keep that credential separate from the room's share link.
+
+**Why:** The user chose a revocable room-scoped key so an AI agent can help in a shared Council without granting access to other rooms.
+
+**How to apply:** Preserve the one-room scope, keep the public share link and MCP credential independent, and never place the credential in the server URL.

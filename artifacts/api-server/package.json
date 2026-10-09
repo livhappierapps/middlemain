@@ -22,7 +22,7 @@
     "pino-http": "^10.5.0",
     "typescript": "~5.9.3",
     "ws": "^8.21.3",
-    "zod": "catalog:"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",

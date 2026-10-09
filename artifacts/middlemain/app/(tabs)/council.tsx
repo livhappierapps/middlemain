@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Feather } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as SecureStore from 'expo-secure-store';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import * as Sharing from 'expo-sharing';
@@ -11,6 +12,7 @@ import {
   AppState,
   AppStateStatus,
   Clipboard,
+  Dimensions,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -409,20 +411,33 @@ function LiveRoomSheet({
   visible,
   onClose,
   url,
+  mcpUrl,
+  mcpToken,
   viewerCount,
   onCopy,
   onShare,
+  onCopyMcpUrl,
+  onCopyMcpToken,
+  onRotateMcpToken,
+  onRevokeMcpToken,
   onStop,
 }: {
   visible: boolean;
   onClose: () => void;
   url: string;
+  mcpUrl: string;
+  mcpToken: string | null;
   viewerCount: number;
   onCopy: () => void;
   onShare: () => void;
+  onCopyMcpUrl: () => void;
+  onCopyMcpToken: () => void;
+  onRotateMcpToken: () => void;
+  onRevokeMcpToken: () => void;
   onStop: () => void;
 }) {
   const { theme } = useTheme();
+  const mcpUrlAvailable = /^https:\/\/\S+/.test(mcpUrl);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -438,6 +453,11 @@ function LiveRoomSheet({
         paddingHorizontal: 20, paddingTop: 20,
         paddingBottom: Platform.OS === 'ios' ? 40 : 24,
       }}>
+        <ScrollView
+          style={{ maxHeight: Dimensions.get('window').height * 0.82 }}
+          contentContainerStyle={{ paddingBottom: 4 }}
+          showsVerticalScrollIndicator
+        >
         {/* Handle bar */}
         <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: theme.border, alignSelf: 'center', marginBottom: 18 }} />
 
@@ -472,6 +492,71 @@ function LiveRoomSheet({
             numberOfLines={2}
           >
             {url}
+          </Text>
+        </View>
+
+        {/* Grok MCP connector */}
+        <View style={{
+          backgroundColor: theme.surface,
+          borderWidth: 1, borderColor: theme.secondary + '66',
+          borderRadius: theme.radius,
+          padding: 14,
+          marginBottom: 12,
+        }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 7 }}>
+            <Feather name="cpu" size={14} color={theme.secondary} />
+            <Text style={{ color: theme.secondary, fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 1.4 }}>
+              GROK CONNECTOR
+            </Text>
+          </View>
+          <Text style={{ color: theme.textMuted, fontSize: 11, fontFamily: 'Inter_400Regular', lineHeight: 16, marginBottom: 10 }}>
+            Add this server in Grok to read this room, reply under your chosen name, and check a pasted source file. The room share link remains separate and still works for anyone who has it.
+          </Text>
+          <Text style={{ color: theme.textMuted, fontSize: 9, fontFamily: 'Inter_600SemiBold', letterSpacing: 1.2, marginBottom: 4 }}>
+            MCP SERVER URL
+          </Text>
+          <Text selectable style={{ color: theme.text, fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 17, marginBottom: 9 }}>
+            {mcpUrlAvailable ? mcpUrl : 'Set a public HTTPS API address before connecting Grok.'}
+          </Text>
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: mcpToken ? 9 : 0 }}>
+            <TouchableOpacity
+              onPress={onCopyMcpUrl}
+              disabled={!mcpUrlAvailable}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !mcpUrlAvailable }}
+              style={{ flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, paddingVertical: 10, borderRadius: theme.radius, borderWidth: 1, borderColor: theme.secondary + '88', opacity: mcpUrlAvailable ? 1 : 0.45 }}
+            >
+              <Feather name="copy" size={13} color={theme.secondary} />
+              <Text style={{ color: theme.secondary, fontSize: 11, fontFamily: 'Inter_600SemiBold' }}>Copy URL</Text>
+            </TouchableOpacity>
+            {mcpToken ? (
+              <TouchableOpacity
+                onPress={onCopyMcpToken}
+                style={{ flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, paddingVertical: 10, borderRadius: theme.radius, borderWidth: 1, borderColor: theme.primary + '88' }}
+              >
+                <Feather name="key" size={13} color={theme.primary} />
+                <Text style={{ color: theme.primary, fontSize: 11, fontFamily: 'Inter_600SemiBold' }}>Copy access key</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+          {mcpToken ? (
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <TouchableOpacity onPress={onRotateMcpToken} accessibilityRole="button">
+                <Text style={{ color: theme.textMuted, fontSize: 11, fontFamily: 'Inter_600SemiBold' }}>Replace key</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={onRevokeMcpToken} accessibilityRole="button">
+                <Text style={{ color: '#ff6666', fontSize: 11, fontFamily: 'Inter_600SemiBold' }}>Revoke Grok access</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <Text style={{ color: theme.textMuted, fontSize: 11, fontFamily: 'Inter_400Regular', lineHeight: 15, marginBottom: 8 }}>
+              No key is saved for this room. Start a new live room to create a Grok key.
+            </Text>
+          )}
+          <Text style={{ color: theme.textMuted, fontSize: 10, fontFamily: 'Inter_400Regular', lineHeight: 14 }}>
+            {mcpUrlAvailable
+              ? 'Grok needs a publicly reachable HTTPS address and a way to send a Bearer access key. Copy the key only into Grok’s authorization step; never add it to the URL. Source text is sent to Grok for its response, then checked locally without running it.'
+              : 'A relative or local preview address cannot be reached by Grok. Source text is sent to Grok for its response, then checked locally without running it.'}
           </Text>
         </View>
 
@@ -513,6 +598,7 @@ function LiveRoomSheet({
           <Feather name="radio" size={15} color="#ff4444" />
           <Text style={{ color: '#ff4444', fontSize: 13, fontFamily: 'Inter_600SemiBold' }}>Stop Room</Text>
         </TouchableOpacity>
+        </ScrollView>
       </View>
     </Modal>
   );
@@ -605,6 +691,28 @@ function AutoModeModal({
 
 // ─── Live room persistence key ────────────────────────────────────────────────
 const LIVE_ROOM_STORAGE_KEY = '@middlemain/liveRoom';
+const LIVE_ROOM_MCP_TOKEN_KEY = '@middlemain/liveRoomMcpToken';
+
+async function persistLiveRoomToken(roomId: string, token: string | null): Promise<boolean> {
+  try {
+    const stored = await AsyncStorage.getItem(LIVE_ROOM_STORAGE_KEY);
+    if (!stored) return false;
+    const room = JSON.parse(stored) as { roomId?: string; [key: string]: unknown };
+    if (room.roomId !== roomId) return false;
+    // Remove any legacy plaintext token before using device secure storage.
+    delete room.mcpToken;
+    await AsyncStorage.setItem(LIVE_ROOM_STORAGE_KEY, JSON.stringify(room));
+    if (Platform.OS === 'web') return token === null;
+    if (token) {
+      await SecureStore.setItemAsync(LIVE_ROOM_MCP_TOKEN_KEY, token);
+    } else {
+      await SecureStore.deleteItemAsync(LIVE_ROOM_MCP_TOKEN_KEY);
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 // ─── API base helper ─────────────────────────────────────────────────────────
 // Prefers the user-configured URL from context (AsyncStorage-backed), falls
@@ -614,6 +722,10 @@ function resolveApiBase(stored: string): string {
   const domain = process.env.EXPO_PUBLIC_DOMAIN;
   if (domain) return `https://${domain}/api`;
   return '/api';
+}
+
+function resolveMcpServerUrl(apiBase: string): string {
+  return `${apiBase.replace(/\/+$/, '')}/mcp`;
 }
 
 export default function CouncilScreen() {
@@ -659,6 +771,8 @@ export default function CouncilScreen() {
   // Live room state (Task #41)
   const [liveRoomId, setLiveRoomId] = useState<string | null>(null);
   const [liveRoomUrl, setLiveRoomUrl] = useState<string | null>(null);
+  const [liveRoomMcpToken, setLiveRoomMcpToken] = useState<string | null>(null);
+  const [liveRoomApiBase, setLiveRoomApiBase] = useState<string | null>(null);
   const [isGoingLive, setIsGoingLive] = useState(false);
   const [liveViewerCount, setLiveViewerCount] = useState(0);
   const [showLiveSheet, setShowLiveSheet] = useState(false);
@@ -704,16 +818,42 @@ export default function CouncilScreen() {
   // Prevents a late-resolving rehydration fetch from overwriting explicit user intent.
   const liveRoomSetByUserRef = useRef(false);
 
-  const handleStopRoom = useCallback(() => {
+  const handleStopRoom = useCallback(async () => {
+    const apiBase = liveRoomApiBase ?? resolveApiBase(apiUrlRef.current);
+    if (liveRoomId && liveRoomMcpToken) {
+      try {
+        const response = await fetch(
+          `${apiBase}/council/rooms/${liveRoomId}/mcp-token`,
+          {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${liveRoomMcpToken}` },
+          },
+        );
+        if (!response.ok && response.status !== 404) {
+          throw new Error(`Server error ${response.status}`);
+        }
+      } catch (err: any) {
+        Alert.alert(
+          'Could not revoke Grok access',
+          err?.message ?? 'The room is still live. Try again when the server is reachable.',
+        );
+        return;
+      }
+    }
     liveRoomSetByUserRef.current = true;
     setLiveRoomId(null);
     setLiveRoomUrl(null);
+    setLiveRoomMcpToken(null);
+    setLiveRoomApiBase(null);
     setLiveViewerCount(0);
     setShowLiveSheet(false);
     broadcastedIdsRef.current.clear();
     AsyncStorage.removeItem(LIVE_ROOM_STORAGE_KEY).catch(() => {});
+    if (Platform.OS !== 'web') {
+      SecureStore.deleteItemAsync(LIVE_ROOM_MCP_TOKEN_KEY).catch(() => {});
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, []);
+  }, [liveRoomApiBase, liveRoomId, liveRoomMcpToken]);
 
   const handleGoLive = useCallback(async () => {
     if (liveRoomId) {
@@ -727,14 +867,14 @@ export default function CouncilScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
     try {
-      const apiBase = resolveApiBase(apiUrlRef.current);
+      const apiBase = resolveApiBase(apiUrlRef.current).replace(/\/+$/, '');
       const resp = await fetch(`${apiBase}/council/rooms`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: 'Council Session' }),
       });
       if (!resp.ok) throw new Error(`Server error ${resp.status}`);
-      const json = await resp.json() as { roomId: string };
+      const json = await resp.json() as { roomId: string; mcpAccessToken?: string };
       // Derive the Council Room web URL from the API base (strip /api, add /council-room/)
       const webBase = apiBase.replace(/\/api$/, '');
       const url = webBase
@@ -747,8 +887,31 @@ export default function CouncilScreen() {
       liveRoomSetByUserRef.current = true;
       setLiveRoomId(json.roomId);
       setLiveRoomUrl(url);
+      setLiveRoomMcpToken(json.mcpAccessToken ?? null);
+      setLiveRoomApiBase(apiBase);
       // Persist so the room can be recovered if the app is killed mid-session
-      AsyncStorage.setItem(LIVE_ROOM_STORAGE_KEY, JSON.stringify({ roomId: json.roomId, url })).catch(() => {});
+      let tokenSaved = !json.mcpAccessToken;
+      try {
+        await AsyncStorage.setItem(
+          LIVE_ROOM_STORAGE_KEY,
+          JSON.stringify({
+            roomId: json.roomId,
+            url,
+            apiBase,
+          }),
+        );
+        if (json.mcpAccessToken) {
+          tokenSaved = await persistLiveRoomToken(json.roomId, json.mcpAccessToken);
+        }
+      } catch {
+        tokenSaved = false;
+      }
+      if (!tokenSaved) {
+        Alert.alert(
+          'Copy the Grok key now',
+          'This device could not save the access key securely. Copy it before closing Middlemain; it cannot be recovered from the server.',
+        );
+      }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       // Open the share sheet immediately so the user can copy/share the link
       setShowLiveSheet(true);
@@ -759,6 +922,62 @@ export default function CouncilScreen() {
     }
   }, [liveRoomId, messages]);
 
+  const handleRotateMcpToken = useCallback(async () => {
+    if (!liveRoomId || !liveRoomMcpToken) return;
+    const apiBase = liveRoomApiBase ?? resolveApiBase(apiUrlRef.current);
+    try {
+      const response = await fetch(
+        `${apiBase}/council/rooms/${liveRoomId}/mcp-token`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${liveRoomMcpToken}` },
+        },
+      );
+      if (!response.ok) throw new Error(`Server error ${response.status}`);
+      const json = await response.json() as { mcpAccessToken?: string };
+      if (!json.mcpAccessToken) throw new Error('The server did not return a replacement key.');
+      setLiveRoomMcpToken(json.mcpAccessToken);
+      const saved = await persistLiveRoomToken(liveRoomId, json.mcpAccessToken);
+      if (!saved) {
+        Alert.alert(
+          'New key ready',
+          'The old key no longer works. Copy the new key now; it could not be saved on this device.',
+        );
+      } else {
+        Alert.alert('Grok key replaced', 'Copy the new key into Grok. The previous key no longer works.');
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (err: any) {
+      Alert.alert('Could not replace Grok key', err?.message ?? 'Check the server connection and try again.');
+    }
+  }, [liveRoomApiBase, liveRoomId, liveRoomMcpToken]);
+
+  const handleRevokeMcpToken = useCallback(async () => {
+    if (!liveRoomId || !liveRoomMcpToken) return;
+    const apiBase = liveRoomApiBase ?? resolveApiBase(apiUrlRef.current);
+    try {
+      const response = await fetch(
+        `${apiBase}/council/rooms/${liveRoomId}/mcp-token`,
+        {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${liveRoomMcpToken}` },
+        },
+      );
+      if (!response.ok) throw new Error(`Server error ${response.status}`);
+      setLiveRoomMcpToken(null);
+      const saved = await persistLiveRoomToken(liveRoomId, null);
+      Alert.alert(
+        'Grok access revoked',
+        saved
+          ? 'Grok can no longer read or post to this room. The room and its share link are still active.'
+          : 'Grok can no longer use the old key. This device could not update its saved room details.',
+      );
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (err: any) {
+      Alert.alert('Could not revoke Grok access', err?.message ?? 'Check the server connection and try again.');
+    }
+  }, [liveRoomApiBase, liveRoomId, liveRoomMcpToken]);
+
   // ── Rehydrate live room from AsyncStorage on mount ───────────────────────────
   useEffect(() => {
     let cancelled = false;
@@ -766,10 +985,21 @@ export default function CouncilScreen() {
       try {
         const stored = await AsyncStorage.getItem(LIVE_ROOM_STORAGE_KEY);
         if (!stored || cancelled) return;
-        const { roomId, url } = JSON.parse(stored) as { roomId: string; url: string };
+        const {
+          roomId,
+          url,
+          apiBase: storedApiBase,
+          mcpToken,
+        } = JSON.parse(stored) as {
+          roomId: string;
+          url: string;
+          apiBase?: string;
+          mcpToken?: string | null;
+        };
         if (!roomId || !url) return;
+        const apiBase = (storedApiBase ?? resolveApiBase(apiUrlRef.current)).replace(/\/+$/, '');
         // Verify the room still exists on the server before restoring
-        const resp = await fetch(`${resolveApiBase(apiUrlRef.current)}/council/rooms/${roomId}`);
+        const resp = await fetch(`${apiBase}/council/rooms/${roomId}`);
         if (cancelled || liveRoomSetByUserRef.current) return;
         if (!resp.ok) {
           // Only discard the persisted entry on a confirmed 404 (room expired/deleted).
@@ -791,8 +1021,31 @@ export default function CouncilScreen() {
           // JSON parse failure — proceed without pre-seeding; worst case is duplicate
           // messages (acceptable degradation, the room still recovers)
         }
+        let secureMcpToken: string | null = null;
+        if (Platform.OS !== 'web') {
+          try {
+            secureMcpToken = await SecureStore.getItemAsync(LIVE_ROOM_MCP_TOKEN_KEY);
+          } catch {
+            secureMcpToken = null;
+          }
+        }
+        if (typeof mcpToken === 'string') {
+          if (!secureMcpToken && Platform.OS === 'web') {
+            await persistLiveRoomToken(roomId, null);
+            secureMcpToken = mcpToken;
+          } else if (!secureMcpToken) {
+            const migrated = await persistLiveRoomToken(roomId, mcpToken);
+            if (migrated) secureMcpToken = mcpToken;
+          } else {
+            await persistLiveRoomToken(roomId, secureMcpToken);
+          }
+        }
+
+        if (cancelled || liveRoomSetByUserRef.current) return;
         setLiveRoomId(roomId);
         setLiveRoomUrl(url);
+        setLiveRoomMcpToken(secureMcpToken);
+        setLiveRoomApiBase(apiBase);
       } catch {
         // Network or parse error — silently skip; don't disrupt the app
       }
@@ -1734,6 +1987,8 @@ export default function CouncilScreen() {
         visible={showLiveSheet}
         onClose={() => setShowLiveSheet(false)}
         url={liveRoomUrl ?? ''}
+        mcpUrl={resolveMcpServerUrl(liveRoomApiBase ?? resolveApiBase(apiUrl))}
+        mcpToken={liveRoomMcpToken}
         viewerCount={liveViewerCount}
         onCopy={() => {
           if (!liveRoomUrl) return;
@@ -1745,9 +2000,39 @@ export default function CouncilScreen() {
           if (!liveRoomUrl) return;
           Sharing.shareAsync(liveRoomUrl);
         }}
+        onCopyMcpUrl={() => {
+          const mcpUrl = resolveMcpServerUrl(liveRoomApiBase ?? resolveApiBase(apiUrl));
+          if (!/^https:\/\/\S+/.test(mcpUrl)) return;
+          Clipboard.setString(mcpUrl);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }}
+        onCopyMcpToken={() => {
+          if (!liveRoomMcpToken) return;
+          Clipboard.setString(liveRoomMcpToken);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          Alert.alert(
+            'Grok access key copied',
+            'Use it only in Grok’s authorization step. Anyone with the key can read and post to this room.',
+          );
+        }}
+        onRotateMcpToken={() => Alert.alert(
+          'Replace Grok access key?',
+          'The current key will stop working. You will need to update it in Grok.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Replace key', style: 'destructive', onPress: () => { void handleRotateMcpToken(); } },
+          ],
+        )}
+        onRevokeMcpToken={() => Alert.alert(
+          'Revoke Grok access?',
+          'Grok will lose access to this room. The room and its share link will remain active.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Revoke access', style: 'destructive', onPress: () => { void handleRevokeMcpToken(); } },
+          ],
+        )}
         onStop={() => {
-          setShowLiveSheet(false);
-          handleStopRoom();
+          void handleStopRoom();
         }}
       />
 

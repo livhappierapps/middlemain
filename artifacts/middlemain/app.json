@@ -70,7 +70,8 @@
           "cameraPermission": "Middlemain uses the camera to capture screenshots and images for AI visual analysis in the Bridge Terminal.",
           "microphonePermission": false
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -5,6 +5,15 @@ import { getXaiKey, hasXaiKey } from "../lib/xaiKey";
 const grokRouter = Router();
 const XAI_BASE = "https://api.x.ai/v1";
 
+function sendXaiError(
+  res: Response,
+  status: number,
+  code: string,
+  message: string,
+): void {
+  res.status(status).json({ error: { code, message } });
+}
+
 interface MessageContent {
   type: "text" | "image_url";
   text?: string;
@@ -22,7 +31,15 @@ interface ChatMessage {
  */
 grokRouter.post("/grok/chat", async (req: Request, res: Response) => {
   const apiKey = getXaiKey();
-  if (!apiKey) { res.status(503).json({ error: "XAI_API_KEY not configured on server" }); return; }
+  if (!apiKey) {
+    sendXaiError(
+      res,
+      503,
+      "XAI_KEY_MISSING",
+      "Server Grok is not configured. Add an xAI key in Settings → Middlemain Executive API.",
+    );
+    return;
+  }
 
   const { model = "grok-3", messages, stream = true, systemPrompt } = req.body as {
     model?: string;
@@ -49,9 +66,19 @@ grokRouter.post("/grok/chat", async (req: Request, res: Response) => {
     });
 
     if (!upstream.ok) {
-      const text = await upstream.text();
-      logger.warn({ status: upstream.status, body: text.slice(0, 300) }, "xAI upstream error");
-      res.status(upstream.status).json({ error: text });
+      logger.warn({ status: upstream.status }, "xAI upstream request failed");
+      if (upstream.status === 401 || upstream.status === 403) {
+        sendXaiError(
+          res,
+          503,
+          "XAI_KEY_REJECTED",
+          "The xAI key configured for this server was rejected. Update it in Settings → Middlemain Executive API.",
+        );
+      } else if (upstream.status === 429) {
+        sendXaiError(res, 429, "XAI_RATE_LIMITED", "Grok is busy right now. Try again shortly.");
+      } else {
+        sendXaiError(res, 502, "XAI_UPSTREAM_ERROR", "Grok is temporarily unavailable. Try again shortly.");
+      }
       return;
     }
 
@@ -77,7 +104,7 @@ grokRouter.post("/grok/chat", async (req: Request, res: Response) => {
     }
   } catch (err) {
     logger.error({ err }, "Grok proxy error");
-    res.status(500).json({ error: "Proxy request failed" });
+    sendXaiError(res, 502, "XAI_UPSTREAM_ERROR", "Could not reach Grok. Check your connection and try again.");
   }
 });
 

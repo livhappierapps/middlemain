@@ -29,6 +29,7 @@ import { NeonCard } from '@/components/NeonCard';
 import { NeonText } from '@/components/NeonText';
 import { ThemedBackground } from '@/components/ThemedBackground';
 import { NeonButton } from '@/components/NeonButton';
+import { ServerGrokNotice } from '@/components/ServerGrokNotice';
 import {
   CouncilParticipant,
   COUNCIL_COLORS,
@@ -1840,6 +1841,7 @@ export default function CouncilScreen() {
         </View>
 
         {/* Message thread — wrapped for screen capture */}
+        <ServerGrokNotice />
         <View ref={screenCaptureRef} style={{ flex: 1 }}>
           <ScrollView
             ref={scrollRef}

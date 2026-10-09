@@ -1,4 +1,5 @@
 import { Feather } from '@expo/vector-icons';
+import Constants from 'expo-constants';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
@@ -16,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AdBanner } from '@/components/AdBanner';
 import { NeonCard } from '@/components/NeonCard';
 import { NeonText } from '@/components/NeonText';
+import { ServerGrokNotice } from '@/components/ServerGrokNotice';
 import { ThemedBackground } from '@/components/ThemedBackground';
 import { useAI } from '@/context/AIContext';
 import { usePurchase } from '@/context/PurchaseContext';
@@ -107,7 +109,7 @@ export default function HomeScreen() {
           <View style={{ flexDirection: 'row', gap: 8, marginTop: 6, alignItems: 'center' }}>
             <View style={{ backgroundColor: theme.secondary + '22', borderWidth: 1, borderColor: theme.secondary, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 }}>
               <Text style={{ color: theme.secondary, fontSize: 9, fontFamily: 'Inter_700Bold', letterSpacing: 2, textShadowColor: theme.secondary, textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 6 }}>
-                BETA v0.1
+                BETA v{Constants.expoConfig?.version ?? 'unknown'}
               </Text>
             </View>
             {tier !== 'free' && (
@@ -149,6 +151,7 @@ export default function HomeScreen() {
             <Feather name="chevron-right" size={16} color={theme.secondary} />
           </TouchableOpacity>
         )}
+        <ServerGrokNotice />
 
         {/* Stats row */}
         <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20, marginTop: 10 }}>

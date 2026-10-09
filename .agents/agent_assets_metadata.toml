@@ -25,3 +25,17 @@ uri = "file://artifacts/middlemain/assets/images/splash.png"
 type = "image"
 title = "Middlemain Splash Screen"
 logical_id = "7bbb773d-d8d7-4ae2-944f-ee4c1ac301fb"
+
+[[outputs]]
+id = "uZlVBKk4Hyz707w7Wswnb"
+uri = "file://deliverables/Middlemain-Source-v1.2.0.zip"
+type = "unspecified"
+title = "Middlemain source zip v1.2.0"
+description = "Full tracked project source, validated archive; excludes .git, node_modules, and dist."
+logical_id = "2bc9d0fd-0814-4969-858f-bddbfb0edd4b"
+content_hash = "sha256:870e5ee52f8fbb00d28816a47a7d60c846b063253e7a9d66990f6d95b4a90c20"
+size = 72052398
+mtime_ms = 1791428531136
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:c619b4d5-e3ec-47d4-a952-2fd41395511e/2bc9d0fd-0814-4969-858f-bddbfb0edd4b/d39327a4-11bf-4850-b082-dce93a03d895"
+storage_version_token = "1791428603855589"
+content_type = "application/octet-stream"

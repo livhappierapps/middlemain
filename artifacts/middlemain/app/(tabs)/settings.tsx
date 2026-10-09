@@ -1,8 +1,8 @@
 import { Feather } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Clipboard from 'expo-clipboard';
+import Constants from 'expo-constants';
 import * as Haptics from 'expo-haptics';
-import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import React, { useEffect, useState } from 'react';
 import {
@@ -22,10 +22,11 @@ import { NeonText } from '@/components/NeonText';
 import { ThemedBackground } from '@/components/ThemedBackground';
 import { ThemeSelector } from '@/components/ThemeSelector';
 import { usePurchase } from '@/context/PurchaseContext';
-import { useTheme } from '@/context/ThemeContext';
 import { useCouncil } from '@/context/CouncilContext';
+import { useAI } from '@/context/AIContext';
+import { useTheme } from '@/context/ThemeContext';
 
-const APP_VERSION = '0.1.0 (Beta)';
+const APP_VERSION = `${Constants.expoConfig?.version ?? 'unknown'} (Beta)`;
 
 const EXEC_KEY_STORAGE = '@middlemain_executive_key';
 
@@ -119,9 +120,10 @@ function PricingCard({
 }
 
 export default function SettingsScreen() {
-  const { theme, themeKey } = useTheme();
+  const { theme } = useTheme();
   const { tier, hasRemovedAds, purchaseMonthly, purchaseAnnual, purchaseAdRemoval, restorePurchases } = usePurchase();
   const { webhookUrl, setWebhookUrl, testWebhook, historyLimit, setHistoryLimit, apiUrl, setApiUrl } = useCouncil();
+  const { refreshServerGrokStatus } = useAI();
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
 
@@ -145,6 +147,7 @@ export default function SettingsScreen() {
   const [xaiKeyInput, setXaiKeyInput] = useState('');
   const [xaiKeySaving, setXaiKeySaving] = useState(false);
   const [xaiKeyStatus, setXaiKeyStatus] = useState<'idle' | 'ok' | 'error'>('idle');
+  const [xaiKeyMessage, setXaiKeyMessage] = useState('');
 
   useEffect(() => {
     AsyncStorage.getItem(EXEC_KEY_STORAGE).then((val) => {
@@ -202,6 +205,7 @@ export default function SettingsScreen() {
     }
     setXaiKeySaving(true);
     setXaiKeyStatus('idle');
+    setXaiKeyMessage('');
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       const resp = await fetch(`${resolveApiBase(apiUrl)}/executive/set-xai-key`, {
@@ -211,19 +215,24 @@ export default function SettingsScreen() {
       });
       if (resp.ok) {
         setXaiKeyStatus('ok');
+        setXaiKeyMessage('Server Grok is ready to use.');
         setXaiKeyInput('');
+        await refreshServerGrokStatus();
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Alert.alert('✅ Key updated', 'xAI key is live on the server. AI Analyze and the executive assistant will use it immediately.');
       } else {
-        const json = await resp.json().catch(() => ({})) as any;
         setXaiKeyStatus('error');
+        const message = resp.status === 401 || resp.status === 403
+          ? 'The Executive API key was rejected. Check it in the Executive API section above.'
+          : resp.status >= 500
+          ? 'The API server could not update the xAI key. Check the API Server URL and try again.'
+          : 'The xAI key could not be updated. Check the details and try again.';
+        setXaiKeyMessage(message);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        Alert.alert('Failed', json?.error ?? `Server error ${resp.status}`);
       }
-    } catch (err: any) {
+    } catch {
       setXaiKeyStatus('error');
+      setXaiKeyMessage('Could not reach the API server. Check the API Server URL in Settings and try again.');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Failed', err?.message ?? 'Could not reach server');
     } finally {
       setXaiKeySaving(false);
     }
@@ -681,13 +690,24 @@ export default function SettingsScreen() {
                   marginBottom: 10,
                 }}
                 value={xaiKeyInput}
-                onChangeText={(t) => { setXaiKeyInput(t); setXaiKeyStatus('idle'); }}
+                onChangeText={(t) => { setXaiKeyInput(t); setXaiKeyStatus('idle'); setXaiKeyMessage(''); }}
                 placeholder="xai-…"
                 placeholderTextColor={theme.textMuted}
                 autoCapitalize="none"
                 autoCorrect={false}
                 secureTextEntry
               />
+              {!!xaiKeyMessage && (
+                <Text style={{
+                  color: xaiKeyStatus === 'error' ? '#ff6b6b' : '#34d399',
+                  fontSize: 11,
+                  fontFamily: 'Inter_400Regular',
+                  marginBottom: 10,
+                  lineHeight: 16,
+                }}>
+                  {xaiKeyMessage}
+                </Text>
+              )}
               <NeonButton
                 label={xaiKeySaving ? 'Updating…' : 'Update Grok Key'}
                 onPress={handleSaveXaiKey}

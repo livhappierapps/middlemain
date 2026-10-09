@@ -20,6 +20,7 @@ import { MemoryMachineCard } from '@/components/MemoryMachineCard';
 import { ConnectionCard } from '@/components/ConnectionCard';
 import { NeonButton } from '@/components/NeonButton';
 import { NeonText } from '@/components/NeonText';
+import { ServerGrokNotice } from '@/components/ServerGrokNotice';
 import { AIConnection, AIProvider, PROVIDER_DEFAULTS, useAI } from '@/context/AIContext';
 import { useTheme } from '@/context/ThemeContext';
 import { ThemedBackground } from '@/components/ThemedBackground';
@@ -266,6 +267,8 @@ export default function ConnectionsScreen() {
             <Feather name="plus" size={20} color={theme.primary} />
           </TouchableOpacity>
         </View>
+
+        <ServerGrokNotice />
 
         {/* AIs & Ears Bridge */}
         <View style={{ paddingTop: 4 }}>

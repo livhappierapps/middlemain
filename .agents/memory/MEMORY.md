@@ -1,10 +1,12 @@
 - [Middlemain project](middlemain.md) — Native Expo dev tool; key architecture decisions, theme system, AI proxy, and vision integration notes.
 - [AIs & Ears Bridge Protocol](ais-and-ears-bridge.md) — Vhis's 3-step HTTP+WS protocol for Leo's camera/screen/hearing senses in Middlemain terminal.
 - [pnpm lockfile overrides sync](pnpm-overrides-sync.md) — Root package.json must have pnpm.overrides matching pnpm-lock.yaml or EAS build frozen install fails.
+- [React type alignment](react-type-alignment.md) — Mixed web/native React typings can break ref assignments; align within the native SDK's supported range.
 - [EAS Xcode version](eas-xcode.md) — iOS production builds require `"image": "latest"` in eas.json to get Xcode 26+; omitting it causes build failure.
 - [Expo E2E testing skip](expo-e2e-skip.md) — Playwright-based runTest() cannot reach the Expo mobile build via browser proxy; skip with documented reason.
-- [EAS Build from main agent](eas-build-restriction.md) — EAS CLI acquires a git index lock which Replit's sandbox blocks in the main agent. Must use a project_tasks background task to trigger EAS builds. Workaround env var: EAS_SKIP_AUTO_FINGERPRINT=1 still needed alongside the task approach.
+- [EAS release setup](eas-release-setup.md) — Task-agent builds need fingerprint bypass; initial iOS signing requires interactive API-key setup and explicit certificate-revocation approval.
 - [Cost transparency](cost-transparency.md) — Warn Dev before any action that may create charges; do not initiate paid API usage or builds without clear notice.
 - [Task ownership](task-ownership.md) — Review already-running work before implementing the same feature; separate main edits from queued merges.
 - [Git provider authorization](git-provider-authorization.md) — Healthy account status can coexist with rejected Git credentials; connector reconnect cards may not apply.
 - [Private developer edition](developer-edition.md) — Public release first; owner-only Dev’s Crash Pad, Council participation, and approval-controlled Dev/Leo tools afterward.
+- [pnpm patch cache](pnpm-patch-cache.md) — Verify installed safety guards, not just patch hashes; a forced frozen install can repair stale patched-package contents.

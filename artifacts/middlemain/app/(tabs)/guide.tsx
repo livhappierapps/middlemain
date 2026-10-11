@@ -1,5 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { isLiquidGlassAvailable } from 'expo-glass-effect';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
@@ -14,6 +15,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedBackground } from '@/components/ThemedBackground';
+import { getOfflineHelpAnswer } from '@/utils/appHelp';
 import { AIProvider, ChatMessage, GuideSource, useAI } from '@/context/AIContext';
 import { useTheme } from '@/context/ThemeContext';
 
@@ -61,52 +63,6 @@ const PROVIDER_INFO: {
   },
 ];
 
-const HELP_TOPICS: {
-  keywords: string[];
-  answer: string;
-}[] = [
-  {
-    keywords: ['offline', 'without a network', 'no network', 'without internet'],
-    answer:
-      'Built-in Middlemain help works offline, sends no question to a provider, and does not incur an AI or search charge. General AI answers and live web search need a selected provider connection and may incur charges.',
-  },
-  {
-    keywords: ['price', 'cost', 'charge', 'billing', 'web search', 'grounding'],
-    answer:
-      'Built-in Middlemain help is available offline and does not send your question anywhere. General AI answers use the provider and model you select and may be billed by that provider. Gemini Google Search grounding can add a separate search charge; check the rates and links shown in this guide.',
-  },
-  {
-    keywords: ['memory', 'mcp', 'tool'],
-    answer:
-      'To connect memory tools, open Connect, find Memory Bridge, enter the service URL and token from that service, and tap Connect. When connected, each listed tool has a help button with the description and input fields advertised by its own schema.',
-  },
-  {
-    keywords: ['privacy', 'api key', 'key'],
-    answer:
-      'AI connection keys are saved on this device. When you ask an AI provider a question, the message is sent to the selected provider; Middlemain cannot promise how that provider handles your data. Avoid including passwords, private keys, or other sensitive information.',
-  },
-  {
-    keywords: ['debug', 'code', 'dry run', 'typecheck', 'build'],
-    answer:
-      'Open Debug, choose the code type, and paste the code or use Paste. AI Analyze sends the code for an AI review. Dry Run checks TypeScript-compatible input with the app’s configured checker. Review the result before building; an AI review is not a guarantee that a build will succeed.',
-  },
-  {
-    keywords: ['council', 'participant', 'role', 'team'],
-    answer:
-      'In Council, add AI participants from your saved connections, give each one a clear role, then describe the goal in the message box. You can run a regular conversation or start an automatic multi-participant session.',
-  },
-  {
-    keywords: ['terminal', 'bridge', 'image', 'photo', 'chat'],
-    answer:
-      'In Bridge, select a saved AI connection and a task from the skill row, then type a question and send it. You can also attach an image when you want help interpreting a screenshot or photo. Camera, microphone, and screen sharing require the separate AIs & Ears bridge.',
-  },
-  {
-    keywords: ['connect', 'provider', 'openai', 'anthropic', 'gemini', 'grok', 'xai'],
-    answer:
-      'Open Connect, tap the plus button, choose a provider, and enter a connection name, API key, and model ID. Tap Save, then use Test to check that the settings work. Provider keys and usage are managed by you and the provider.',
-  },
-];
-
 const GUIDE_SYSTEM_PROMPT =
   'You are a helpful guide in Middlemain. Answer the user directly in plain language. Do not claim certainty when you are unsure. For questions about Middlemain, distinguish what is known from what may depend on their app version or provider. If web search was used, describe what the cited sources support and do not invent citations.';
 
@@ -121,12 +77,7 @@ type GuideMessage = {
 };
 
 function getBuiltInAnswer(question: string): string {
-  const normalized = question.toLowerCase();
-  const topic = HELP_TOPICS.find(({ keywords }) =>
-    keywords.some((keyword) => normalized.includes(keyword)),
-  );
-  return topic?.answer
-    ?? 'This offline guide only answers questions covered by built-in Middlemain help. It has not sent your question anywhere. Switch to Ask AI for general questions; a selected provider may charge for its answer.';
+  return getOfflineHelpAnswer(question);
 }
 
 function makeId(): string {
@@ -276,7 +227,8 @@ export default function GuideScreen() {
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View style={{ flex: 1, paddingTop: topInset + 10 }}>
+        <View style={{ flex: 1, paddingTop: topInset + 10,
+          paddingBottom: Platform.OS === 'web' ? 84 : isLiquidGlassAvailable() ? 0 : 49 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingBottom: 12 }}>
             <Feather name="user" size={20} color={theme.primary} />
             <Text accessibilityRole="header" style={{ color: theme.text, fontFamily: 'Inter_700Bold', fontSize: 18, flex: 1 }}>

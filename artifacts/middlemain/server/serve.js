@@ -45,18 +45,59 @@ function getAppName() {
   }
 }
 
-function serveManifest(platform, res) {
-  const manifestPath = path.join(STATIC_ROOT, platform, "manifest.json");
-
-  if (!fs.existsSync(manifestPath)) {
-    res.writeHead(404, { "content-type": "application/json" });
-    res.end(
-      JSON.stringify({ error: `Manifest not found for platform: ${platform}` }),
-    );
-    return;
+function resolvePublicFile(root, relativePath) {
+  // Check both the lexical path and the actual filesystem target. A prefix-only
+  // check accepts sibling directories; a lexical-only check accepts symlinks.
+  const isInside = (parent, target) => {
+    const relative = path.relative(parent, target);
+    return relative !== "" && !path.isAbsolute(relative) &&
+      relative !== ".." && !relative.startsWith(`..${path.sep}`);
+  };
+  if (relativePath.includes("\\") || relativePath.includes("\0") ||
+      relativePath.split("/").some((segment) => segment === ".." || segment === ".")) {
+    throw Object.assign(new Error("Forbidden"), { status: 403 });
   }
+  const rootPath = path.resolve(root);
+  const filePath = path.resolve(rootPath, relativePath);
+  if (!isInside(rootPath, filePath)) {
+    throw Object.assign(new Error("Forbidden"), { status: 403 });
+  }
+  const realRoot = fs.realpathSync(rootPath);
+  const realFile = fs.realpathSync(filePath);
+  if (!isInside(realRoot, realFile)) {
+    throw Object.assign(new Error("Forbidden"), { status: 403 });
+  }
+  if (!fs.statSync(realFile).isFile()) {
+    throw Object.assign(new Error("Not Found"), { status: 404 });
+  }
+  return realFile;
+}
 
-  const manifest = fs.readFileSync(manifestPath, "utf-8");
+function sendFileError(error, res) {
+  const status = error.status || (error.code === "ENOENT" || error.code === "ENOTDIR" ? 404 : 500);
+  res.writeHead(status);
+  res.end(status === 403 ? "Forbidden" : status === 404 ? "Not Found" : "File unavailable");
+}
+
+function serveManifest(platform, res, staticRoot) {
+  // Request headers never become a filesystem path.
+  let manifest;
+  try {
+    switch (platform) {
+      case "ios":
+        manifest = fs.readFileSync(resolvePublicFile(staticRoot, "ios/manifest.json"), "utf-8");
+        break;
+      case "android":
+        manifest = fs.readFileSync(resolvePublicFile(staticRoot, "android/manifest.json"), "utf-8");
+        break;
+      default:
+        res.writeHead(400);
+        res.end("Unsupported platform");
+        return;
+    }
+  } catch (error) {
+    return sendFileError(error, res);
+  }
   res.writeHead(200, {
     "content-type": "application/json",
     "expo-protocol-version": "1",
@@ -67,58 +108,77 @@ function serveManifest(platform, res) {
 
 function serveLandingPage(req, res, landingPageTemplate, appName) {
   const forwardedProto = req.headers["x-forwarded-proto"];
-  const protocol = forwardedProto || "https";
+  const protocol = typeof forwardedProto === "string" ? forwardedProto.split(",")[0].trim() : "https";
   const host = req.headers["x-forwarded-host"] || req.headers["host"];
+  // These values are interpolated into both HTML and a script in the template.
+  if (!["https", "http"].includes(protocol) || typeof host !== "string" ||
+      !/^(?:[a-zA-Z0-9.-]+|\[[0-9a-fA-F:]+\])(?::\d{1,5})?$/.test(host)) {
+    res.writeHead(400);
+    res.end("Invalid host or protocol");
+    return;
+  }
   const baseUrl = `${protocol}://${host}`;
   const expsUrl = `${host}`;
+  const escapedAppName = appName.replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  })[character]);
 
   const html = landingPageTemplate
     .replace(/BASE_URL_PLACEHOLDER/g, baseUrl)
     .replace(/EXPS_URL_PLACEHOLDER/g, expsUrl)
-    .replace(/APP_NAME_PLACEHOLDER/g, appName);
+    .replace(/APP_NAME_PLACEHOLDER/g, () => escapedAppName);
 
-  res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+  res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
   res.end(html);
 }
 
-function serveStaticFile(urlPath, res) {
-  const safePath = path.normalize(urlPath).replace(/^(\.\.(\/|\\|$))+/, "");
-  const filePath = path.join(STATIC_ROOT, safePath);
-
-  if (!filePath.startsWith(STATIC_ROOT)) {
-    res.writeHead(403);
-    res.end("Forbidden");
+function serveStaticFile(urlPath, res, staticRoot) {
+  let decoded;
+  try {
+    decoded = decodeURIComponent(urlPath);
+  } catch {
+    res.writeHead(400);
+    res.end("Malformed path");
     return;
   }
-
-  if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
-    res.writeHead(404);
-    res.end("Not Found");
-    return;
+  try {
+    const filePath = resolvePublicFile(staticRoot, decoded.replace(/^\/+/, ""));
+    const contentType = MIME_TYPES[path.extname(filePath).toLowerCase()] || "application/octet-stream";
+    const content = fs.readFileSync(filePath);
+    res.writeHead(200, { "content-type": contentType });
+    res.end(content);
+  } catch (error) {
+    sendFileError(error, res);
   }
-
-  const ext = path.extname(filePath).toLowerCase();
-  const contentType = MIME_TYPES[ext] || "application/octet-stream";
-  const content = fs.readFileSync(filePath);
-  res.writeHead(200, { "content-type": contentType });
-  res.end(content);
 }
 
-const landingPageTemplate = fs.readFileSync(TEMPLATE_PATH, "utf-8");
-const appName = getAppName();
-
-const server = http.createServer((req, res) => {
-  const url = new URL(req.url || "/", `http://${req.headers.host}`);
+function createStaticServer({ staticRoot = STATIC_ROOT, mountPath = basePath } = {}) {
+ const landingPageTemplate = fs.readFileSync(TEMPLATE_PATH, "utf-8");
+ const appName = getAppName();
+ return http.createServer((req, res) => {
+  let url;
+  try {
+    url = new URL(req.url || "/", "http://localhost");
+  } catch {
+    res.writeHead(400);
+    res.end("Malformed URL");
+    return;
+  }
   let pathname = url.pathname;
 
-  if (basePath && pathname.startsWith(basePath)) {
-    pathname = pathname.slice(basePath.length) || "/";
+  if (mountPath) {
+    if (pathname !== mountPath && !pathname.startsWith(`${mountPath}/`)) {
+      res.writeHead(404);
+      res.end("Not Found");
+      return;
+    }
+    pathname = pathname.slice(mountPath.length) || "/";
   }
 
   if (pathname === "/" || pathname === "/manifest") {
     const platform = req.headers["expo-platform"];
-    if (platform === "ios" || platform === "android") {
-      return serveManifest(platform, res);
+    if (platform !== undefined) {
+      return serveManifest(platform, res, staticRoot);
     }
 
     if (pathname === "/") {
@@ -126,10 +186,15 @@ const server = http.createServer((req, res) => {
     }
   }
 
-  serveStaticFile(pathname, res);
-});
+  serveStaticFile(pathname, res, staticRoot);
+ });
+}
 
-const port = parseInt(process.env.PORT || "3000", 10);
-server.listen(port, "0.0.0.0", () => {
-  console.log(`Serving static Expo build on port ${port}`);
-});
+if (require.main === module) {
+  const port = parseInt(process.env.PORT || "3000", 10);
+  createStaticServer().listen(port, "0.0.0.0", () => {
+    console.log(`Serving static Expo build on port ${port}`);
+  });
+}
+
+module.exports = { createStaticServer, resolvePublicFile };

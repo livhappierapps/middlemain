@@ -121,7 +121,7 @@ function PricingCard({
 
 export default function SettingsScreen() {
   const { theme } = useTheme();
-  const { tier, hasRemovedAds, purchaseMonthly, purchaseAnnual, purchaseAdRemoval, restorePurchases } = usePurchase();
+  const { tier, hasRemovedAds, purchasesAvailable, purchaseMonthly, purchaseAnnual, purchaseAdRemoval, restorePurchases } = usePurchase();
   const { webhookUrl, setWebhookUrl, testWebhook, historyLimit, setHistoryLimit, apiUrl, setApiUrl } = useCouncil();
   const { refreshServerGrokStatus } = useAI();
   const insets = useSafeAreaInsets();
@@ -156,6 +156,7 @@ export default function SettingsScreen() {
   }, []);
 
   const handlePurchaseMonthly = async () => {
+    if (!purchasesAvailable) { await purchaseMonthly(); return; }
     Alert.alert('Subscribe Monthly', 'Middlemain Pro — $3.99/month\n\nUnlimited AI bridge sessions, priority support, and all future features.', [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -169,6 +170,7 @@ export default function SettingsScreen() {
   };
 
   const handlePurchaseAnnual = async () => {
+    if (!purchasesAvailable) { await purchaseAnnual(); return; }
     Alert.alert('Subscribe Annually', 'Middlemain Pro — $29.99/year\nSave 37% vs monthly.\n\nUnlimited AI bridge sessions, priority support, and all future features.', [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -182,6 +184,7 @@ export default function SettingsScreen() {
   };
 
   const handleAdRemoval = async () => {
+    if (!purchasesAvailable) { await purchaseAdRemoval(); return; }
     Alert.alert('Remove Ads', 'Remove all ads for a one-time payment of $1.99.', [
       { text: 'Cancel', style: 'cancel' },
       {

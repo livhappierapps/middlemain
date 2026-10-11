@@ -47,3 +47,15 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+/generated-artifacts/
+/deliverables/*.zip
+artifacts/api-server/data/
+artifacts/data/
+**/static-build/
+*.p8
+*.p12
+credentials.json
+google-services-account.json
+.env
+.env.*
+!.env.example

@@ -693,8 +693,9 @@ function AutoModeModal({
 // ─── Live room persistence key ────────────────────────────────────────────────
 const LIVE_ROOM_STORAGE_KEY = '@middlemain/liveRoom';
 const LIVE_ROOM_MCP_TOKEN_KEY = '@middlemain/liveRoomMcpToken';
+const LIVE_ROOM_HOST_TOKEN_KEY = '@middlemain/liveRoomHostToken';
 
-async function persistLiveRoomToken(roomId: string, token: string | null): Promise<boolean> {
+async function persistLiveRoomToken(roomId: string, token: string | null, kind: 'mcp' | 'host' = 'mcp'): Promise<boolean> {
   try {
     const stored = await AsyncStorage.getItem(LIVE_ROOM_STORAGE_KEY);
     if (!stored) return false;
@@ -702,12 +703,13 @@ async function persistLiveRoomToken(roomId: string, token: string | null): Promi
     if (room.roomId !== roomId) return false;
     // Remove any legacy plaintext token before using device secure storage.
     delete room.mcpToken;
+    delete room.hostToken;
     await AsyncStorage.setItem(LIVE_ROOM_STORAGE_KEY, JSON.stringify(room));
     if (Platform.OS === 'web') return token === null;
     if (token) {
-      await SecureStore.setItemAsync(LIVE_ROOM_MCP_TOKEN_KEY, token);
+      await SecureStore.setItemAsync(kind === 'host' ? LIVE_ROOM_HOST_TOKEN_KEY : LIVE_ROOM_MCP_TOKEN_KEY, token);
     } else {
-      await SecureStore.deleteItemAsync(LIVE_ROOM_MCP_TOKEN_KEY);
+      await SecureStore.deleteItemAsync(kind === 'host' ? LIVE_ROOM_HOST_TOKEN_KEY : LIVE_ROOM_MCP_TOKEN_KEY);
     }
     return true;
   } catch {
@@ -773,6 +775,7 @@ export default function CouncilScreen() {
   const [liveRoomId, setLiveRoomId] = useState<string | null>(null);
   const [liveRoomUrl, setLiveRoomUrl] = useState<string | null>(null);
   const [liveRoomMcpToken, setLiveRoomMcpToken] = useState<string | null>(null);
+  const [liveRoomHostToken, setLiveRoomHostToken] = useState<string | null>(null);
   const [liveRoomApiBase, setLiveRoomApiBase] = useState<string | null>(null);
   const [isGoingLive, setIsGoingLive] = useState(false);
   const [liveViewerCount, setLiveViewerCount] = useState(0);
@@ -845,6 +848,7 @@ export default function CouncilScreen() {
     setLiveRoomId(null);
     setLiveRoomUrl(null);
     setLiveRoomMcpToken(null);
+    setLiveRoomHostToken(null);
     setLiveRoomApiBase(null);
     setLiveViewerCount(0);
     setShowLiveSheet(false);
@@ -875,7 +879,8 @@ export default function CouncilScreen() {
         body: JSON.stringify({ name: 'Council Session' }),
       });
       if (!resp.ok) throw new Error(`Server error ${resp.status}`);
-      const json = await resp.json() as { roomId: string; mcpAccessToken?: string };
+      const json = await resp.json() as { roomId: string; mcpAccessToken?: string; hostAccessToken?: string };
+      if (!json.hostAccessToken) throw new Error('Publish the secured API Server before creating a live room.');
       // Derive the Council Room web URL from the API base (strip /api, add /council-room/)
       const webBase = apiBase.replace(/\/api$/, '');
       const url = webBase
@@ -889,6 +894,7 @@ export default function CouncilScreen() {
       setLiveRoomId(json.roomId);
       setLiveRoomUrl(url);
       setLiveRoomMcpToken(json.mcpAccessToken ?? null);
+      setLiveRoomHostToken(json.hostAccessToken);
       setLiveRoomApiBase(apiBase);
       // Persist so the room can be recovered if the app is killed mid-session
       let tokenSaved = !json.mcpAccessToken;
@@ -904,13 +910,14 @@ export default function CouncilScreen() {
         if (json.mcpAccessToken) {
           tokenSaved = await persistLiveRoomToken(json.roomId, json.mcpAccessToken);
         }
+        tokenSaved = (await persistLiveRoomToken(json.roomId, json.hostAccessToken, 'host')) && tokenSaved;
       } catch {
         tokenSaved = false;
       }
       if (!tokenSaved) {
         Alert.alert(
-          'Copy the Grok key now',
-          'This device could not save the access key securely. Copy it before closing Middlemain; it cannot be recovered from the server.',
+          'Live-room keys are session-only',
+          'This device could not save the room keys securely. The room works for this session, but you must create a new room after restarting. Copy any MCP key you need before closing.',
         );
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -998,6 +1005,13 @@ export default function CouncilScreen() {
           mcpToken?: string | null;
         };
         if (!roomId || !url) return;
+        const hostToken = Platform.OS !== 'web'
+          ? await SecureStore.getItemAsync(LIVE_ROOM_HOST_TOKEN_KEY).catch(() => null)
+          : null;
+        if (!hostToken) {
+          Alert.alert('Create a new live room', 'This saved room has no securely stored host key. Its existing link/history remains available, but start a new room to resume publishing safely.');
+          return;
+        }
         const apiBase = (storedApiBase ?? resolveApiBase(apiUrlRef.current)).replace(/\/+$/, '');
         // Verify the room still exists on the server before restoring
         const resp = await fetch(`${apiBase}/council/rooms/${roomId}`);
@@ -1046,6 +1060,7 @@ export default function CouncilScreen() {
         setLiveRoomId(roomId);
         setLiveRoomUrl(url);
         setLiveRoomMcpToken(secureMcpToken);
+        setLiveRoomHostToken(hostToken);
         setLiveRoomApiBase(apiBase);
       } catch {
         // Network or parse error — silently skip; don't disrupt the app
@@ -1144,11 +1159,31 @@ export default function CouncilScreen() {
   // Tracks streaming messages we've already announced to the live room
   // Map<messageId, lastBroadcastContent>
   const streamingTrackerRef = useRef<Map<string, string>>(new Map());
+  const roomSyncErrorShown = useRef(false);
+  const postRoomUpdate = useCallback(async (route: 'messages' | 'streaming/start' | 'streaming/chunk' | 'streaming/end', payload: unknown) => {
+    if (!liveRoomId || !liveRoomHostToken) return;
+    const base = liveRoomApiBase ?? resolveApiBase(apiUrlRef.current);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15_000);
+    try {
+      const response = await fetch(`${base}/council/rooms/${liveRoomId}/${route}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Room-Key': liveRoomHostToken },
+        body: JSON.stringify(payload), signal: controller.signal,
+      });
+      if (!response.ok) throw new Error(`Room server rejected the update (HTTP ${response.status}).`);
+    } catch (error) {
+      if (!roomSyncErrorShown.current) {
+        roomSyncErrorShown.current = true;
+        Alert.alert('Live room sync failed', `${error instanceof Error ? error.message : 'Network error'} Your local conversation remains available. Check the room server before sharing.`);
+      }
+    } finally { clearTimeout(timer); }
+  }, [liveRoomId, liveRoomHostToken, liveRoomApiBase]);
+  useEffect(() => { roomSyncErrorShown.current = false; }, [liveRoomId]);
 
   // Broadcast streaming events (start / chunk / end) to the live room
   useEffect(() => {
-    if (!liveRoomId) return;
-    const base = resolveApiBase(apiUrlRef.current);
+    if (!liveRoomId || !liveRoomHostToken) return;
 
     for (const msg of messages) {
       if (msg.role !== 'ai') continue;
@@ -1157,45 +1192,33 @@ export default function CouncilScreen() {
         if (!streamingTrackerRef.current.has(msg.id)) {
           // New streaming message — announce start
           streamingTrackerRef.current.set(msg.id, msg.content);
-          fetch(`${base}/council/rooms/${liveRoomId}/streaming/start`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
+          void postRoomUpdate('streaming/start', {
+              content: msg.content,
               messageId: msg.id,
               participantName: msg.participantName,
               participantColor: msg.participantColor,
               timestamp: msg.timestamp,
-            }),
-          }).catch(() => {});
+          });
         } else {
           const lastContent = streamingTrackerRef.current.get(msg.id) ?? '';
           if (msg.content.length > lastContent.length) {
             // New chunk arrived — send the delta
             const delta = msg.content.slice(lastContent.length);
             streamingTrackerRef.current.set(msg.id, msg.content);
-            fetch(`${base}/council/rooms/${liveRoomId}/streaming/chunk`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ messageId: msg.id, content: delta }),
-            }).catch(() => {});
+            void postRoomUpdate('streaming/chunk', { messageId: msg.id, content: delta });
           }
         }
       } else if (streamingTrackerRef.current.has(msg.id)) {
         // Was streaming, now done — announce end
         streamingTrackerRef.current.delete(msg.id);
-        fetch(`${base}/council/rooms/${liveRoomId}/streaming/end`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messageId: msg.id }),
-        }).catch(() => {});
+        void postRoomUpdate('streaming/end', { messageId: msg.id });
       }
     }
-  }, [messages, liveRoomId]);
+  }, [messages, liveRoomId, liveRoomHostToken, postRoomUpdate]);
 
   // Forward new non-streaming messages to the live room
   useEffect(() => {
-    if (!liveRoomId) return;
-    const base = resolveApiBase(apiUrlRef.current);
+    if (!liveRoomId || !liveRoomHostToken) return;
     const toSend = messages.filter((m) => !m.streaming && !broadcastedIdsRef.current.has(m.id));
     for (const msg of toSend) {
       broadcastedIdsRef.current.add(msg.id);
@@ -1205,20 +1228,16 @@ export default function CouncilScreen() {
         pendingWebContentsRef.current.delete(msg.content);
         continue;
       }
-      fetch(`${base}/council/rooms/${liveRoomId}/messages`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      void postRoomUpdate('messages', {
           id: msg.id,
           role: msg.role,
           participantName: msg.participantName,
           participantColor: msg.participantColor,
           content: msg.content,
           timestamp: msg.timestamp,
-        }),
-      }).catch(() => {});
+      });
     }
-  }, [messages, liveRoomId]);
+  }, [messages, liveRoomId, liveRoomHostToken, postRoomUpdate]);
 
   const handleExport = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1673,7 +1692,18 @@ export default function CouncilScreen() {
                 </TouchableOpacity>
               ) : (
                 <TouchableOpacity
-                  onPress={isGoingLive ? undefined : handleGoLive}
+                  onPress={isGoingLive ? undefined : () => {
+                    if (liveRoomId) { void handleGoLive(); return; }
+                    const warning = 'Anyone with the link can read this room and ask your selected AIs questions. Their questions may spend your provider credits. Share only with intended people.';
+                    if (Platform.OS === 'web') {
+                      if (window.confirm(warning)) void handleGoLive();
+                    } else {
+                      Alert.alert('Go live and allow guest questions?', warning, [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Go live', onPress: () => { void handleGoLive(); } },
+                      ]);
+                    }
+                  }}
                   style={{ padding: 7 }}
                   disabled={isGoingLive}
                 >

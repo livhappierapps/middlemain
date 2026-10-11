@@ -15,7 +15,7 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "c619b4d5-e3ec-47d4-a952-2fd41395511e-00-1c23pimrri8w9.worf.replit.dev",
+        "EXPO_PUBLIC_DOMAIN": "middle-ma-in.replit.app",
         "EXPO_PUBLIC_GITHUB_APP_CLIENT_ID": "Iv23lizWSqwgviRUzGYF"
       },
       "ios": {
@@ -28,7 +28,7 @@
     },
     "production": {
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "c619b4d5-e3ec-47d4-a952-2fd41395511e-00-1c23pimrri8w9.worf.replit.dev",
+        "EXPO_PUBLIC_DOMAIN": "middle-ma-in.replit.app",
         "EXPO_PUBLIC_GITHUB_APP_CLIENT_ID": "Iv23lizWSqwgviRUzGYF"
       },
       "ios": {
@@ -42,12 +42,7 @@
   },
   "submit": {
     "production": {
-      "ios": {
-        "appleId": "oblivionhappier@icloud.com",
-        "ascApiKeyPath": "/tmp/AuthKey.p8",
-        "ascApiKeyId": "env:ASC_KEY_ID",
-        "ascApiKeyIssuerId": "env:ASC_ISSUER_ID"
-      },
+      "ios": {},
       "android": {
         "serviceAccountKeyPath": "./google-services-account.json"
       }

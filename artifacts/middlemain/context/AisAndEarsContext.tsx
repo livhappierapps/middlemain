@@ -10,7 +10,6 @@ const WS_PING_TIMEOUT_MS = 10_000;
 const WS_MAX_RECONNECT_ATTEMPTS = 8;
 const WS_RECONNECT_BASE_MS = 1_000;
 
-const DEFAULT_API_KEY = 'bridge_ffeb0d255c586c5dd0be421fd4813f38253c2de106291bc9';
 const CONFIG_KEY = '@aie_bridge_config';
 const CHUNK_MS = 2500;
 const VISION_INTERVAL_MS = 3000;
@@ -88,7 +87,7 @@ const RECORDING_OPTIONS: Audio.RecordingOptions = {
 export function AisAndEarsProvider({ children }: { children: React.ReactNode }) {
   const [config, setConfigState] = useState<Config>({
     domain: '',
-    apiKey: DEFAULT_API_KEY,
+    apiKey: '',
     durationMinutes: 30,
   });
   const [session, setSession] = useState<Session | null>(null);
@@ -228,6 +227,11 @@ export function AisAndEarsProvider({ children }: { children: React.ReactNode }) 
     const domain = config.domain.trim().replace(/\/$/, '');
     if (!domain) {
       setErrorMsg('Enter the AIs & Ears app URL first.');
+      setStatus('error');
+      return;
+    }
+    if (!config.apiKey.trim()) {
+      setErrorMsg('Enter your AIs & Ears API key first.');
       setStatus('error');
       return;
     }

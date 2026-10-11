@@ -14,3 +14,10 @@ The root `package.json` must have a `"pnpm": { "overrides": {...} }` section tha
 1. After any `pnpm update` or `pnpm install --no-frozen-lockfile`, run `pnpm install --frozen-lockfile` locally to verify it passes.
 2. If it fails with `LOCKFILE_CONFIG_MISMATCH`, copy the `overrides:` block from `pnpm-lock.yaml` into `package.json` under `"pnpm": { "overrides": {...} }`.
 3. Run `pnpm install --frozen-lockfile` again to confirm clean before pushing to GitHub.
+
+## Native builder platforms
+Do not exclude Darwin variants merely to reduce Linux workspace dependencies.
+
+**Why:** EAS iOS workers use macOS; a Linux installation/typecheck cannot demonstrate those workers have their required native binaries.
+
+**How to apply:** Preserve macOS variants for native build tooling. Let the package manager select by platform rather than applying Linux-only exclusions to a cross-platform lockfile.

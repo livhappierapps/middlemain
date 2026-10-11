@@ -1,161 +1,52 @@
-# Middlemain
+# Middlemain contributor instructions
 
-Universal AI Development Bridge — a native mobile developer tool that acts as an intelligent bridge between multiple AI providers, enabling real-time code testing, debugging, multi-agent council sessions, and AI-assisted development workflows. Built for Leo and the council.
+Middlemain is LivHappier Apps' native-first Expo developer tool: provider connections, Bridge chat/vision, multi-agent Council, repository debugging, and offline/AI help. Preserve that product and its existing theme system; do not add unnecessary web layers.
 
-**Version:** 1.2.0 (build 3) | **Bundle ID:** app.middlemain.bridge | **Company:** LivHappier Apps
+## Runtime and documentation
 
----
+- `artifacts/middlemain`: Expo SDK 54 / React Native 0.81; Expo Router screens and contexts.
+- `artifacts/api-server`: Express 5 / WebSockets at `/api`; isolated source checking, owner services, live rooms, APK proxy.
+- `artifacts/council-room`: guest web client at `/council-room`.
+- [Canonical user guide](docs/middlemain-user-guide.md): screen/control instructions and tips. It is also the source for bundled offline/AI help.
+- [Repository debugging](docs/repository-debugging.md): customer GitHub App authorization and single-file compiler boundaries.
+- [Security/release gates](docs/security-status.md) and [threat model](threat_model.md).
 
-## Run & Operate
+Use pnpm. Managed workflows provide the service ports:
 
-- `pnpm --filter @workspace/middlemain run dev` — Expo dev server
-- `pnpm --filter @workspace/api-server run dev` — API server (uses `PORT` env var)
-- `pnpm --filter @workspace/council-room run dev` — Council Room web app (live; join via `?room=<roomId>`)
-- `pnpm run typecheck` — full typecheck across all packages
-
----
-
-## Artifacts
-
-| Artifact | Kind | Path |
-|---|---|---|
-| `artifacts/middlemain` | Expo mobile app | — |
-| `artifacts/api-server` | Express API server | `/api` |
-| `artifacts/council-room` | Web app (live) | `/council-room` |
-
----
-
-## Stack
-
-- **Mobile:** Expo SDK 54, React Native 0.81, TypeScript 5.9, Expo Router
-- **Persistence:** AsyncStorage (API keys, theme, council history, purchases)
-- **AI:** Grok (xAI), OpenAI, Anthropic, Custom (OpenAI-compatible), Dev Server proxy
-- **Streaming:** `expo/fetch` with SSE parsing (NOT global fetch — ReadableStream requirement)
-- **Vision:** grok-2-vision-1212 / gpt-4o / claude-3-5-sonnet
-- **Backend:** Express 5 + `ws` (WebSocket rooms live — council room manager in `api-server/src/routes/councilRoom.ts`)
-- **Build:** EAS Build (production profile, `image: "latest"` for Xcode 26+)
-
----
-
-## Where Things Live
-
-```
-artifacts/middlemain/
-  app/(tabs)/
-    index.tsx          — Home dashboard
-    council.tsx        — Multi-agent council (chat, auto-sessions, vision, webhooks)
-    debug.tsx          — AI Analyze (Grok streaming) + Dry Run (real tsc)
-    terminal.tsx       — Bridge Terminal (AI chat + skills)
-    connections.tsx    — Manage AI connections
-    settings.tsx       — Theme, subscription, executive API, XAI key updater, webhook
-
-  context/
-    ThemeContext.tsx   — 8 themes
-    AIContext.tsx      — AI provider logic, streaming, vision
-    CouncilContext.tsx — Council sessions, participants, webhooks, autonomous rounds
-    MCPContext.tsx     — Memory Machine MCP bridge
-    PurchaseContext.tsx
-    SkillsContext.tsx
-
-  components/
-    NeonText, NeonCard, NeonButton, AdBanner, ConnectionCard,
-    ThemeSelector, ErrorBoundary, ErrorFallback, ThemedBackground
-
-  constants/themes.ts  — All 8 theme definitions
-
-artifacts/api-server/src/
-  routes/
-    executive.ts   — Leo's executive API (status, chat, memory, webhook, set-xai-key)
-    grok.ts        — Grok proxy (/api/grok/chat, /api/grok/status)
-    debug.ts       — TypeScript dry-run (/api/debug/typecheck)
-    health.ts      — Health check
-  lib/
-    xaiKey.ts      — Runtime XAI key store (set from app without server restart)
-    logger.ts      — Pino logger
+```sh
+pnpm --filter @workspace/middlemain run dev
+pnpm --filter @workspace/api-server run dev
+pnpm --filter @workspace/council-room run dev
+pnpm run typecheck
+pnpm run test:middlemain
 ```
 
----
+After a guide edit, run `pnpm run guide:sync` and `pnpm run guide:check`. Do not independently maintain a second offline FAQ. AI retrieval adds relevant sections to the existing request; never claim it trains the model or guarantees every answer.
 
-## Leo's Executive API
+## Engineering constraints
 
-Base: `https://{domain}/api/executive/`
-Auth header: `X-Executive-Key: <LEO_EXECUTIVE_KEY>`
+- Keep `app.json` static for Expo Launch; do not replace it with an app.config file.
+- Native streaming must use `expo/fetch`, including shared network wrappers—not just the calling component. Node fetch mocks cannot prove native streaming works.
+- Keep `ThemeProvider` above `ErrorBoundary`; preserve theme keys in `constants/themes.ts`.
+- Customer private GitHub access needs a read-only, customer-authorized GitHub App/device flow. Never bundle the workspace owner's GitHub token into a consumer build.
+- AI source review requires explicit cost/data-sharing consent, uses customer credentials, and does not automatically retry. Dry Run is not a paid EAS/native build and never executes submitted code or follows its imports.
+- The API's TypeScript compiler is a runtime dependency. Its isolated checks need fixed options, limited input, and no package installation.
+- Owner-funded Grok, Executive API, and inbound owner webhooks require executive authorization. New room AI/system publications require a separate room host key; guest links and MCP keys cannot authorize them.
+- Keep host keys in native secure storage, separate from share links/MCP tokens. Pin room publication to the server that created it. Old hosts without a key create a new room; preserve prior history.
+- Keys not yet migrated to native keychain remain local storage, not a promise of encryption. Do not claim that submitted messages, guest names, source, or images never leave the device.
+- No purchase simulation or unverified paid entitlements. Store purchases/restore remain explicitly unavailable until real integration is tested.
+- Keep error messages explicit, secrets out of logs, and room writes atomic. Invalid persisted history must not be silently overwritten.
 
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/executive/status` | Ping; shows grokConfigured, memoryConfigured |
-| POST | `/executive/chat` | Grok chat via server XAI key |
-| POST | `/executive/memory/search` | Search Memory Machine |
-| POST | `/executive/memory/save` | Save to Memory Machine |
-| GET | `/executive/memory/recent` | Recent memories |
-| POST | `/executive/set-xai-key` | Update XAI key at runtime (no restart needed) |
-| POST | `/executive/webhook/council` | Inbound council digests from Middlemain |
-| GET | `/executive/webhook/inbox` | Read received digests (last 30) |
+## Dependency/build constraints
 
-**Secrets needed:**
-- `LEO_EXECUTIVE_KEY` — executive API auth key
-- `LEO_MEMORY_TOKEN` — Memory Machine bearer token
-- `XAI_API_KEY` — xAI API key (can also be updated at runtime via `/executive/set-xai-key`)
-
----
-
-## Themes (8)
-
-| Key | Name | Primary | Secondary |
-|---|---|---|---|
-| cyberpunk | Cyberpunk (default) | Hot pink #ff00aa | Cyan #00ffff |
-| rainbow | Cyber Rainbow | Pink #ff0090 | Green #00ff88 |
-| pink | Rose Neon | Cotton candy #ffb3d9 | Hot pink #ff69b4 |
-| sunshine | Sunshine | Yellow #ffe600 | Amber #ffaa00 |
-| matrix | Matrix | Lime #39ff14 | Green #00ff41 |
-| serene | Serene | Aqua #00e5ff | Blue #00bfff |
-| monochrome | Monochrome | White #ffffff | Grey #cccccc |
-| prism | Prism | Warm pink #ffb3de | Pastel blue #b3d9ff |
-
----
-
-## Pricing
-
-- Monthly: $3.99/month
-- Annual: $29.99/year (save 37%)
-- Ad removal: $1.99 one-time
-
----
-
-## EAS Build
-
-- Project ID: `a72a78ff-35a8-41f1-8e9a-897a88b03eb8`
-- iOS: production profile, `image: "latest"` (requires Xcode 26+)
-- Android: production profile, `buildType: app-bundle`
-- Submit Apple ID: oblivionhappier@icloud.com
-- GitHub repo: `livhappierapps/middlemain` | base dir: `artifacts/middlemain`
-- **EAS must be triggered via a project task** — EAS CLI acquires a git index lock that Replit's sandbox blocks in the main agent
-
----
-
-## Gotchas
-
-- Repository debugging: see `docs/repository-debugging.md`. Debug imports a selected GitHub source/config file, pinned to a commit; it is not a complete native-build test.
-- Private repo access requires a customer-authorized, read-only GitHub App with device flow enabled and a public client ID in the native build. Never reuse the workspace's owner token for consumers.
-- Debug AI analysis requires explicit cost/data-sharing consent, uses a customer connection, and never automatically retries. Source checks do not trigger EAS.
-- The compiler is a runtime dependency of the API server. Isolated checks do not follow user-supplied imports/reference paths or run repository code.
-
-- `expo-clipboard` must be `~8.0.8` (Expo SDK 54 compatible)
-- Streaming uses `fetch` from `expo/fetch` — NOT global fetch (ReadableStream requirement)
-- `ThemeProvider` must be above `ErrorBoundary` in `_layout.tsx` for `ErrorFallback` theming
-- `app.json` must stay static (no `app.config.ts/js`) for Expo Launch compatibility
-- `pnpm-lock.yaml` must have matching `pnpm.overrides` in root `package.json` or EAS frozen install fails
-- After any `pnpm update`, run `pnpm install --frozen-lockfile` to verify before pushing to GitHub
-- Shadow/textShadow deprecation warnings are web-only noise — safe to ignore
-- E2E Playwright testing cannot reach the Expo mobile build via browser proxy — skip
-
----
-
-## User Preferences
-
-- Agent name: **Dev**
-- Build native mobile first; no unnecessary web layers
-- No PII collected — anonymous usage data and user-submitted reports only
-- Easy-to-find reporting tool in Settings
-- Apple and Google dev accounts ready
-- Contact: oblivionhappier@icloud.com | LivHappier Apps | livhappierapps.com
+- Root `package.json` and `pnpm-workspace.yaml` overrides must agree with `pnpm-lock.yaml`. Verify a frozen installation after dependency edits.
+- Preserve `patches/` and patchedDependencies entries until compatible upstream fixes replace them. Version-based audits still flag patched versions; report mitigations honestly.
+- Align React type versions across packages within Expo's supported range; do not fix incompatible ref types with broad unsafe casts.
+- Do not exclude Darwin native packages just because the workspace uses Linux; iOS EAS builders need macOS binaries.
+- Do not commit generated source archives, exports, test output, or credential files. Use `generated-artifacts/` for local output; preserve user-uploaded originals unless specifically approved for deletion.
+- EAS production iOS needs `"image": "latest"` for Xcode 26+. Android preview produces APK; Android production produces AAB.
+- EAS builds run through the assigned task with `EAS_SKIP_AUTO_FINGERPRINT=1`. Check security and backend deployment gates before spending build credits.
+- Submission uses `artifacts/middlemain/scripts/submit-ios.sh`: current EAS takes ASC credential configuration, not `--asc-api-key-*` flags. Temporary keys/configuration must be private and removed.
+- Never automatically revoke an existing Apple certificate. Obtain explicit approval for a named certificate or reuse its matching private key through the secure credential flow.
+- Production APK download uses only an approved stable Expo artifact URL. It must not run the EAS signing CLI on public requests or promote a pre-fix binary.
+- Browser previews, static scans, and mocked tests do not replace real-device permissions, streaming, private sign-in, native secure-storage recovery, or store submission verification.

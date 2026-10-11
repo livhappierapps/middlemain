@@ -1,5 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { resilientFetch } from '@/utils/resilientFetch';
+import { serverAuthHeaders } from '@/utils/serverAuth';
+import { streamSSE } from '@/utils/streamSSE';
+import { appHelpContext } from '@/utils/appHelp';
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { fetch } from 'expo/fetch';
 
@@ -183,7 +186,7 @@ async function callOpenAICompat(
         stream,
       }),
     },
-    { timeoutMs: stream ? 60_000 : 30_000, retries: 3, retryBaseMs: 1_200 },
+    { timeoutMs: stream ? 60_000 : 30_000, retries: 0 },
   );
 }
 
@@ -221,7 +224,7 @@ async function callAnthropic(
         messages: [...messages.filter((message) => message.role !== 'system').slice(0, -1), augmentedLast],
       }),
     },
-    { timeoutMs: stream ? 60_000 : 30_000, retries: 3, retryBaseMs: 1_200 },
+    { timeoutMs: stream ? 60_000 : 30_000, retries: 0 },
   );
 }
 
@@ -237,7 +240,7 @@ async function callServerProxy(
     `${base}/grok/chat`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await serverAuthHeaders(base, conn.apiKey),
       body: JSON.stringify({
         model: imageBase64 ? (conn.visionModel || 'grok-2-vision-1212') : (conn.model || 'grok-3'),
         messages: [...messages.slice(0, -1), buildUserMessage(
@@ -248,7 +251,7 @@ async function callServerProxy(
         systemPrompt: conn.systemPrompt,
       }),
     },
-    { timeoutMs: stream ? 60_000 : 30_000, retries: 3, retryBaseMs: 1_200 },
+    { timeoutMs: stream ? 60_000 : 30_000, retries: 0 },
   );
 }
 
@@ -258,44 +261,14 @@ async function callAI(
   stream: boolean,
   imageBase64?: string,
 ): Promise<Response> {
+  const question = messages[messages.length - 1]?.content;
+  if (typeof question === 'string' && !conn.systemPrompt.includes('Middlemain help reference')) {
+    const help = appHelpContext(question);
+    if (help) conn = { ...conn, systemPrompt: [conn.systemPrompt, help].filter(Boolean).join('\n\n') };
+  }
   if (conn.provider === 'anthropic') return callAnthropic(conn, messages, stream, imageBase64);
   if (conn.provider === 'server') return callServerProxy(conn, messages, stream, imageBase64);
   return callOpenAICompat(conn, messages, stream, imageBase64);
-}
-
-async function streamSSE(
-  resp: Response,
-  onChunk: (c: string) => void,
-  onDone: () => void,
-  onError: (e: string) => void,
-) {
-  const reader = resp.body?.getReader();
-  if (!reader) { onError('Streaming not supported'); return; }
-  const decoder = new TextDecoder();
-  let buffer = '';
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith('data: ')) continue;
-        const raw = trimmed.slice(6);
-        if (raw === '[DONE]') continue;
-        try {
-          const json = JSON.parse(raw);
-          const content = json.choices?.[0]?.delta?.content || json.delta?.text || '';
-          if (content) onChunk(content);
-        } catch {}
-      }
-    }
-    onDone();
-  } catch (e: any) {
-    onError(e?.message ?? 'Stream error');
-  }
 }
 
 export function AIProvider({ children }: { children: React.ReactNode }) {
@@ -586,6 +559,11 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      const question = messages[messages.length - 1]?.content;
+      systemPromptOverride = [
+        systemPromptOverride || conn.systemPrompt,
+        appHelpContext(typeof question === 'string' ? question : '', true),
+      ].filter(Boolean).join('\n\n');
       if (!useGoogleSearch) {
         onSources([]);
         await sendMessage(

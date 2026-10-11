@@ -15,7 +15,8 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "c619b4d5-e3ec-47d4-a952-2fd41395511e-00-1c23pimrri8w9.worf.replit.dev"
+        "EXPO_PUBLIC_DOMAIN": "c619b4d5-e3ec-47d4-a952-2fd41395511e-00-1c23pimrri8w9.worf.replit.dev",
+        "EXPO_PUBLIC_GITHUB_APP_CLIENT_ID": "Iv23lizWSqwgviRUzGYF"
       },
       "ios": {
         "buildConfiguration": "Release",
@@ -27,7 +28,8 @@
     },
     "production": {
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "c619b4d5-e3ec-47d4-a952-2fd41395511e-00-1c23pimrri8w9.worf.replit.dev"
+        "EXPO_PUBLIC_DOMAIN": "c619b4d5-e3ec-47d4-a952-2fd41395511e-00-1c23pimrri8w9.worf.replit.dev",
+        "EXPO_PUBLIC_GITHUB_APP_CLIENT_ID": "Iv23lizWSqwgviRUzGYF"
       },
       "ios": {
         "buildConfiguration": "Release",

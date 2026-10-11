@@ -42,4 +42,4 @@ externalPort = 3002
 [userenv]
 
 [userenv.shared]
-EXPO_PUBLIC_GITHUB_APP_CLIENT_ID = "https://github.com/settings/apps/new "
+EXPO_PUBLIC_GITHUB_APP_CLIENT_ID = "Iv23lizWSqwgviRUzGYF"

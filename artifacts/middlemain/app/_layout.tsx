@@ -46,6 +46,9 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
+    if (__DEV__ && fontError) {
+      console.warn("Local font could not load", fontError.message);
+    }
     if (fontsLoaded || fontError) {
       SplashScreen.hideAsync();
     }

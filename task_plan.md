@@ -7,7 +7,7 @@ Audit Middlemain and its API, repair security/debugging findings, remove proven 
 1. Inventory, baseline checks, security scans — complete.
 2. Dependency/application-code repairs and regression tests — complete; one upstream signing-tool advisory remains.
 3. Safe cleanup/documentation/shared AI knowledge — complete.
-4. Full fix/test/fix pass, scans, preview, GitHub push — final verification/push.
+4. Full fix/test/fix pass, scans, preview — verified locally; source push being finalized. Development warnings and native-device checks remain open.
 5. Secure builds/submission/APK verification — blocked on backend publication, Apple app record, and signing access.
 
 ## Gates and constraints

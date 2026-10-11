@@ -15,6 +15,8 @@
 - GitHub token verified with push permission to the existing private repository.
 - ASC key normalized/canonically validated; Apple authentication works, but no app record matches the configured bundle identifier.
 - No new paid build or submission started. Production source security fixes are not yet published.
+- Reconciled newer GitHub commits without force-pushing. Preserved the working Debug screen rather than accepting the remote's empty screen; kept the newer Grok model/CLI notes.
+- Preview confirms the offline Guide and its question composer render above the tabs. Development console still reports Expo AV deprecation and an unidentified HTTP 415 resource warning; this is not a claim of error-free native operation.
 
 ## Release blockers
 - Explicit production publication approval and verification of owner authorization.

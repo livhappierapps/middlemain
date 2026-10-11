@@ -56,6 +56,7 @@ interface Room {
   createdAt: string;
   messages: RoomMessage[];
   mcpTokenHash: string | null;
+  hostTokenHash: string | null;
   clients: Map<WebSocket, RoomClient>;
   /** In-memory only — never persisted. Keyed by messageId to support concurrent AI streams. */
   activeStreams: Map<string, ActiveStream>;
@@ -72,13 +73,14 @@ for (const persisted of loadRooms()) {
   rooms.set(persisted.id, {
     ...persisted,
     mcpTokenHash: persisted.mcpTokenHash ?? null,
+    hostTokenHash: persisted.hostTokenHash ?? null,
     clients: new Map(),
     activeStreams: new Map(),
   });
 }
 
 function genId(): string {
-  return Math.random().toString(36).slice(2, 9);
+  return randomBytes(18).toString("base64url");
 }
 
 function generateMcpToken(): string {
@@ -135,13 +137,15 @@ export function postMcpRoomMessage(
     content,
     timestamp: new Date().toLocaleTimeString(),
   };
-  room.messages.push(message);
-  if (room.messages.length > MAX_ROOM_MESSAGES) {
-    room.messages = room.messages.slice(-MAX_ROOM_MESSAGES);
-  }
-  saveRooms(rooms);
-  broadcast(room, { type: "message", message });
+  appendRoomMessage(room, message);
   return message;
+}
+
+function appendRoomMessage(room: Room, message: RoomMessage): void {
+  const previous = room.messages;
+  room.messages = [...previous.slice(-(MAX_ROOM_MESSAGES - 1)), message];
+  try { saveRooms(rooms); } catch (error) { room.messages = previous; throw error; }
+  broadcast(room, { type: "message", message });
 }
 
 function broadcast(room: Room, payload: unknown, exclude?: WebSocket): void {
@@ -156,27 +160,72 @@ function broadcast(room: Room, payload: unknown, exclude?: WebSocket): void {
 // ─── REST router ─────────────────────────────────────────────────────────────
 
 export const councilRoomRouter = Router();
+// Room links allow guest participation, not owner-authored AI/system publications.
+councilRoomRouter.post([
+  "/council/rooms/:roomId/messages",
+  "/council/rooms/:roomId/streaming/:phase",
+], (req: Request, res: Response, next) => {
+  const room = rooms.get(req.params.roomId as string);
+  if (!room) { res.status(404).json({ error: "Room not found" }); return; }
+  const token = req.header("x-room-key") ?? "";
+  if (!/^mhost_[A-Za-z0-9_-]{43}$/.test(token) || !/^[a-f0-9]{64}$/.test(room.hostTokenHash ?? "") ||
+    !timingSafeEqual(Buffer.from(hashMcpToken(token), "hex"), Buffer.from(room.hostTokenHash!, "hex"))) {
+    res.status(401).json({ error: "Room host authorization required; legacy hosts must create a new room." });
+    return;
+  }
+  if (req.path.endsWith("/messages")) {
+    if (typeof req.body?.content !== "string" || req.body.content.length > 250_000 ||
+      !["user", "ai", "system"].includes(req.body?.role ?? "user")) {
+      res.status(400).json({ error: "Invalid room message" }); return;
+    }
+  } else {
+    const id = req.body?.messageId;
+    if (typeof id !== "string" || !id || id.length > 160 ||
+      (req.body?.content !== undefined && typeof req.body.content !== "string")) {
+      res.status(400).json({ error: "Invalid stream request" }); return;
+    }
+    if (!room.activeStreams.has(id) && [...room.activeStreams.values()].filter(stream => !stream.terminated).length >= 32) {
+      res.status(429).json({ error: "Too many active room streams" }); return;
+    }
+    if ((room.activeStreams.get(id)?.content.length ?? 0) + (req.body?.content?.length ?? 0) > 250_000) {
+      res.status(413).json({ error: "Room stream exceeded the safe size limit" }); return;
+    }
+    let globalStreams = 0;
+    let globalContent = 0;
+    for (const activeRoom of rooms.values()) for (const stream of activeRoom.activeStreams.values()) {
+      if (!stream.terminated) { globalStreams++; globalContent += stream.content.length; }
+    }
+    if ((!room.activeStreams.has(id) && globalStreams >= 128) ||
+      globalContent + (req.body?.content?.length ?? 0) > 4_000_000) {
+      res.status(429).json({ error: "Server stream capacity reached" }); return;
+    }
+  }
+  next();
+});
 
 /** POST /api/council/rooms — create a room */
 councilRoomRouter.post("/council/rooms", (req: Request, res: Response) => {
+  if (rooms.size >= 1000) { res.status(503).json({ error: "Room capacity reached. Contact the server operator." }); return; }
   const id = genId();
   const name =
     typeof req.body?.name === "string" && req.body.name.trim()
       ? req.body.name.trim().slice(0, 80)
       : "Council Session";
   const mcpAccessToken = generateMcpToken();
+  const hostAccessToken = `mhost_${randomBytes(32).toString("base64url")}`;
   rooms.set(id, {
     id,
     name,
     createdAt: new Date().toISOString(),
     messages: [],
     mcpTokenHash: hashMcpToken(mcpAccessToken),
+    hostTokenHash: hashMcpToken(hostAccessToken),
     clients: new Map(),
     activeStreams: new Map(),
   });
   saveRooms(rooms);
   logger.info({ roomId: id }, "Council room created");
-  res.json({ roomId: id, wsPath: `/api/council/ws/${id}`, mcpAccessToken });
+  res.json({ roomId: id, wsPath: `/api/council/ws/${id}`, mcpAccessToken, hostAccessToken });
 });
 
 /** Rotate the room-scoped MCP secret; the old token stops working immediately. */
@@ -261,13 +310,7 @@ councilRoomRouter.post(
         (req.body?.timestamp as string) ?? new Date().toLocaleTimeString(),
     };
 
-    room.messages.push(msg);
-    if (room.messages.length > MAX_ROOM_MESSAGES) {
-      room.messages = room.messages.slice(-MAX_ROOM_MESSAGES);
-    }
-
-    saveRooms(rooms);
-    broadcast(room, { type: "message", message: msg });
+    appendRoomMessage(room, msg);
     res.json({ ok: true });
   }
 );
@@ -286,10 +329,10 @@ councilRoomRouter.post(
 
     const existing = room.activeStreams.get(messageId);
     // If already terminated (end raced before start), ignore entirely.
-    if (existing?.terminated) { res.json({ ok: true }); return; }
+    if (existing?.terminated || existing?.started) { res.json({ ok: true }); return; }
 
     // Preserve content buffered by out-of-order pre-start chunks.
-    const bufferedContent = existing?.content ?? "";
+    const bufferedContent = (req.body?.content ?? "") + (existing?.content ?? "");
 
     room.activeStreams.set(messageId, {
       messageId, participantName, participantColor, timestamp,
@@ -370,6 +413,11 @@ councilRoomRouter.post(
       });
     } else {
       entry.terminated = true;
+      entry.content = "";
+    }
+    for (const [id, stream] of room.activeStreams) {
+      if (room.activeStreams.size <= 256) break;
+      if (stream.terminated && id !== messageId) room.activeStreams.delete(id);
     }
 
     // Only broadcast end if start was already sent; otherwise clients have no open bubble.
@@ -399,14 +447,19 @@ councilRoomRouter.post(
     const room = rooms.get(req.params.roomId as string);
     if (!room) { res.status(404).json({ error: "Room not found" }); return; }
 
-    const name = ((req.body?.name as string) ?? "").trim();
-    const content = ((req.body?.message as string) ?? "").trim();
-    const suppliedKey = (req.body?.agentKey as string | undefined)?.trim();
+    if (getRoomIdFromMcpToken(requestBearerToken(req)) !== room.id) {
+      res.status(401).json({ error: "A room MCP bearer key is required for external agents" }); return;
+    }
+    const name = typeof req.body?.name === "string" ? req.body.name.trim().slice(0, 80) : "";
+    const content = typeof req.body?.message === "string" ? req.body.message.trim() : "";
+    const suppliedKey = typeof req.body?.agentKey === "string" ? req.body.agentKey.trim() : undefined;
+    if (content.length > 20_000) { res.status(413).json({ error: "Agent message is too large" }); return; }
 
     if (!name) { res.status(400).json({ error: "name is required" }); return; }
     if (!content) { res.status(400).json({ error: "message is required" }); return; }
 
     const keyMap = getOrCreateAgentKeyMap(req.params.roomId as string);
+    if (!suppliedKey && keyMap.size >= 128) { res.status(429).json({ error: "Room agent capacity reached" }); return; }
 
     let agentKey: string;
 
@@ -439,12 +492,7 @@ councilRoomRouter.post(
       timestamp: new Date().toLocaleTimeString(),
     };
 
-    room.messages.push(msg);
-    if (room.messages.length > MAX_ROOM_MESSAGES) {
-      room.messages = room.messages.slice(-MAX_ROOM_MESSAGES);
-    }
-    saveRooms(rooms);
-    broadcast(room, { type: "message", message: msg });
+    appendRoomMessage(room, msg);
 
     logger.info({ roomId: req.params.roomId, agentName: name }, "Agent message posted");
     res.json({ ok: true, agentKey, agentName: name });
@@ -458,12 +506,19 @@ councilRoomRouter.post(
  * Handles upgrade requests at /api/council/ws/:roomId
  */
 export function attachCouncilWs(server: HttpServer): void {
-  const wss = new WebSocketServer({ noServer: true });
+  const wss = new WebSocketServer({ noServer: true, maxPayload: 65_536 });
 
   server.on(
     "upgrade",
     (req: IncomingMessage, socket: Duplex, head: Buffer) => {
       if (req.url?.startsWith("/api/council/ws/")) {
+        const id = req.url.split("?")[0].split("/").pop() ?? "";
+        const room = rooms.get(id);
+        if (!room || room.clients.size >= 32 || wss.clients.size >= 512) {
+          socket.write("HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n");
+          socket.destroy();
+          return;
+        }
         wss.handleUpgrade(req, socket, head, (ws) => {
           wss.emit("connection", ws, req);
         });
@@ -487,6 +542,8 @@ export function attachCouncilWs(server: HttpServer): void {
       ws.close(1008, "Room not found");
       return;
     }
+    if (room.clients.size >= 32) { ws.close(1013, "Room connection limit reached"); return; }
+    ws.on("error", () => ws.close());
 
     let clientName = "Guest";
     room.clients.set(ws, { name: clientName, isApp: false });
@@ -531,12 +588,16 @@ export function attachCouncilWs(server: HttpServer): void {
       participants: [...room.clients.values()].map((c) => c.name),
     }, ws);
 
+    let inboundWindowStart = Date.now();
+    let inboundMessages = 0;
     ws.on("message", (raw) => {
+      if (Date.now() - inboundWindowStart >= 60_000) { inboundWindowStart = Date.now(); inboundMessages = 0; }
+      if (++inboundMessages > 20) { ws.close(1008, "Guest message rate exceeded"); return; }
       try {
         const data = JSON.parse(raw.toString()) as Record<string, unknown>;
 
         if (data.type === "join") {
-          clientName = (data.name as string) || "Guest";
+          clientName = typeof data.name === "string" ? data.name.trim().slice(0, 80) || "Guest" : "Guest";
           room.clients.set(ws, { name: clientName, isApp: false });
           broadcast(room, {
             type: "join",
@@ -548,7 +609,8 @@ export function attachCouncilWs(server: HttpServer): void {
         }
 
         if (data.type === "message") {
-          const content = ((data.content as string) ?? "").trim();
+          const content = typeof data.content === "string" ? data.content.trim() : "";
+          if (content.length > 20_000) { ws.close(1009, "Message is too large"); return; }
           if (!content) return;
           const msg: RoomMessage = {
             id: genId(),
@@ -557,12 +619,7 @@ export function attachCouncilWs(server: HttpServer): void {
             content,
             timestamp: new Date().toLocaleTimeString(),
           };
-          room.messages.push(msg);
-          if (room.messages.length > MAX_ROOM_MESSAGES) {
-            room.messages = room.messages.slice(-MAX_ROOM_MESSAGES);
-          }
-          saveRooms(rooms);
-          broadcast(room, { type: "message", message: msg });
+          appendRoomMessage(room, msg);
         }
       } catch {
         // ignore malformed frames

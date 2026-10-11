@@ -34,12 +34,6 @@ Official protocol: https://docs.github.com/en/apps/creating-github-apps/authenti
 - `pnpm --filter @workspace/api-server run typecheck`
 - Inspect Debug in the Expo preview and exercise the local compiler endpoint with clean and invalid source.
 
-The separately queued help-and-guide task is not duplicated here. Final source ZIP and store submission remain separate shipping milestones.
+For screen-by-screen instructions and cost/privacy tips, see [the canonical user guide](middlemain-user-guide.md). Run `pnpm run guide:sync` after editing it, then `pnpm run guide:check`; the same content powers offline help and relevant AI help context.
 
-### Checked on October 7, 2026
-
-- Eight mocked GitHub/provider tests passed; no paid-provider requests were made.
-- Mobile and API TypeScript checks passed.
-- Frozen-lockfile installation passed without running dependency scripts.
-- Live development API checks accepted clean source, rejected a type error, and rejected an untrusted filesystem import.
-- Debug was inspected at a phone-sized viewport. Native private-repository authorization and live paid AI requests were not verified.
+Native private-repository authorization must also be checked on a real device with the registered GitHub App. Mocked requests and the browser preview do not verify that flow or live paid-provider responses.

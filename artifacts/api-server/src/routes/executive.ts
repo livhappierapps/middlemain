@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { logger } from "../lib/logger";
 import { getXaiKey, hasXaiKey, setXaiKey } from "../lib/xaiKey";
+import { checkExecutiveKey } from "../lib/security";
 
 const executiveRouter = Router();
 const XAI_BASE = "https://api.x.ai/v1";
@@ -77,26 +78,6 @@ function getMcpUrl(): string {
   );
 }
 
-/**
- * Returns true if the X-Executive-Key header matches LEO_EXECUTIVE_KEY.
- * Writes a 401/503 response and returns false if auth fails.
- */
-function checkExecutiveKey(req: Request, res: Response): boolean {
-  const key = process.env["LEO_EXECUTIVE_KEY"];
-  if (!key) {
-    res
-      .status(503)
-      .json({ error: "Executive API not configured — set LEO_EXECUTIVE_KEY" });
-    return false;
-  }
-  const provided = req.headers["x-executive-key"];
-  if (!provided || provided !== key) {
-    res.status(401).json({ error: "Unauthorized — invalid executive key" });
-    return false;
-  }
-  return true;
-}
-
 /** Calls an MCP tool on Leo's Memory Machine. */
 async function mcpToolCall(
   toolName: string,
@@ -117,6 +98,7 @@ async function mcpToolCall(
       params: { name: toolName, arguments: args },
       id: 1,
     }),
+    signal: AbortSignal.timeout(15_000),
   });
 
   if (!resp.ok) {
@@ -225,11 +207,12 @@ executiveRouter.post("/executive/chat", async (req: Request, res: Response) => {
   try {
     const upstream = await fetch(`${XAI_BASE}/chat/completions`, {
       method: "POST",
+      signal: AbortSignal.timeout(60_000),
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ model, messages: fullMessages, stream }),
+      body: JSON.stringify({ model, messages: fullMessages, stream, max_tokens: 2048 }),
     });
 
     if (!upstream.ok) {
@@ -274,6 +257,7 @@ executiveRouter.post("/executive/chat", async (req: Request, res: Response) => {
     }
   } catch (err) {
     logger.error({ err }, "Executive chat error");
+    if (res.headersSent) { res.end(); return; }
     sendXaiError(res, 502, "XAI_UPSTREAM_ERROR", "Could not reach Grok. Check your connection and try again.");
   }
 });
@@ -389,6 +373,7 @@ executiveRouter.post(
 executiveRouter.post(
   "/executive/webhook/council",
   (req: Request, res: Response) => {
+    if (!checkExecutiveKey(req, res)) return;
     const digest = req.body as WebhookDigest;
     if (!digest || typeof digest !== "object") {
       res.status(400).json({ error: "Invalid digest payload" });
@@ -423,6 +408,7 @@ executiveRouter.post(
 executiveRouter.post(
   "/executive/webhook/test",
   (req: Request, res: Response) => {
+    if (!checkExecutiveKey(req, res)) return;
     const body = (req.body ?? {}) as Partial<WebhookDigest>;
 
     const entry: InboxEntry = {

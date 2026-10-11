@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { logger } from "../lib/logger";
 import { getXaiKey, hasXaiKey } from "../lib/xaiKey";
+import { checkExecutiveKey } from "../lib/security";
 
 const grokRouter = Router();
 const XAI_BASE = "https://api.x.ai/v1";
@@ -30,6 +31,7 @@ interface ChatMessage {
  * Supports multimodal (vision) messages — pass imageBase64 in body.
  */
 grokRouter.post("/grok/chat", async (req: Request, res: Response) => {
+  if (!checkExecutiveKey(req, res)) return;
   const apiKey = getXaiKey();
   if (!apiKey) {
     sendXaiError(
@@ -48,8 +50,12 @@ grokRouter.post("/grok/chat", async (req: Request, res: Response) => {
     systemPrompt?: string;
   };
 
-  if (!Array.isArray(messages) || messages.length === 0) {
-    res.status(400).json({ error: "messages array is required" });
+  if (!Array.isArray(messages) || messages.length === 0 || messages.length > 100 ||
+      messages.some((message) => !message || !["system", "user", "assistant"].includes(message.role) ||
+        (typeof message.content !== "string" && !Array.isArray(message.content))) ||
+      typeof model !== "string" || model.length > 100 || typeof stream !== "boolean" ||
+      (systemPrompt !== undefined && (typeof systemPrompt !== "string" || systemPrompt.length > 20_000))) {
+    res.status(400).json({ error: "Invalid chat request" });
     return;
   }
 
@@ -58,11 +64,16 @@ grokRouter.post("/grok/chat", async (req: Request, res: Response) => {
     ...messages,
   ];
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 60_000);
+  const disconnect = () => { if (!res.writableFinished) controller.abort(); };
+  res.on("close", disconnect);
   try {
     const upstream = await fetch(`${XAI_BASE}/chat/completions`, {
       method: "POST",
       headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model, messages: fullMessages, stream }),
+      body: JSON.stringify({ model, messages: fullMessages, stream, max_tokens: 2048 }),
+      signal: controller.signal,
     });
 
     if (!upstream.ok) {
@@ -104,7 +115,14 @@ grokRouter.post("/grok/chat", async (req: Request, res: Response) => {
     }
   } catch (err) {
     logger.error({ err }, "Grok proxy error");
-    sendXaiError(res, 502, "XAI_UPSTREAM_ERROR", "Could not reach Grok. Check your connection and try again.");
+    if (!res.headersSent && !res.destroyed) {
+      sendXaiError(res, 502, "XAI_UPSTREAM_ERROR", "Could not reach Grok. Check your connection and try again.");
+    } else if (!res.destroyed) {
+      res.end();
+    }
+  } finally {
+    clearTimeout(timeout);
+    res.off("close", disconnect);
   }
 });
 
@@ -115,6 +133,7 @@ grokRouter.post("/grok/chat", async (req: Request, res: Response) => {
 grokRouter.get("/grok/status", (_req: Request, res: Response) => {
   res.json({
     configured: hasXaiKey(),
+    authorizationRequired: true,
     models: {
       text: "grok-3",
       vision: "grok-2-vision-1212",

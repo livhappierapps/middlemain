@@ -10,6 +10,7 @@ import fs from "fs";
 import path from "path";
 import { logger } from "./logger";
 import type { RoomMessage } from "../routes/councilRoom";
+import { workspaceRoot } from "./workspacePaths";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -20,22 +21,25 @@ export interface PersistedRoom {
   messages: RoomMessage[];
   /** SHA-256 digest only; the raw MCP token is returned once to the host device. */
   mcpTokenHash?: string | null;
+  hostTokenHash?: string | null;
 }
 
 // ─── Storage path ─────────────────────────────────────────────────────────────
 
 // Resolve relative to the package root so the path works regardless of cwd.
 // The optional override lets local integration tests use an isolated room file.
+const currentStore = path.join(workspaceRoot(), "artifacts", "api-server", "data", "rooms.json");
+const legacyStore = path.join(workspaceRoot(), "artifacts", "data", "rooms.json");
 const STORE_PATH = process.env.MIDDLEMAIN_ROOM_STORE_PATH
   ? path.resolve(process.env.MIDDLEMAIN_ROOM_STORE_PATH)
-  : path.resolve(__dirname, "..", "..", "data", "rooms.json");
+  : (!fs.existsSync(currentStore) && fs.existsSync(legacyStore) ? legacyStore : currentStore);
 const DATA_DIR = path.dirname(STORE_PATH);
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function ensureDataDir(): void {
   if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
   }
 }
 
@@ -54,13 +58,13 @@ export function loadRooms(): PersistedRoom[] {
     }
     return [];
   } catch (err) {
-    logger.warn({ err, path: STORE_PATH }, "Failed to parse room store — starting fresh");
-    return [];
+    logger.error({ err, path: STORE_PATH }, "Invalid room store; refusing to overwrite existing history");
+    throw new Error("Room storage is invalid. Repair or restore its backup before restarting.");
   }
 }
 
-/** Persist the current room list to disk. Silently swallows write errors. */
-export function saveRooms(rooms: Map<string, { id: string; name: string; createdAt: string; messages: RoomMessage[]; mcpTokenHash?: string | null }>): void {
+/** Persist atomically, failing explicitly rather than claiming an unsaved update succeeded. */
+export function saveRooms(rooms: Map<string, { id: string; name: string; createdAt: string; messages: RoomMessage[]; mcpTokenHash?: string | null; hostTokenHash?: string | null }>): void {
   ensureDataDir();
   const payload: PersistedRoom[] = [];
   for (const room of rooms.values()) {
@@ -70,11 +74,19 @@ export function saveRooms(rooms: Map<string, { id: string; name: string; created
       createdAt: room.createdAt,
       messages: room.messages,
       mcpTokenHash: room.mcpTokenHash ?? null,
+      hostTokenHash: room.hostTokenHash ?? null,
     });
   }
   try {
-    fs.writeFileSync(STORE_PATH, JSON.stringify(payload, null, 2), "utf8");
+    const serialized = JSON.stringify(payload, null, 2);
+    if (Buffer.byteLength(serialized) > 16 * 1024 * 1024) {
+      throw new Error("Room storage capacity reached; operator archival is required.");
+    }
+    const temporaryPath = `${STORE_PATH}.tmp`;
+    fs.writeFileSync(temporaryPath, serialized, { encoding: "utf8", mode: 0o600 });
+    fs.renameSync(temporaryPath, STORE_PATH);
   } catch (err) {
     logger.warn({ err, path: STORE_PATH }, "Failed to write room store");
+    throw new Error("Room storage could not be saved");
   }
 }

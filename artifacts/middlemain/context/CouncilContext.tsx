@@ -1,4 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { serverAuthHeaders } from '@/utils/serverAuth';
+import { streamSSE } from '@/utils/streamSSE';
+import { appHelpContext } from '@/utils/appHelp';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
@@ -186,41 +189,6 @@ const RECORDING_OPTIONS: Audio.RecordingOptions = {
   web: { mimeType: 'audio/webm', bitsPerSecond: 128000 },
 };
 
-async function streamSSE(
-  resp: Response,
-  onChunk: (c: string) => void,
-  onDone: () => void,
-  onError: (e: string) => void,
-) {
-  const reader = resp.body?.getReader();
-  if (!reader) { onError('Streaming not supported'); return; }
-  const decoder = new TextDecoder();
-  let buffer = '';
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith('data: ')) continue;
-        const raw = trimmed.slice(6);
-        if (raw === '[DONE]') continue;
-        try {
-          const json = JSON.parse(raw);
-          const content = json.choices?.[0]?.delta?.content || json.delta?.text || '';
-          if (content) onChunk(content);
-        } catch {}
-      }
-    }
-    onDone();
-  } catch (e: any) {
-    onError(e?.message ?? 'Stream error');
-  }
-}
-
 function buildAutonomousHistory(
   participant: CouncilParticipant,
   allMessages: CouncilMessage[],
@@ -275,6 +243,9 @@ async function callParticipantAI(
   participant: CouncilParticipant,
   messages: ChatMessage[],
 ): Promise<Response> {
+  const question = messages[messages.length - 1]?.content;
+  const help = typeof question === 'string' ? appHelpContext(question) : '';
+  if (help) participant = { ...participant, systemPrompt: [participant.systemPrompt, help].filter(Boolean).join('\n\n') };
   if (participant.provider === 'anthropic') {
     const baseUrl = participant.baseUrl || PROVIDER_DEFAULTS.anthropic.baseUrl;
     return fetch(`${baseUrl}/messages`, {
@@ -297,7 +268,7 @@ async function callParticipantAI(
     const base = participant.baseUrl || getServerBase();
     return fetch(`${base}/grok/chat`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await serverAuthHeaders(base, participant.apiKey),
       body: JSON.stringify({
         model: participant.model || 'grok-3',
         messages: [
@@ -549,7 +520,9 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
     try {
       const resp = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: /\/executive\/webhook\/(?:council|test)$/.test(url)
+          ? await serverAuthHeaders(url.replace(/\/executive\/webhook\/(?:council|test)$/, ''))
+          : { 'Content-Type': 'application/json' },
         body: JSON.stringify(digest),
       });
       if (!resp.ok) {

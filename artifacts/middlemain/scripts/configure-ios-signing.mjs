@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Sets up EAS remote signing with the stored ASC key. Never approves revocation.
+// Sets up EAS remote signing; --build queues production with the same temporary ASC key.
+// Never approves revocation.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -9,6 +10,12 @@ import { stripVTControlCharacters } from 'node:util';
 import { fileURLToPath } from 'node:url';
 
 const required = ['ASC_PRIVATE_KEY', 'ASC_KEY_ID', 'ASC_ISSUER_ID'];
+const args = process.argv.slice(2);
+if (args.some(arg => arg !== '--build')) {
+  console.error('Usage: node configure-ios-signing.mjs [--build]');
+  process.exit(1);
+}
+const build = args.includes('--build');
 if (required.some(name => !process.env[name])) {
   console.error('Required ASC secrets are missing.');
   process.exit(1);
@@ -47,7 +54,9 @@ try {
   delete env.CI; // An empty CI value is not a valid Expo boolean.
   child = spawn('script', [
     '-q', '-e', '-c',
-    'pnpm exec eas credentials:configure-build --platform ios --profile production',
+    build
+      ? 'pnpm exec eas build --platform ios --profile production --non-interactive --no-wait'
+      : 'pnpm exec eas credentials:configure-build --platform ios --profile production',
     '/dev/null',
   ], {
     cwd: path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'),

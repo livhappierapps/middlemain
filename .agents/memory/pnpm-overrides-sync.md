@@ -21,3 +21,10 @@ Do not exclude Darwin variants merely to reduce Linux workspace dependencies.
 **Why:** EAS iOS workers use macOS; a Linux installation/typecheck cannot demonstrate those workers have their required native binaries.
 
 **How to apply:** Preserve macOS variants for native build tooling. Let the package manager select by platform rather than applying Linux-only exclusions to a cross-platform lockfile.
+
+## Builder package-manager major version
+Keep EAS on the locally verified pnpm 10 configuration until the workspace settings are deliberately migrated.
+
+**Why:** The latest iOS image introduced pnpm 11, which ignores package.json's pnpm overrides and patchedDependencies. A locally valid frozen install then failed on EAS before compilation; dropping those settings would also discard security protections.
+
+**How to apply:** Pin the same pnpm version in the root packageManager and EAS build profiles. Do not fix this by disabling frozen installs or removing safety patches.

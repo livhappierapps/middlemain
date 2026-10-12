@@ -26,3 +26,9 @@ Prefer EAS-managed signing for Middlemain's iOS release.
 **Why:** The user explicitly selected EAS signing.
 
 **How to apply:** Use EAS-managed remote credentials, while obtaining separate approval before revoking any existing Apple certificate.
+
+Keep temporary ASC authentication available for non-interactive iOS build credential checks, not just initial signing setup.
+
+**Why:** A newly created active EAS profile was reported as malformed without ASC authentication; supplying the key allowed EAS to repair the profile and queue the build without another certificate revocation.
+
+**How to apply:** Use a permission-restricted temporary key for validation and remove it when the EAS command exits. Do not respond to this validation failure by revoking more certificates.

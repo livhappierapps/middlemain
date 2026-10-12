@@ -1,6 +1,7 @@
 {
   "name": "workspace",
   "version": "0.0.0",
+  "packageManager": "pnpm@10.26.1",
   "license": "MIT",
   "scripts": {
     "guide:sync": "node scripts/sync-middlemain-guide.mjs",

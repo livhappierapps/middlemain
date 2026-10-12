@@ -79,3 +79,13 @@ test('in-app data summary discloses remote storage instead of claiming no collec
   assert.doesNotMatch(legal, /INFORMATION WE DO NOT COLLECT|Since we do not collect your data/);
   assert.match(legal, /subscriptions are not enabled in this build/);
 });
+
+test('EAS pins the package manager that reads the repository security overrides', () => {
+  const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+  const eas = JSON.parse(readFileSync('artifacts/middlemain/eas.json', 'utf8'));
+  assert.equal(pkg.packageManager, 'pnpm@10.26.1');
+  for (const profile of ['development', 'preview', 'production']) {
+    assert.equal(eas.build[profile].pnpm, '10.26.1');
+  }
+  assert.ok(pkg.pnpm.overrides && pkg.pnpm.patchedDependencies);
+});

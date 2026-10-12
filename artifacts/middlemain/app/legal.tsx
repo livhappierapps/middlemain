@@ -6,82 +6,41 @@ import { Platform, ScrollView, Text, TouchableOpacity, View } from 'react-native
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
 
-const LAST_UPDATED = 'June 14, 2026';
+const LAST_UPDATED = 'October 12, 2026';
 const APP_NAME = 'Middlemain';
 const COMPANY_NAME = 'LivHappier Apps';
 const CONTACT_EMAIL = 'oblivionhappier@icloud.com';
 const WEBSITE = 'livhappierapps.com';
 
-const PRIVACY_POLICY = `PRIVACY POLICY
-Last Updated: ${LAST_UPDATED}
-Published by: ${COMPANY_NAME} · ${WEBSITE}
+const PRIVACY_POLICY = `DATA-HANDLING SUMMARY
+Updated: ${LAST_UPDATED}
+${COMPANY_NAME} · ${WEBSITE}
 
-OUR KEY PROMISE
-${APP_NAME} does not require an account. It does not track you. It does not build a profile of you. Your API keys and conversation data are stored only on your own device and are never collected by ${COMPANY_NAME} servers — except where explicitly described below.
+This technical summary describes the current app. It is not a replacement for the publisher's full privacy policy, available through the website link above.
 
-1. INFORMATION WE DO NOT COLLECT
-${APP_NAME} does NOT collect, store, or process:
-  - Your name, email address, or contact information
-  - Your location data
-  - Device identifiers or advertising IDs
-  - Your browsing or usage history
-  - Your AI conversation content (messages, code, images)
-  - Your API keys or authentication credentials
+1. LOCAL APP STORAGE
+Provider API keys, connection settings, preferences, skills, and chat history are stored locally. Not all connection settings use a separate encrypted credential vault.
 
-2. INFORMATION STORED ON YOUR DEVICE ONLY
-The following is stored locally on your device and never leaves it except as described in Sections 3–4:
-  - AI provider API keys you enter
-  - AI connection configurations
-  - Custom skill definitions you create
-  - App theme and settings preferences
-  - Subscription/purchase status
+2. AI CONVERSATIONS AND CODE ANALYSIS
+Prompts, code, and attached images are sent to your selected AI provider. Server-proxy mode also passes content through the publisher's backend. Credentials are sent to the services they authorize. The selected provider's policies govern its processing and retention.
 
-You can delete all of this by uninstalling the App.
+3. LIVE COUNCIL ROOMS
+The backend stores room names, participant display names, timestamps, and messages. People with the shared room link can see the discussion; display names are not verified identities. Stopping a live session does not automatically delete its stored history.
 
-3. DIRECT AI CONNECTIONS — YOUR DATA GOES TO YOUR CHOSEN AI
-When you configure a direct AI connection (xAI/Grok, OpenAI, Anthropic, or custom), your messages travel directly from your device to the AI provider you selected. ${COMPANY_NAME} does not see, intercept, receive, or store this data.
+4. OPTIONAL CAMERA, MICROPHONE, AND SCREEN BRIDGE
+Enabled camera, audio, or screen content is sent to your configured bridge service. These features require the relevant permissions and controls. The bridge service's policies apply to data it receives.
 
-EXPLICIT CONSENT: By configuring an AI connection and sending your first message, you explicitly consent to your message content (including any images you attach) being transmitted to the third-party AI provider you have selected. You control which AI provider receives your data and can change or remove connections at any time.
+5. GITHUB, MEMORY, AND WEBHOOK CONNECTIONS
+These connections exchange authorization information and selected repository or conversation content with their configured services. Council webhook digests can include participant names and messages. Review a destination before sending private content.
 
-Third-party AI provider privacy policies:
-  - xAI (Grok): x.ai/legal/privacy-policy
-  - OpenAI: openai.com/policies/privacy-policy
-  - Anthropic: anthropic.com/privacy
+6. REPORTS AND NETWORK INFORMATION
+Optional bug reports can send the report text and app/version details. Hosting and connected services process network/request information, including IP addresses. Do not include secrets or other people's personal information in a report.
 
-4. SERVER PROXY MODE ("DEV'S GROK")
-${APP_NAME} offers an optional server connection that routes your messages through a ${COMPANY_NAME} server before forwarding them to xAI's Grok API. When using this mode:
-  - Your message content passes through our server
-  - Message content is NOT logged, stored, or retained
-  - Our server acts as a pass-through relay only
-  - All connections use HTTPS/TLS encryption
-  - You can disable this at any time in the Connect tab
+7. RETENTION AND DELETION
+Clearing local history, removing a connection, or uninstalling does not delete copies already held by backend rooms or third-party services. Retention and deletion depend on the destination and publisher's policy. Do not assume automatic expiry or deletion from every service.
 
-5. CAMERA AND PHOTO LIBRARY
-Vision features may request camera and photo library access. Images you attach are transmitted only to the AI provider you selected. Images are never stored or retained by ${COMPANY_NAME}.
-
-Camera and photo access is optional — the App works fully without it for non-Vision features.
-
-6. BUG REPORTS (OPTIONAL)
-If you submit a bug report through the in-app tool, only the text you write and the app version number are transmitted. No conversation data, API keys, or personal information are included.
-
-7. PURCHASES AND SUBSCRIPTIONS
-All payments are processed by Apple App Store or Google Play. ${COMPANY_NAME} does not receive or store your payment information.
-
-8. CHILDREN'S PRIVACY
-${APP_NAME} is intended for users 17 and older. We do not knowingly collect information from children under 13.
-
-9. DATA SECURITY
-All connections use HTTPS/TLS. Since we do not collect your data, there is no ${COMPANY_NAME} database that could expose your information.
-
-10. YOUR RIGHTS (GDPR / CCPA)
-Since ${APP_NAME} does not collect personal data, there is no personal data held by ${COMPANY_NAME} for you to access, correct, or delete. California residents: we do not sell personal information.
-
-11. CHANGES TO THIS POLICY
-Updates will be posted at ${WEBSITE} and within the App. Continued use after changes constitutes acceptance.
-
-12. CONTACT
-Questions? Email us: ${CONTACT_EMAIL}
-Website: ${WEBSITE}`;
+8. PRIVACY QUESTIONS
+Consult the full website policy for the publisher's contact and rights-request information. Data you enter may identify you or others even though the app does not require a general Middlemain account.`;
 
 const TERMS_AND_CONDITIONS = `TERMS AND CONDITIONS
 Last Updated: ${LAST_UPDATED}
@@ -105,7 +64,7 @@ When you connect an AI provider using your own API key, you are solely responsib
   - Compliance with the third-party provider's terms of service
   - Any content you send to or receive from the AI provider
 
-Your API keys are stored locally on your device only. ${COMPANY_NAME} does not have access to your API keys.
+Your connection credentials are stored locally and are transmitted to the services they authorize. Server-proxy connections send authorization credentials to the configured backend.
 
 5. AI OUTPUT DISCLAIMER
 AI-generated output (code, analysis, suggestions, explanations) produced through ${APP_NAME}:
@@ -116,24 +75,8 @@ AI-generated output (code, analysis, suggestions, explanations) produced through
 
 You are solely responsible for reviewing and testing any code or content generated by AI through the App.
 
-6. SUBSCRIPTIONS AND BILLING
-
-a) Pricing
-  - Monthly Subscription: $3.99/month
-  - Annual Subscription: $29.99/year
-  - Ad Removal: $1.99 (one-time)
-
-b) Billing
-All purchases are processed through Apple App Store or Google Play. ${COMPANY_NAME} does not receive or store your payment information.
-
-c) Auto-Renewal
-Subscriptions auto-renew unless cancelled at least 24 hours before the renewal date. Manage subscriptions in your App Store or Google Play account settings.
-
-d) Apple Subscription Terms
-Payment charged to Apple ID at purchase confirmation. Manage and cancel in App Store Account Settings.
-
-e) Refunds
-Refund requests are handled by Apple or Google under their refund policies.
+6. PURCHASE AVAILABILITY
+In-app purchases and subscriptions are not enabled in this build. Purchase and restore controls do not activate a paid plan or initiate store billing. Usage charges from your chosen AI providers are separate and remain your responsibility.
 
 7. ACCEPTABLE USE
 You agree not to use ${APP_NAME} to:
@@ -228,7 +171,7 @@ export default function LegalScreen() {
         <TouchableOpacity
           onPress={() => WebBrowser.openBrowserAsync(
             activeTab === 'privacy'
-              ? 'https://livhappierapps.com/apps/middlemain/privacy'
+              ? 'https://livhappierapps.com/apps/middlemain/privacypolicy'
               : 'https://livhappierapps.com/apps/middlemain/terms'
           )}
           style={{

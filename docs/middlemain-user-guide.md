@@ -104,3 +104,11 @@ Store purchases and Restore are not connected to StoreKit/RevenueCat. They must 
 For network errors, check internet access, the correct HTTPS server URL, model name, provider quota, and service status. For permission errors, open the device's app permissions. For a rejected owner key, verify the executive key on that trusted device rather than sharing it. Copy a minimal error description for a bug report, excluding keys and private source. Restarting the app can reset transient connections, but does not replace tests or revoke remote credentials.
 
 Tips: protect your device and backups. Connection information is stored locally; local storage is not a promise of encrypted storage or protection from a compromised device/browser. Sending prompts, screenshots, webhooks, or tools sends data to their selected destinations. Deleting local data does not delete remote records.
+
+## 12. Privacy and data handling
+
+Middlemain does handle user information. API keys, connection settings, preferences, skills, and chat history are stored locally. Prompts, selected code, and images go to the chosen AI provider; server-proxy mode also passes content through the publisher's backend. Credentials go to their authorized destinations.
+
+Live Council rooms store room names, participant display names, timestamps, and messages on the backend. Shared-link visitors can see the discussion. Stopping a session does not automatically delete stored history. Optional camera/audio/screen bridge features send enabled content to the configured bridge service. GitHub, memory tools, and webhooks receive the data selected for those connections. Bug reports can contain report text and app/version details; hosting services process network/request metadata.
+
+Uninstalling, clearing local history, and disconnecting do not erase copies held by servers or third parties. Do not claim no data is collected, that all local keys use an encrypted vault, or that every destination deletes data automatically. The publisher's full policy is at https://livhappierapps.com/apps/middlemain/privacypolicy; a technical summary is also available in the app's legal screen. Website policy publication and Apple privacy disclosures require publisher review.

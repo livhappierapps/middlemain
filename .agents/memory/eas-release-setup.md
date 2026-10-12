@@ -20,3 +20,9 @@ Validate the ASC key cryptographically and look up the exact bundle identifier's
 **Why:** A PEM envelope alone does not prove usable formatting, and Apple signing credentials do not imply an App Store app record exists. Either can block submission after paying for a build.
 
 **How to apply:** Normalize only parseable PKCS#8 material into a private temporary file, require Apple's EC P-256 format, and perform a read-only app lookup first. Creating the App Store record and choosing a certificate revocation still require the creator's action or specific approval.
+
+Prefer EAS-managed signing for Middlemain's iOS release.
+
+**Why:** The user explicitly selected EAS signing.
+
+**How to apply:** Use EAS-managed remote credentials, while obtaining separate approval before revoking any existing Apple certificate.

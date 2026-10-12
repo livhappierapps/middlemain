@@ -60,3 +60,10 @@ Middlemain's Grok connector is intended for the owner's Replit agent and future 
 **Why:** The user chose a revocable room-scoped key so an AI agent can help in a shared Council without granting access to other rooms.
 
 **How to apply:** Preserve the one-room scope, keep the public share link and MCP credential independent, and never place the credential in the server URL.
+
+## Publisher privacy policy
+The user designated https://livhappierapps.com/apps/middlemain/privacypolicy as Middlemain's public privacy-policy page.
+
+**Why:** The user said the policy belongs on the publisher's website.
+
+**How to apply:** Align the app's privacy link and store listing with this page; do not substitute a Replit API or preview URL.

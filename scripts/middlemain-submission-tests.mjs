@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { randomUUID, generateKeyPairSync } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createRequire } from 'node:module';
 
 test('submission dry run restricts key permissions, preserves tracked config, and removes temporary credentials', () => {
   const script = new URL('../artifacts/middlemain/scripts/submit-ios.sh', import.meta.url).pathname;
@@ -88,4 +89,18 @@ test('EAS pins the package manager that reads the repository security overrides'
     assert.equal(eas.build[profile].pnpm, '10.26.1');
   }
   assert.ok(pkg.pnpm.overrides && pkg.pnpm.patchedDependencies);
+});
+
+test('Expo and EAS plist readers work with the hardened XML parser', () => {
+  const require = createRequire(new URL('../artifacts/middlemain/package.json', import.meta.url));
+  const expoDir = join(require.resolve('expo/package.json'), '..');
+  const configDir = join(require.resolve('@expo/config-plugins/package.json', { paths: [expoDir] }), '..');
+  const easDir = join(require.resolve('eas-cli/package.json'), '..');
+  for (const consumer of [configDir, easDir]) {
+    const plist = require(require.resolve('@expo/plist', { paths: [consumer] })).default;
+    const parsed = plist.parse('<?xml version="1.0"?><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>app.middlemain.bridge</string></dict></plist>');
+    assert.equal(parsed.CFBundleIdentifier, 'app.middlemain.bridge');
+    assert.deepEqual(Object.keys(parsed), ['CFBundleIdentifier']);
+    assert.equal(plist.parse('\n<?xml version="1.0"?><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>app.middlemain.bridge</string></dict></plist>').CFBundleIdentifier, 'app.middlemain.bridge');
+  }
 });

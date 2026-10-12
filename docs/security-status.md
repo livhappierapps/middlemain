@@ -19,20 +19,20 @@ Manual review also found and repaired unauthenticated owner-funded Grok access a
 
 ## Required before shipping
 
-1. Publish the secured backend with approval and verify unauthenticated owner operations fail **without calling a paid provider**. The currently published API is not made safe by committing this source.
+1. The secured backend has been published and its owner-authorization requirement verified live. New download-manifest/client changes still require publication; a source commit alone does not update production.
 2. Rotate/revoke the formerly exposed AIs & Ears service key at its issuer. Do not assume deleting the source literal invalidates history, devices, or old APKs.
 3. Verify the new separate live-room host key and native secure-storage recovery on a real device; load-check room/frame/client/stream bounds and persistence. Old room hosts must create a new room; history is preserved. Shared links still permit guest participation and are not private account sessions.
-4. Resolve Apple distribution signing: reuse a matching certificate/private key, or obtain explicit permission to revoke a named existing certificate. Do not auto-revoke other apps' certificates.
+4. EAS-managed Apple signing is configured. No additional certificate revocation is needed for this release; never auto-revoke other apps' certificates.
 5. Configure customer GitHub App device flow and validate it on native hardware. Mock tests cannot authorize a real customer.
 6. Keep purchases explicitly unavailable until real StoreKit/RevenueCat implementation and restoration are tested. Provider billing is separate.
-7. Complete native-device checks, then build fresh binaries. Never promote the earlier pre-hardening APK as the security-fixed release.
+7. Build fresh binaries for native-device testing and complete those checks before public release. Never promote an older APK as containing newer security/privacy fixes.
 8. Record a verified new APK URL, publish the download manifest, verify APK bytes through the proxy, complete iOS build/submission, and check App Store processing.
 
 ## Scope limits
 
-The final static-code scan reported no findings and was not incomplete. The privacy/dataflow scan reported no findings. Twenty-nine regression tests, workspace typechecks, frozen install, API build, and local iOS/Android/web exports passed. These are local checks, not successful EAS signing/submission or native-device tests.
+The final static-code scan reported no findings and was not incomplete. The privacy/dataflow scan reported no findings. Thirty-three regression tests, frozen install, native typecheck, and clean local iOS prebuild passed. Earlier workspace checks, API build, and local platform exports also passed. These are not successful iOS EAS builds/submissions or native-device tests.
 
-The ASC private key can now be validated and used for read-only Apple authentication. No App Store app record currently matches this build's bundle identifier; creating that record is an additional submission gate.
+ASC authentication, the matching App Store record, and EAS signing are verified. Two iOS attempts failed before a binary was produced; builder-version and XML compatibility fixes are now locally verified. Another paid attempt is required. The completed Android refresh predates newer privacy/GitHub changes. The publisher's privacy URL still rendered 404 at the last check.
 
 The Guide's question composer is visible in the preview after the tab-overlap fix. The development console still reports Expo AV deprecation and an unidentified HTTP 415 resource warning. Assets rendered correctly on the settled preview, but native-device behavior remains unverified.
 

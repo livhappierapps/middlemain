@@ -31,6 +31,7 @@
       "tar": "^7.5.21",
       "minimatch": "^9.0.9",
       "@xmldom/xmldom": "^0.9.12",
+      "@expo/plist": "0.5.4",
       "postcss": "^8.5.23",
       "uuid": "^11.1.1",
       "joi": "^17.13.8",
@@ -131,7 +132,8 @@
     },
     "patchedDependencies": {
       "image-size@1.2.1": "patches/image-size@1.2.1.patch",
-      "braces@3.0.3": "patches/braces@3.0.3.patch"
+      "braces@3.0.3": "patches/braces@3.0.3.patch",
+      "@expo/plist@0.5.4": "patches/@expo__plist@0.5.4.patch"
     }
   }
 }

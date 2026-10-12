@@ -27,8 +27,8 @@ Prefer EAS-managed signing for Middlemain's iOS release.
 
 **How to apply:** Use EAS-managed remote credentials, while obtaining separate approval before revoking any existing Apple certificate.
 
-Keep temporary ASC authentication available for non-interactive iOS build credential checks, not just initial signing setup.
+Check plist parser compatibility before treating a “malformed provisioning profile” error as an Apple credential failure.
 
-**Why:** A newly created active EAS profile was reported as malformed without ASC authentication; supplying the key allowed EAS to repair the profile and queue the build without another certificate revocation.
+**Why:** The hardened xmldom parser requires an explicit MIME type, but legacy Expo plist callers omit it. This caused EAS to reject newly active profiles and later fail native prebuild. Supplying ASC authentication only masked the problem by allowing profile regeneration.
 
-**How to apply:** Use a permission-restricted temporary key for validation and remove it when the EAS command exits. Do not respond to this validation failure by revoking more certificates.
+**How to apply:** Preserve the hardened XML dependency and verify Expo/EAS plist parsing plus a native prebuild before another paid build. Do not respond to this error by revoking more certificates. Keep any required ASC key temporary and permission-restricted.

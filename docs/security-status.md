@@ -32,7 +32,7 @@ Manual review also found and repaired unauthenticated owner-funded Grok access a
 
 The final static-code scan reported no findings and was not incomplete. The privacy/dataflow scan reported no findings. Thirty-three regression tests, frozen install, native typecheck, and clean local iOS prebuild passed. Earlier workspace checks, API build, and local platform exports also passed. These are not successful iOS EAS builds/submissions or native-device tests.
 
-ASC authentication, the matching App Store record, and EAS signing are verified. Two iOS attempts failed before a binary was produced; builder-version and XML compatibility fixes are now locally verified. Another paid attempt is required. The completed Android refresh predates newer privacy/GitHub changes. The publisher's privacy URL still rendered 404 at the last check.
+ASC authentication, the matching App Store record, and EAS signing are verified. After builder-version/XML compatibility fixes and additional approval, iOS production version 1.2.0 build 1 completed, uploaded successfully, and reached Apple's VALID processing state. The updated Android APK also completed and its canonical URL returned 200. The new download manifest still needs backend publication and production-proxy verification. The publisher's privacy URL still rendered 404 at the last check.
 
 The Guide's question composer is visible in the preview after the tab-overlap fix. The development console still reports Expo AV deprecation and an unidentified HTTP 415 resource warning. Assets rendered correctly on the settled preview, but native-device behavior remains unverified.
 

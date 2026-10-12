@@ -8,3 +8,5 @@
 - [Cost transparency](cost-transparency.md) — Warn Dev before any action that may create charges; do not initiate paid API usage or builds without clear notice.
 - [Task ownership](task-ownership.md) — Review already-running work before implementing the same feature; separate main edits from queued merges.
 - [Git provider authorization](git-provider-authorization.md) — Healthy account status can coexist with rejected Git credentials; connector reconnect cards may not apply.
+- [Private developer edition](developer-edition.md) — Public release first; owner-only Dev’s Crash Pad, Council participation, and approval-controlled Dev/Leo tools afterward.
+- [pnpm patch cache](pnpm-patch-cache.md) — Verify installed safety guards, not just patch hashes; a forced frozen install can repair stale patched-package contents.

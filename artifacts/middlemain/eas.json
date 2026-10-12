@@ -15,7 +15,8 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "middle-ma-in.replit.app"
+        "EXPO_PUBLIC_DOMAIN": "middle-ma-in.replit.app",
+        "EXPO_PUBLIC_GITHUB_APP_CLIENT_ID": "Iv23lizWSqwgviRUzGYF"
       },
       "ios": {
         "buildConfiguration": "Release",
@@ -27,7 +28,8 @@
     },
     "production": {
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "middle-ma-in.replit.app"
+        "EXPO_PUBLIC_DOMAIN": "middle-ma-in.replit.app",
+        "EXPO_PUBLIC_GITHUB_APP_CLIENT_ID": "Iv23lizWSqwgviRUzGYF"
       },
       "ios": {
         "buildConfiguration": "Release",

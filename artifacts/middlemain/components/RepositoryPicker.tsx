@@ -17,6 +17,16 @@ export function RepositoryPicker({ onSelect, onReset }: { onSelect: (code: strin
   const mounted = useRef(true);
   const token = session && session.expiresAt > Date.now() ? session.token : '';
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; abort.current?.abort(); }; }, []);
+  useEffect(() => {
+    if (!session) return;
+    const timer = setTimeout(() => {
+      if (session.expiresAt > Date.now()) return;
+      setSession(null);
+      setListing(null);
+      setError('GitHub authorization expired. Sign in again to access private repositories.');
+    }, Math.max(session.expiresAt - Date.now(), 0));
+    return () => clearTimeout(timer);
+  }, [session, onReset]);
   const text = { color: theme.text, fontSize: 13, lineHeight: 20 };
   const button = { padding: 12, minHeight: 44, justifyContent: 'center' as const, borderRadius: theme.radius, backgroundColor: theme.primary + '22' };
   const input = { ...text, padding: 12, borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius, backgroundColor: theme.surface };

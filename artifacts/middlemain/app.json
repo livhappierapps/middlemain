@@ -19,9 +19,9 @@
       "bundleIdentifier": "app.middlemain.bridge",
       "buildNumber": "1",
       "infoPlist": {
-        "NSCameraUsageDescription": "Middlemain uses the camera to capture screenshots and images for AI visual analysis in the Bridge Terminal.",
+        "NSCameraUsageDescription": "Middlemain uses the camera to capture photos and, when enabled, share camera frames with the AI service you select in the Bridge Terminal.",
         "NSPhotoLibraryUsageDescription": "Middlemain accesses your photo library to attach screenshots and images for AI analysis in the Bridge Terminal.",
-        "NSMicrophoneUsageDescription": "Middlemain may request microphone access for future voice input features.",
+        "NSMicrophoneUsageDescription": "Middlemain uses the microphone for voice input in Council and in the AIs & Ears bridge when you enable Hearing.",
         "ITSAppUsesNonExemptEncryption": false
       },
       "privacyManifests": {
@@ -53,21 +53,21 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Middlemain uses the camera to capture screenshots and images for AI visual analysis in the Bridge Terminal.",
-          "microphonePermission": "Middlemain uses the microphone for AI voice input in the Council."
+          "cameraPermission": "Middlemain uses the camera to capture photos and, when enabled, share camera frames with the AI service you select in the Bridge Terminal.",
+          "microphonePermission": "Middlemain uses the microphone for voice input in Council and in the AIs & Ears bridge when you enable Hearing."
         }
       ],
       [
         "expo-av",
         {
-          "microphonePermission": "Middlemain uses the microphone for AI voice input in the Council."
+          "microphonePermission": "Middlemain uses the microphone for voice input in Council and in the AIs & Ears bridge when you enable Hearing."
         }
       ],
       [
         "expo-image-picker",
         {
           "photosPermission": "Middlemain accesses your photo library to attach screenshots and images for AI analysis in the Bridge Terminal.",
-          "cameraPermission": "Middlemain uses the camera to capture screenshots and images for AI visual analysis in the Bridge Terminal.",
+          "cameraPermission": "Middlemain uses the camera to capture photos and, when enabled, share camera frames with the AI service you select in the Bridge Terminal.",
           "microphonePermission": false
         }
       ],

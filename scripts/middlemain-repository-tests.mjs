@@ -45,6 +45,24 @@ test('repository URL accepts only the GitHub repository root without credentials
   }
 });
 
+test('iOS camera and microphone permission copy matches current Bridge features', async () => {
+  const config = JSON.parse(await readFile(new URL('../artifacts/middlemain/app.json', import.meta.url), 'utf8')).expo;
+  const descriptions = config.ios.infoPlist;
+  assert.match(descriptions.NSCameraUsageDescription, /camera frames.*AI service/i);
+  assert.match(descriptions.NSMicrophoneUsageDescription, /Council.*AIs & Ears bridge.*Hearing/i);
+  const plugins = config.plugins;
+  for (const pluginName of ['expo-camera', 'expo-image-picker']) {
+    const plugin = plugins.find(value => Array.isArray(value) && value[0] === pluginName);
+    assert.ok(plugin, `Missing ${pluginName} config`);
+    assert.match(plugin[1].cameraPermission, /camera frames.*AI service/i);
+  }
+  for (const pluginName of ['expo-camera', 'expo-av']) {
+    const plugin = plugins.find(value => Array.isArray(value) && value[0] === pluginName);
+    assert.ok(plugin, `Missing ${pluginName} config`);
+    assert.match(plugin[1].microphonePermission, /Council.*AIs & Ears bridge.*Hearing/i);
+  }
+});
+
 test('listing filters secret/large/generated files and pins the selected branch to a commit', async () => {
   const calls = [];
   globalThis.fetch = async (url, options) => {

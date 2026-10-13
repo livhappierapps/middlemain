@@ -37,3 +37,8 @@
 - Verified 43 regression tests, workspace typechecks, whitespace checks, and a multi-file fixture through the bundled running API. The Debug browser preview renders; physical-device GitHub authorization and interactive native use remain unverified.
 - Direct dependency audit remains 0 critical / 4 high. Installed parser guards pass their safety tests; node-forge remains unresolved. Secure saved-key storage and local embedded-secret warnings are separate proposed security work.
 - No EAS build or paid provider/search call was started. This new feature is in source/preview, not in the previously completed APK or IPA; shipping new native binaries requires separate approval.
+
+## iPhone AIs & Ears bridge test preparation
+- Confirmed the Terminal uses the front camera for AI image frames when Camera is enabled and sends frames about every three seconds; Hearing requests microphone permission and streams short audio chunks over the bridge WebSocket. The screen-capture control captures the app's terminal view, not the entire phone or background screen.
+- Updated iOS camera/microphone permission wording in the app manifest and Expo plugin settings; a local regression test checks the native and plugin permission strings.
+- Verified 44 regression tests and all workspace typechecks. No EAS build, live bridge request, or paid provider call was run. Existing TestFlight IPA is unchanged; testing it on an iPhone still needs hands-on device confirmation.

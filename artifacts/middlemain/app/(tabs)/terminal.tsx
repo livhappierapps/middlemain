@@ -2,6 +2,7 @@ import { Feather } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
+import { isLiquidGlassAvailable } from 'expo-glass-effect';
 import { router } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -17,6 +18,8 @@ import {
 import { captureRef } from 'react-native-view-shot';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AdBanner } from '@/components/AdBanner';
+import { BridgeCameraPreview } from '@/components/BridgeCameraPreview';
+import { bridgeBottomClearance } from '@/utils/bridgeVision';
 import { AICursorOverlay, CursorAction, parseCursorAction, stripCursorBlock } from '@/components/AICursorOverlay';
 import { NetworkStatusBar } from '@/components/NetworkStatusBar';
 import { NeonText } from '@/components/NeonText';
@@ -64,7 +67,6 @@ export default function TerminalScreen() {
     session,
   } = useAisAndEars();
   const insets = useSafeAreaInsets();
-  const [cameraGranted, setCameraGranted] = useState(false);
 
   const [input, setInput] = useState('');
   const [lines, setLines] = useState<TerminalLine[]>([
@@ -84,9 +86,7 @@ export default function TerminalScreen() {
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
   const scrollRef = useRef<ScrollView>(null);
-  const cameraRef = useRef<any>(null);
   const screenCaptureRef = useRef<View>(null);
-  const cameraIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const screenIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const controlIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const greetedConnsRef = useRef<Set<string>>(new Set());
@@ -116,40 +116,6 @@ export default function TerminalScreen() {
     });
     return unsub;
   }, [subscribe]);
-
-  // Camera capture interval
-  useEffect(() => {
-    if (cameraOn && session) {
-      if (!cameraGranted) {
-        ImagePicker.requestCameraPermissionsAsync().then((result) => {
-          setCameraGranted(result.granted);
-          if (!result.granted) {
-            appendLine({ type: 'error', content: 'Camera permission denied. Enable in Settings.' });
-          }
-        });
-      }
-      cameraIntervalRef.current = setInterval(async () => {
-        if (!cameraRef.current) return;
-        try {
-          const photo = await cameraRef.current.takePictureAsync({ base64: true, quality: 0.4 });
-          if (photo?.base64) {
-            await sendVisionFrame(`data:image/jpeg;base64,${photo.base64}`, 'camera');
-          }
-        } catch {}
-      }, VISION_INTERVAL_MS);
-    } else {
-      if (cameraIntervalRef.current) {
-        clearInterval(cameraIntervalRef.current);
-        cameraIntervalRef.current = null;
-      }
-    }
-    return () => {
-      if (cameraIntervalRef.current) {
-        clearInterval(cameraIntervalRef.current);
-        cameraIntervalRef.current = null;
-      }
-    };
-  }, [cameraOn, session, cameraGranted]);
 
   // Cursor control interval — direct Grok Vision, no AIs & Ears needed
   useEffect(() => {
@@ -217,7 +183,10 @@ export default function TerminalScreen() {
           if (base64) {
             await sendVisionFrame(`data:image/jpeg;base64,${base64}`, 'screen');
           }
-        } catch {}
+        } catch (error) {
+          appendLine({ type: 'error', content: error instanceof Error ? error.message : 'Screen image delivery failed.' });
+          if (screenIntervalRef.current) clearInterval(screenIntervalRef.current);
+        }
       }, VISION_INTERVAL_MS);
     } else {
       if (screenIntervalRef.current) {
@@ -485,6 +454,8 @@ export default function TerminalScreen() {
       style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
+      {/* Keep tab clearance on a child: iOS KeyboardAvoidingView overrides its own padding. */}
+      <View style={{ flex: 1, paddingBottom: bridgeBottomClearance(Platform.OS, isLiquidGlassAvailable(), insets.bottom) }}>
       {/* Header */}
       <View style={{ paddingTop: topInset + 10, paddingHorizontal: 16, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: theme.border, backgroundColor: theme.surface + 'E6' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
@@ -667,11 +638,11 @@ export default function TerminalScreen() {
         )}
       </View>
 
-      {/* Hidden CameraView for frame capture — native only */}
-      {Platform.OS !== 'web' && cameraOn && cameraGranted && (() => {
-        const NativeCameraView = (require('expo-camera') as typeof import('expo-camera')).CameraView;
-        return <NativeCameraView ref={cameraRef} facing="front" style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }} />;
-      })()}
+      {cameraOn && session && (Platform.OS === 'web' ? (
+        <Text style={{ color: theme.text, padding: 10 }}>Live camera testing requires the native iPhone or Android app.</Text>
+      ) : (
+        <BridgeCameraPreview sendFrame={sendVisionFrame} onError={message => appendLine({ type: 'error', content: message })} />
+      ))}
 
       {/* Terminal output — wrapped for screen capture */}
       <View
@@ -756,7 +727,7 @@ export default function TerminalScreen() {
       {/* Input bar */}
       <View style={{
         borderTopWidth: 1, borderTopColor: theme.border, backgroundColor: theme.surface + 'E6',
-        paddingBottom: Platform.OS === 'web' ? 34 : (insets.bottom > 0 ? insets.bottom : 10),
+        paddingBottom: 10,
         paddingTop: 10, paddingHorizontal: 12,
       }}>
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
@@ -825,6 +796,7 @@ export default function TerminalScreen() {
       </View>
 
       <AdBanner onUpgradePress={() => router.push('/(tabs)/settings')} />
+      </View>
     </KeyboardAvoidingView>
     </ThemedBackground>
   );

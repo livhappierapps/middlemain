@@ -1,5 +1,5 @@
 - [Middlemain project](middlemain.md) — Native Expo dev tool; key architecture decisions, theme system, AI proxy, and vision integration notes.
-- [AIs & Ears Bridge Protocol](ais-and-ears-bridge.md) — Vhis's 3-step HTTP+WS protocol for Leo's camera/screen/hearing senses in Middlemain terminal.
+- [AIs & Ears Bridge Protocol](ais-and-ears-bridge.md) — External media contract, distinct credentials, and local preview before potentially billable camera sends.
 - [pnpm lockfile overrides sync](pnpm-overrides-sync.md) — Root package.json must have pnpm.overrides matching pnpm-lock.yaml or EAS build frozen install fails.
 - [React type alignment](react-type-alignment.md) — Mixed web/native React typings can break ref assignments; align within the native SDK's supported range.
 - [EAS Xcode version](eas-xcode.md) — iOS production builds require `"image": "latest"` in eas.json to get Xcode 26+; omitting it causes build failure.

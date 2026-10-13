@@ -1,9 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { resilientFetch } from '@/utils/resilientFetch';
+import { fetch } from 'expo/fetch';
+import { deliverVisionFrame } from '@/utils/bridgeVision';
 
 const WS_PING_INTERVAL_MS = 15_000;
 const WS_PING_TIMEOUT_MS = 10_000;
@@ -49,7 +51,7 @@ interface AisAndEarsContextValue {
   toggleHearing: () => void;
   toggleCamera: () => void;
   toggleScreen: () => void;
-  sendVisionFrame: (imageData: string, source: 'camera' | 'screen') => Promise<string | null>;
+  sendVisionFrame: (imageData: string, source: 'camera' | 'screen', signal?: AbortSignal) => Promise<string | null>;
   subscribe: (cb: (msg: BridgeMessage) => void) => () => void;
 }
 
@@ -106,6 +108,7 @@ export function AisAndEarsProvider({ children }: { children: React.ReactNode }) 
   const shouldReconnectRef = useRef(false);
   const recordingRef = useRef<Audio.Recording | null>(null);
   const hearingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const audioGenerationRef = useRef(0);
   const listeners = useRef<Set<(msg: BridgeMessage) => void>>(new Set());
 
   const emit = useCallback((msg: BridgeMessage) => {
@@ -139,6 +142,7 @@ export function AisAndEarsProvider({ children }: { children: React.ReactNode }) 
   }, []);
 
   const stopAudio = useCallback(async () => {
+    audioGenerationRef.current += 1;
     if (hearingIntervalRef.current) {
       clearInterval(hearingIntervalRef.current);
       hearingIntervalRef.current = null;
@@ -267,50 +271,48 @@ export function AisAndEarsProvider({ children }: { children: React.ReactNode }) 
     }
   }, [config, emit, setupWebSocket]);
 
-  const sendVisionFrame = useCallback(async (imageData: string, source: 'camera' | 'screen'): Promise<string | null> => {
-    if (!session) return null;
-    try {
-      const res = await resilientFetch(
-        session.visionUrl,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sessionId: session.sessionId,
-            imageData,
-            prompt: source === 'screen' ? 'Describe what you see on this screen.' : 'What do you observe?',
-            isFirstFrame: false,
-          }),
-        },
-        { timeoutMs: 12_000, retries: 2, retryBaseMs: 800 },
-      );
-      if (!res.ok) return null;
-      const data = await res.json();
-      const msg = data.message ?? null;
-      if (msg) emit({ type: 'vision_response', content: msg, source });
-      return msg;
-    } catch {
-      return null;
-    }
+  const sendVisionFrame = useCallback(async (imageData: string, source: 'camera' | 'screen', signal?: AbortSignal): Promise<string | null> => {
+    if (!session) throw new Error('No active bridge session. Reconnect AIs & Ears in Connect.');
+    const message = await deliverVisionFrame(session, imageData, source, fetch, signal);
+    if (signal?.aborted) return null;
+    if (message) emit({ type: 'vision_response', content: message, source });
+    return message;
   }, [session, emit]);
 
   const startAudioChunks = useCallback(async () => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    const generation = audioGenerationRef.current;
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      emit({ type: 'bridge_error', content: 'Audio connection is not ready. Reconnect AIs & Ears before testing Hear.' });
+      return false;
+    }
     const { status: permStatus } = await Audio.requestPermissionsAsync();
+    if (generation !== audioGenerationRef.current) return false;
     if (permStatus !== 'granted') {
       emit({ type: 'bridge_error', content: 'Microphone permission denied.' });
-      return;
+      return false;
     }
     await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+    if (generation !== audioGenerationRef.current) return false;
 
     const recordChunk = async () => {
-      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+      if (generation !== audioGenerationRef.current || recordingRef.current ||
+          !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
       const rec = new Audio.Recording();
+      recordingRef.current = rec;
       try {
         await rec.prepareToRecordAsync(RECORDING_OPTIONS);
+        if (generation !== audioGenerationRef.current) {
+          try { await rec.stopAndUnloadAsync(); } catch {}
+          return;
+        }
         await rec.startAsync();
+        if (generation !== audioGenerationRef.current) {
+          try { await rec.stopAndUnloadAsync(); } catch {}
+          return;
+        }
         recordingRef.current = rec;
         await new Promise((r) => setTimeout(r, CHUNK_MS));
+        if (generation !== audioGenerationRef.current) return;
         await rec.stopAndUnloadAsync();
         recordingRef.current = null;
         const uri = rec.getURI();
@@ -318,17 +320,31 @@ export function AisAndEarsProvider({ children }: { children: React.ReactNode }) 
           const base64 = await FileSystem.readAsStringAsync(uri, {
             encoding: 'base64',
           });
+          if (generation !== audioGenerationRef.current) {
+            await FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
+            return;
+          }
           wsRef.current.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: base64 }));
           try { await FileSystem.deleteAsync(uri, { idempotent: true }); } catch {}
         }
       } catch {
+        try { await rec.stopAndUnloadAsync(); } catch {}
+        if (generation !== audioGenerationRef.current) return;
         recordingRef.current = null;
+        await stopAudio();
+        setHearingOn(false);
+        emit({ type: 'bridge_error', content: 'Microphone recording or delivery failed. Hearing has stopped; check permissions and the bridge connection before testing again.' });
+      } finally {
+        if (recordingRef.current === rec) recordingRef.current = null;
+        const uri = rec.getURI();
+        if (uri) await FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
       }
     };
 
     recordChunk();
     hearingIntervalRef.current = setInterval(recordChunk, CHUNK_MS + 200);
-  }, [emit]);
+    return true;
+  }, [emit, stopAudio]);
 
   const toggleHearing = useCallback(async () => {
     if (!session) { emit({ type: 'bridge_error', content: 'Connect to AIs & Ears first.' }); return; }
@@ -339,7 +355,13 @@ export function AisAndEarsProvider({ children }: { children: React.ReactNode }) 
     } else {
       setHearingOn(true);
       emit({ type: 'bridge_status', content: '🎤 Microphone on — audio is being sent to the selected AI.' });
-      await startAudioChunks();
+      try {
+        if (!await startAudioChunks()) setHearingOn(false);
+      } catch {
+        await stopAudio();
+        setHearingOn(false);
+        emit({ type: 'bridge_error', content: 'Could not start the microphone. Check microphone permissions in device Settings.' });
+      }
     }
   }, [hearingOn, session, stopAudio, startAudioChunks, emit]);
 
@@ -347,7 +369,7 @@ export function AisAndEarsProvider({ children }: { children: React.ReactNode }) 
     if (!session) { emit({ type: 'bridge_error', content: 'Connect to AIs & Ears first.' }); return; }
     setCameraOn((v) => {
       const next = !v;
-      emit({ type: 'bridge_status', content: next ? '👁 Camera on — images are being shared with the selected AI.' : '👁 Camera off.' });
+      emit({ type: 'bridge_status', content: next ? 'Camera preview on — nothing sent yet. Use Send one frame to test or explicitly start live sharing.' : 'Camera off — no new frames will be sent.' });
       return next;
     });
   }, [session, emit]);

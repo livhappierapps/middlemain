@@ -53,7 +53,7 @@ The user supplies an external bridge app URL, bridge API key, and session durati
 
 Connect sends a POST request to the configured service's `/api/bridge/session`. The service returns a session identifier, WebSocket address, vision address, and expiry. The default requested duration is 30 minutes.
 
-Hearing sends microphone recording chunks through the session WebSocket. Camera sends captured images to the session vision endpoint. Screen sends images of a referenced in-app view using `react-native-view-shot`; this is not proof of whole-phone or other-app screen capture. Camera and screen capture intervals are approximately three seconds while enabled.
+Hearing sends microphone recording chunks through the session WebSocket. Camera opens a visible front-camera preview without uploading; users explicitly confirm a single frame or live sharing to the session vision endpoint. Live camera requests are sequential, with three seconds between a completed request and the next capture; failures pause sharing and uploads are not automatically retried. Leaving Bridge or backgrounding the app stops camera uploads. Cancellation cannot recall an already-delivered image. Screen sends images of a referenced in-app view using `react-native-view-shot` approximately every three seconds while enabled; this is not proof of whole-phone or other-app screen capture.
 
 Camera, hearing, screen, and control have separate user toggles. Camera/microphone use device permission prompts. Disconnect stops local streaming, closes the WebSocket, clears the local session, and turns off the local toggles. The inspected client does not send a server-side session-revocation request; it receives a server-reported expiry.
 

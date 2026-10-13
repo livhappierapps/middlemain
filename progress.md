@@ -42,3 +42,11 @@
 - Confirmed the Terminal uses the front camera for AI image frames when Camera is enabled and sends frames about every three seconds; Hearing requests microphone permission and streams short audio chunks over the bridge WebSocket. The screen-capture control captures the app's terminal view, not the entire phone or background screen.
 - Updated iOS camera/microphone permission wording in the app manifest and Expo plugin settings; a local regression test checks the native and plugin permission strings.
 - Verified 44 regression tests and all workspace typechecks. No EAS build, live bridge request, or paid provider call was run. Existing TestFlight IPA is unchanged; testing it on an iPhone still needs hands-on device confirmation.
+
+## Camera delivery feedback and bounded testing
+- Replaced the hidden camera capture with a visible front-camera preview, an in-memory last-frame thumbnail, and explicit single-frame or live send controls. Preview alone sends no images; sending asks about possible bridge/provider charges.
+- Added safe HTTP/network/timeout diagnostics, no automatic vision retries, and distinct accepted-without-description feedback. Live camera requests are sequential and stop on failure, navigation away, or backgrounding. Cancellation cannot recall an already-received image.
+- Reserved bottom-tab clearance outside the iOS keyboard-avoidance padding so the Bridge footer does not intentionally sit under the menu.
+- Corrected AIs & Ears microphone file operations to use the supported SDK 54 legacy API; recording/delivery errors stop Hearing and are visible. Cancelled chunks are gated against further sends. This does not verify the external bridge's audio-format compatibility.
+- Updated and synchronized the user guide and non-secret integration summary. The full suite passed 56 tests and all workspace typechecks; after the final layout adjustment, all 12 focused camera tests and the native app typecheck passed again. The Bridge browser preview rendered with its composer and ad controls above the tab bar. Native camera, microphone, and TestFlight behavior still require a device test on a newly built version.
+- No live bridge/AI request, new native build, or submission was started. Existing installed APK/IPA versions do not contain these changes.

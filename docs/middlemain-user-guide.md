@@ -35,6 +35,10 @@ In Connect, open the AIs & Ears card, enter your bridge service URL, your own br
 
 After connecting, Bridge's microphone/hearing, camera/vision, screen-sharing, and control controls enable supported remote capabilities. Grant only the permissions you intend to use. Device/OS support differs; native screen capture is not equivalent to a browser tab capture. Stop capture when you finish.
 
+Camera testing: tap **Cam** to open a front-camera preview. Opening the preview does not upload a frame. Tap **Send one frame**, then confirm the possible bridge/provider charge. A local thumbnail and status distinguish capture, upload, acceptance, missing AI description, and failure. An accepted request does not prove that the AI understood the image. No automatic upload retry is made.
+
+**Start live** is a separate, explicitly confirmed action. It sends the next frame three seconds after the preceding request finishes, never in parallel. Stop live, turn Cam off, leave Bridge, or background the app to stop further camera requests. Errors or an accepted frame without an AI description pause live sharing. Cancelling cannot recall a frame already received by the bridge. Thumbnails stay only in memory; the temporary camera file is deleted on a best-effort basis.
+
 Tips: use HTTPS for remote services and avoid displaying password managers, private notifications, or financial details while sharing. Bridge availability and any charges belong to the separate bridge service. If an old shared key was exposed, its owner must rotate it at that service; deleting it locally is not revocation.
 
 ## Memory Bridge and advertised MCP tools

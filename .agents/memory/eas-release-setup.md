@@ -21,6 +21,12 @@ Validate the ASC key cryptographically and look up the exact bundle identifier's
 
 **How to apply:** Normalize only parseable PKCS#8 material into a private temporary file, require Apple's EC P-256 format, and perform a read-only app lookup first. Creating the App Store record and choosing a certificate revocation still require the creator's action or specific approval.
 
+Check the project's EAS build history and current GitHub release changes before retrying a failed build or declaring that no installable artifact exists.
+
+**Why:** A stale main workspace can submit an older broken configuration even after a separate release worker has produced both binaries and pushed the fixes. Looking only at the newest failed attempt can lead to an unnecessary paid rebuild.
+
+**How to apply:** Compare finished builds with failed attempts, verify existing download URLs, and reconcile completed release fixes without overwriting ongoing work. Keep physical-device testing and store approval separate from build completion.
+
 Prefer EAS-managed signing for Middlemain's iOS release.
 
 **Why:** The user explicitly selected EAS signing.

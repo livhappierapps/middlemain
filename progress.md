@@ -24,3 +24,9 @@
 - Publish the updated backend/download manifest and verify APK bytes through the production proxy.
 - The publisher's privacy URL still rendered a 404 at the last check; website policy and public App Store metadata/review remain separate work.
 - External bridge-key rotation and native-device validation remain required; do not claim scans certify all runtime paths.
+
+## Workspace reconciliation and current checks
+- Reconciled the completed GitHub release changes into this workspace, preserving the Sable integration handoff. The later failed Android attempt used the older configuration without the pnpm pin; it did not replace the earlier completed APK or IPA.
+- Both completed artifact URLs returned HTTP 200. No additional EAS build, submission, or paid-provider request was started during this reconciliation.
+- Rechecked the frozen install with pnpm 10.26.1, all 33 regression tests, all workspace typechecks, and Git whitespace checks successfully.
+- Restarted the API and Expo workflows. The home screen rendered in the mobile-size browser preview; Expo AV deprecation and the previously observed HTTP 415 resource warning remain. This does not verify installation or GitHub device authorization on a physical phone.

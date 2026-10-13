@@ -30,7 +30,7 @@ Manual review also found and repaired unauthenticated owner-funded Grok access a
 
 ## Scope limits
 
-The final static-code scan reported no findings and was not incomplete. The privacy/dataflow scan reported no findings. Thirty-three regression tests, frozen install, native typecheck, and clean local iOS prebuild passed. Earlier workspace checks, API build, and local platform exports also passed. These are not successful iOS EAS builds/submissions or native-device tests.
+The previously run static-code scan reported no findings and was not incomplete. The privacy/dataflow scan reported no findings. Thirty-three regression tests, frozen install, native typecheck, and clean local iOS prebuild passed. Earlier workspace checks, API build, and local platform exports also passed. These local checks do not substitute for native-device tests. EAS build and Apple upload outcomes are recorded separately below.
 
 ASC authentication, the matching App Store record, and EAS signing are verified. After builder-version/XML compatibility fixes and additional approval, iOS production version 1.2.0 build 1 completed, uploaded successfully, and reached Apple's VALID processing state. The updated Android APK also completed and its canonical URL returned 200. The new download manifest still needs backend publication and production-proxy verification. The publisher's privacy URL still rendered 404 at the last check.
 

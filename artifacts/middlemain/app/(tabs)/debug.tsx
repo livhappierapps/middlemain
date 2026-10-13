@@ -98,6 +98,7 @@ export default function DebugScreen() {
   const abortRef = useRef<AbortController | null>(null);
   const dryAbortRef = useRef<AbortController | null>(null);
   const [sourceLabel, setSourceLabel] = useState('');
+  const [repositoryBusy, setRepositoryBusy] = useState(false);
   const [connectionId, setConnectionId] = useState('');
   const [paidConsent, setPaidConsent] = useState(false);
   const ownConnections = connections.filter(c => c.provider !== 'server');
@@ -126,7 +127,7 @@ export default function DebugScreen() {
       Alert.alert('Nothing to analyze', 'Paste some code first.');
       return;
     }
-    if (isAnalyzing || isDryRunning || !analysisConnection || !paidConsent) return;
+    if (isAnalyzing || isDryRunning || repositoryBusy || !analysisConnection || !paidConsent) return;
     if (code.length > 60_000) { setResult('Select a smaller section (up to 60,000 characters) for AI review to limit provider usage. The free source check can still inspect this file.'); return; }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setIsAnalyzing(true);
@@ -145,7 +146,7 @@ export default function DebugScreen() {
       abortRef.current = null;
       setIsAnalyzing(false);
     }
-  }, [code, mode, analysisConnection, paidConsent, isAnalyzing, isDryRunning]);
+  }, [code, mode, analysisConnection, paidConsent, isAnalyzing, isDryRunning, repositoryBusy]);
 
   const handleStop = useCallback(() => {
     abortRef.current?.abort();
@@ -183,7 +184,7 @@ export default function DebugScreen() {
   // ── Dry Run (real TypeScript compiler) ────────────────────────────────────
 
   const handleDryRun = useCallback(async () => {
-    if (isDryRunning || isAnalyzing) return;
+    if (isDryRunning || isAnalyzing || repositoryBusy) return;
     if (!code.trim()) {
       Alert.alert('Nothing to check', 'Paste some code first.');
       return;
@@ -236,7 +237,7 @@ export default function DebugScreen() {
       dryAbortRef.current = null;
       setIsDryRunning(false);
     }
-  }, [code, mode, isDryRunning, isAnalyzing]);
+  }, [code, mode, isDryRunning, isAnalyzing, repositoryBusy]);
 
   const handleCopyDryRun = useCallback(async () => {
     if (!dryRunResult) return;
@@ -438,6 +439,7 @@ export default function DebugScreen() {
 
           <View pointerEvents={isAnalyzing || isDryRunning ? 'none' : 'auto'}>
             <RepositoryPicker
+              onBusyChange={setRepositoryBusy}
               onSelect={(source, label) => { setCode(source); setSourceLabel(label); setResult(''); setDryRunResult(null); setPaidConsent(false); const path = label.split(' · ')[2] ?? ''; setMode(/\.json$/.test(path) ? 'json' : /\.jsx?$/.test(path) ? 'javascript' : 'expo'); }}
               onReset={() => { setCode(''); setSourceLabel(''); setResult(''); setDryRunResult(null); setPaidConsent(false); }}
             />
@@ -483,7 +485,7 @@ export default function DebugScreen() {
               style={S.codeBox}
               value={code}
               onChangeText={v => { setCode(v); setPaidConsent(false); setResult(''); setDryRunResult(null); }}
-              editable={!isAnalyzing && !isDryRunning}
+              editable={!isAnalyzing && !isDryRunning && !repositoryBusy}
               accessibilityLabel="Source code to inspect"
               multiline
               maxLength={300_000}
@@ -519,7 +521,7 @@ export default function DebugScreen() {
             <TouchableOpacity
               style={[S.analyzeBtn, { flex: 1, marginHorizontal: 0, marginBottom: 0, opacity: !isAnalyzing && (!code.trim() || isDryRunning || !analysisConnection || !paidConsent) ? 0.45 : 1 }]}
               onPress={isAnalyzing ? handleStop : handleAnalyze}
-              disabled={!isAnalyzing && (!code.trim() || isDryRunning || !analysisConnection || !paidConsent)}
+              disabled={!isAnalyzing && (!code.trim() || isDryRunning || repositoryBusy || !analysisConnection || !paidConsent)}
               accessibilityRole="button"
               activeOpacity={0.8}
             >
@@ -552,7 +554,7 @@ export default function DebugScreen() {
               }}
               onPress={isDryRunning ? undefined : handleDryRun}
               activeOpacity={0.8}
-              disabled={isDryRunning || isAnalyzing || !code.trim()}
+              disabled={isDryRunning || isAnalyzing || repositoryBusy || !code.trim()}
             >
               {isDryRunning ? (
                 <>

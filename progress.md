@@ -30,3 +30,10 @@
 - Both completed artifact URLs returned HTTP 200. No additional EAS build, submission, or paid-provider request was started during this reconciliation.
 - Rechecked the frozen install with pnpm 10.26.1, all 33 regression tests, all workspace typechecks, and Git whitespace checks successfully.
 - Restarted the API and Expo workflows. The home screen rendered in the mobile-size browser preview; Expo AV deprecation and the previously observed HTTP 415 resource warning remain. This does not verify installation or GitHub device authorization on a physical phone.
+
+## Bounded repository preflight
+- Added commit-pinned repository snapshot retrieval and a preflight report in Debug, with explicit file/byte limits, partial coverage, categorized findings, and native checks not run.
+- Repository code, hooks, plugins and external configuration inheritance are not executed. Trusted compiler workers use a restricted virtual filesystem, bounded heap/concurrency/deadline, cancellation and cleanup; source is not persisted by the preflight.
+- Verified 43 regression tests, workspace typechecks, whitespace checks, and a multi-file fixture through the bundled running API. The Debug browser preview renders; physical-device GitHub authorization and interactive native use remain unverified.
+- Direct dependency audit remains 0 critical / 4 high. Installed parser guards pass their safety tests; node-forge remains unresolved. Secure saved-key storage and local embedded-secret warnings are separate proposed security work.
+- No EAS build or paid provider/search call was started. This new feature is in source/preview, not in the previously completed APK or IPA; shipping new native binaries requires separate approval.

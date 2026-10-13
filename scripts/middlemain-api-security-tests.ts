@@ -168,3 +168,24 @@ test('archive URLs and limiter reject unsafe destinations and excessive callers'
   assert.equal(status, 429);
   assert.ok(Number(retryAfter) > 0);
 });
+
+test('repository preflight API checks a bounded snapshot and rejects unsafe paths without paid requests', async () => {
+  const source = {
+    owner: 'fixture', repo: 'app', branch: 'main', commit: 'a'.repeat(40), partial: false, totalFiles: 2,
+    observedPaths: ['package.json', 'src/main.ts', 'pnpm-lock.yaml'],
+    files: [{ path: 'package.json', content: '{"name":"fixture"}' }, { path: 'src/main.ts', content: 'const wrong: string = 42;' }],
+  };
+  const before = providerCalls;
+  const response = await fetch(base + '/debug/repository-preflight', { method: 'POST',
+    headers: { 'content-type': 'application/json' }, body: JSON.stringify(source) });
+  assert.equal(response.status, 200);
+  const report = await response.json();
+  assert.equal(report.commit, source.commit);
+  assert.ok(report.findings.syntaxTypes.some((f: { code: string }) => f.code === 'TS2322'));
+  assert.match(report.summary, /never guarantees/);
+  const unsafe = await fetch(base + '/debug/repository-preflight', { method: 'POST',
+    headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...source, files: [{ path: '../escape.ts', content: '' }] }) });
+  assert.equal(unsafe.status, 400);
+  assert.ok(!(await unsafe.text()).includes('/home/'));
+  assert.equal(providerCalls, before);
+});

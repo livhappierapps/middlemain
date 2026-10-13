@@ -33,6 +33,8 @@ Enabled camera, audio, or screen content is sent to your configured bridge servi
 5. GITHUB, MEMORY, AND WEBHOOK CONNECTIONS
 These connections exchange authorization information and selected repository or conversation content with their configured services. Council webhook digests can include participant names and messages. Review a destination before sending private content.
 
+Debug source checks also send the selected file or bounded repository snapshot to the publisher's API. Repository preflight processes source in memory and does not persist repository files; its worker is terminated after completion, cancellation or timeout. The separate single-file check uses temporary files which are removed after the check. GitHub authorization is not included in the repository preflight upload. Filename filters do not detect every embedded secret; review source before sending it.
+
 6. REPORTS AND NETWORK INFORMATION
 Optional bug reports can send the report text and app/version details. Hosting and connected services process network/request information, including IP addresses. Do not include secrets or other people's personal information in a report.
 

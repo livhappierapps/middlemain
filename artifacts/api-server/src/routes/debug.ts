@@ -6,12 +6,31 @@ import { join } from "path";
 import { tmpdir } from "os";
 import { promisify } from "util";
 import { logger } from "../lib/logger";
+import { runRepositoryPreflight, PreflightError } from "../lib/repositoryPreflight";
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);
 const debugRouter = Router();
 let activeChecks = 0;
+
+debugRouter.post("/debug/repository-preflight", async (req: Request, res: Response) => {
+  const controller = new AbortController();
+  const cancelled = () => { if (!res.writableEnded) controller.abort(); };
+  req.once("aborted", cancelled);
+  res.once("close", cancelled);
+  try {
+    const result = await runRepositoryPreflight(req.body, { signal: controller.signal });
+    logger.info({ status: result.status, files: result.coverage.receivedFiles, durationMs: result.durationMs }, "Repository source preflight complete");
+    if (!res.destroyed) res.json(result);
+  } catch (error) {
+    const known = error instanceof PreflightError;
+    if (!res.destroyed) res.status(known ? error.status : 500).json({ error: known ? error.message : "Repository preflight failed." });
+  } finally {
+    req.off("aborted", cancelled);
+    res.off("close", cancelled);
+  }
+});
 
 // Use the workspace-root tsc and middlemain's @types for full React Native awareness
 const TYPE_ROOTS = join(process.cwd(), "../middlemain/node_modules/@types");

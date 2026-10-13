@@ -10,3 +10,4 @@
 - [Git provider authorization](git-provider-authorization.md) — Healthy account status can coexist with rejected Git credentials; connector reconnect cards may not apply.
 - [Private developer edition](developer-edition.md) — Public release first; owner-only Dev’s Crash Pad, Council participation, and approval-controlled Dev/Leo tools afterward.
 - [pnpm patch cache](pnpm-patch-cache.md) — Verify installed safety guards, not just patch hashes; a forced frozen install can repair stale patched-package contents.
+- [Untrusted preflight](untrusted-preflight-security.md) — Repository checks must not become project runners; validate worker behavior through the actual API bundle.

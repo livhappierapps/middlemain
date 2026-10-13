@@ -6,7 +6,19 @@ export const GITHUB_INSTALL_URL = process.env.EXPO_PUBLIC_GITHUB_APP_SLUG
   : 'https://github.com/settings/installations';
 
 export interface RepoFile { path: string; size: number; sha: string }
-export interface RepoListing { owner: string; repo: string; branch: string; commit: string; files: RepoFile[]; partial: boolean; totalFiles: number }
+export interface RepoListing { owner: string; repo: string; branch: string; commit: string; files: RepoFile[]; partial: boolean; totalFiles: number; observedPaths?: string[] }
+export interface RepoSnapshot {
+  owner: string; repo: string; branch: string; commit: string;
+  files: { path: string; content: string }[];
+  observedPaths: string[]; partial: boolean; totalFiles: number;
+}
+export interface PreflightFinding { severity: 'error' | 'warning' | 'info'; code: string; message: string; path?: string; line?: number; col?: number }
+export interface RepoPreflightReport {
+  repository: string; branch: string; commit: string; partial: boolean; status: string;
+  summary: string; durationMs: number;
+  coverage: { receivedFiles: number; checkedSourceFiles: number; totalFiles: number; bytes: number };
+  findings: { syntaxTypes: PreflightFinding[]; dependencies: PreflightFinding[]; configuration: PreflightFinding[]; native: PreflightFinding[] };
+}
 export interface DeviceCode { device_code: string; user_code: string; verification_uri: string; expires_in: number; interval: number }
 
 export function parseRepoUrl(value: string): { owner: string; repo: string } {
@@ -68,17 +80,84 @@ export async function listRepo(url: string, branch: string, token: string, signa
   const ref = branch.trim() || metadata.default_branch;
   const commit = await githubGet(`${base}/commits/${encodeURIComponent(ref)}`, token, signal);
   const tree = await githubGet(`${base}/git/trees/${encodeURIComponent(commit.commit.tree.sha)}?recursive=1`, token, signal);
-  const allowed = (tree.tree ?? []).filter((f: any) => f.type === 'blob' && /\.(?:tsx?|jsx?|json)$/i.test(f.path) &&
+  const safe = (tree.tree ?? []).filter((f: any) => f.type === 'blob' && f.mode !== '120000' && typeof f.path === 'string' &&
+    f.path.length <= 300 && !/[\\\x00-\x1f:]/.test(f.path) && f.path.split('/').every((s: string) => s && s !== '.' && s !== '..') &&
     !/(^|\/)(node_modules|dist|build|\.expo|vendor|coverage|\.git)(\/|$)/.test(f.path) &&
-    !/(credential|secret|private[-_]?key|service[-_]?account|package-lock|tsconfig\.tsbuildinfo)/i.test(f.path) &&
+    !/(credential|secret|private[-_]?key|service[-_]?account|(^|\/)\.env)/i.test(f.path));
+  const supported = safe.filter((f: any) => /\.(?:[cm]?[jt]sx?|json)$/i.test(f.path) && !/(package-lock|tsconfig\.tsbuildinfo)/i.test(f.path));
+  const allowed = supported.filter((f: any) =>
     f.size <= 150_000 && typeof f.sha === 'string');
-  return { owner, repo, branch: ref, commit: commit.sha, files: allowed.slice(0, 300), totalFiles: allowed.length, partial: !!tree.truncated || allowed.length > 300 };
+  return { owner, repo, branch: ref, commit: commit.sha, files: allowed.slice(0, 300), totalFiles: supported.length,
+    observedPaths: safe.slice(0, 1000).map((f: any) => f.path),
+    partial: !!tree.truncated || safe.length > 1000 || allowed.length > 300 || allowed.length < supported.length };
 }
 
 export async function loadRepoFile(list: RepoListing, file: RepoFile, token: string, signal: AbortSignal): Promise<string> {
   if (!list.files.some(f => f.path === file.path && f.sha === file.sha)) throw new Error('Choose a file from the loaded repository.');
   const path = file.path.split('/').map(encodeURIComponent).join('/');
   return githubGet(`/repos/${encodeURIComponent(list.owner)}/${encodeURIComponent(list.repo)}/contents/${path}?ref=${encodeURIComponent(list.commit)}`, token, signal, true, 150_000);
+}
+
+/** Bounded downloads only; never clone, install, or execute a repository. */
+export async function loadRepoSnapshot(list: RepoListing, token: string, signal: AbortSignal): Promise<RepoSnapshot> {
+  const selected: RepoFile[] = [];
+  let reserved = 0;
+  const ordered = [...list.files].sort((a, b) => {
+    const priority = (p: string) => /(^|\/)(package|eas|app|tsconfig[^/]*|jsconfig[^/]*)\.json$/.test(p) ? 0 : 1;
+    return priority(a.path) - priority(b.path) || a.path.localeCompare(b.path);
+  });
+  for (const file of ordered) {
+    if (selected.length >= 60 || reserved + file.size > 220_000) continue;
+    selected.push(file); reserved += file.size;
+  }
+  const files: RepoSnapshot['files'] = [];
+  let index = 0;
+  let bytes = 0;
+  let partial = list.partial || selected.length < list.totalFiles;
+  async function download() {
+    while (index < selected.length) {
+      if (signal.aborted) throw new Error('Repository preflight cancelled or timed out.');
+      const file = selected[index++];
+      try {
+        const content = await loadRepoFile(list, file, token, signal);
+        const size = new TextEncoder().encode(content).length;
+        if (bytes + size > 220_000) { partial = true; continue; }
+        bytes += size;
+        files.push({ path: file.path, content });
+      } catch (error) {
+        if (signal.aborted) throw error;
+        partial = true; // A failed file cannot turn the rest of the snapshot into a pass.
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(3, selected.length) }, download));
+  if (!files.length) throw new Error('No source files could be loaded for preflight. Check GitHub authorization and repository size.');
+  return { owner: list.owner, repo: list.repo, branch: list.branch, commit: list.commit,
+    files: files.sort((a, b) => a.path.localeCompare(b.path)),
+    observedPaths: list.observedPaths ?? list.files.map(f => f.path), totalFiles: list.totalFiles, partial };
+}
+
+export async function requestRepoPreflight(snapshot: RepoSnapshot, signal: AbortSignal): Promise<RepoPreflightReport> {
+  const domain = process.env.EXPO_PUBLIC_DOMAIN;
+  if (!domain) throw new Error('The source-check API is not configured in this build.');
+  // Explicit allowlist: session fields must never hitchhike on the source upload.
+  const body = JSON.stringify({
+    owner: snapshot.owner, repo: snapshot.repo, branch: snapshot.branch, commit: snapshot.commit,
+    files: snapshot.files.map(f => ({ path: f.path, content: f.content })),
+    observedPaths: snapshot.observedPaths, totalFiles: snapshot.totalFiles, partial: snapshot.partial,
+  });
+  if (new TextEncoder().encode(body).length > 390_000) throw new Error('Encoded snapshot is too large. Select a smaller repository or branch.');
+  const response = await fetch(`https://${domain}/api/debug/repository-preflight`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal, redirect: 'error',
+  });
+  const result = JSON.parse(await readLimited(response, 200_000));
+  if (!response.ok) throw new Error(result.error ?? `Repository preflight failed (${response.status}).`);
+  if (result.commit !== snapshot.commit || result.branch !== snapshot.branch || typeof result.status !== 'string' ||
+      typeof result.summary !== 'string' || !result.coverage ||
+      !['syntaxTypes', 'dependencies', 'configuration', 'native'].every(key => Array.isArray(result.findings?.[key]))) {
+    throw new Error('The API returned an invalid or mismatched preflight report.');
+  }
+  return result;
 }
 
 async function githubDevice(path: string, body: Record<string, string>, signal: AbortSignal): Promise<any> {

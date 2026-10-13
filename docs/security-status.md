@@ -37,3 +37,9 @@ ASC authentication, the matching App Store record, and EAS signing are verified.
 The Guide's question composer is visible in the preview after the tab-overlap fix. The development console still reports Expo AV deprecation and an unidentified HTTP 415 resource warning. Assets rendered correctly on the settled preview, but native-device behavior remains unverified.
 
 Static/privacy scans do not inspect all historical Git objects, remote provider settings, device backups, native OS behavior, App Store metadata, or every runtime path. No paid AI requests are used as tests. The RSA-tooling advisory, external key rotation, production deployment, room host controls, and native validation must not be hidden behind a “clean security scan” claim.
+
+## Repository preflight security boundary
+
+A fresh direct registry audit still reports four high findings and zero critical findings. Installed image-size and braces malformed-input safety tests pass; version-based findings remain visible. The node-forge advisory still lists no patched release. Dependency inspection places it in Expo/EAS tooling, not the API server's dependency graph; that does not make the signing-toolchain finding fixed.
+
+The new repository preflight never executes uploaded code, installs dependencies, runs package hooks, or loads repository compiler plugins. Its compiler reads supplied virtual files and trusted compiler standard libraries only. Source/file/output limits, two-worker concurrency, worker heap limits, timeouts, cancellation and cleanup are enforced. Uploaded source is not persisted by this checker; request logs contain counts/status, not source or GitHub tokens. Physical-device behavior, embedded-secret detection, secure storage of saved connector credentials and external key revocation still need separate verification/remediation.

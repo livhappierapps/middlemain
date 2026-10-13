@@ -6,6 +6,14 @@ Debug accepts an HTTPS GitHub repository URL, with an optional branch. It lists 
 
 Dry Run checks the selected JS/TS file with the server's TypeScript compiler, or validates JSON locally. It does **not** follow source imports/reference paths, install the repository's dependencies, execute repository scripts, start EAS, or prove that a native build will pass. Missing project dependencies and imports can appear as diagnostics in an isolated-file check.
 
+After loading a repository, **Repository preflight — no AI / EAS calls** checks a bounded source snapshot at the displayed branch and full commit. It sends source to Middlemain's API, not an AI provider; the GitHub token is not included. Review source for embedded credentials before uploading—filename filtering is not a secret scan.
+
+The importer downloads at most 60 files and 220 KB of source, with at most three GitHub file requests at once. The server runs at most two isolated workers, each with a 128 MB old-generation JavaScript heap limit and a 15-second deadline. Cancel/disconnect, timeout, memory failure, filtered/omitted files and capped findings never become a complete pass. Workers are terminated and slots released; repository files are kept in a virtual filesystem, not written to disk.
+
+Reports separate syntax/type findings, missing or unverified dependencies/imports, configuration concerns, and checks not performed. Supplied local imports can resolve; third-party dependencies and typings are not installed, so declared-package diagnostics may be inconclusive. The compiler uses safe fixed options, ignores repository plugins/external config inheritance, and can read only supplied virtual files and the trusted installed compiler's standard libraries. It cannot follow a source reference into server files. Package hooks, repository scripts, native plugins and repository code are never executed.
+
+Even **NO DEFINITE SOURCE ERRORS** is not an EAS/native-build guarantee. Unsupported languages/assets, lockfile consistency, package installation/version compatibility, signing, native configuration/toolchains, device permissions and store readiness remain unverified. A partial report must be reviewed together with the displayed coverage.
+
 AI Analyze uses the customer's own saved provider connection, never the owner's server credits. It requires an explicit consent checkbox, limits source to 60,000 characters and output to 2,048 tokens, sends one request, and does not automatically retry. A stopped or timed-out request may already have incurred a provider charge. Review private source for secrets before sending it to any AI.
 
 GitHub imports have a 30-second request timeout, a 3 MB metadata response limit, and a 150 KB selected-file limit. Generated folders, large files, and obvious credential filenames are skipped. Results may be partial. Compiler checks are capped at two concurrent requests and cannot report success when the compiler fails to complete.

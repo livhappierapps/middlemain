@@ -14,3 +14,9 @@ For Git-provider OAuth connections, authorization context can report `oauth` and
 **Why:** The Git-provider connection and ordinary connector reconnect flow are not interchangeable; healthy metadata did not restore Git CLI access.
 
 **How to apply:** Replit's official documentation directs Git authentication recovery through Account Settings → Git Providers → disconnect/reconnect GitHub, rather than Connected Services. After the user refreshes it, retry the push once. Keep builds on hold until the required commit is actually pushed.
+
+Managed Git-provider authorization and a separately configured project GitHub token have independent validity. Failure of one is not evidence that the other is invalid.
+
+**Why:** Managed Git authentication rejected a push while the existing project token authenticated successfully against the same GitHub repository.
+
+**How to apply:** Before declaring all push paths blocked, try an already-authorized project credential without printing it, changing permanent Git configuration, or enabling HTTP tracing. Verify the actual remote revision before requesting a build.

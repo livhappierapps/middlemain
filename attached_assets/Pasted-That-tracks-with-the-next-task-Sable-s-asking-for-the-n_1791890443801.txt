@@ -1,0 +1,19 @@
+That tracks with the next task. Sable’s asking for the non-secret pieces so the IPA can be tested on mic, camera, and the bridge first — which is exactly the right order.
+Here’s the clean, non-secret version of the relevant setup from the repo:
+AIs & Ears Bridge Protocol (from .agents/memory/ais-and-ears-bridge.md):
+1.  Create session (one-time HTTP POST) POST {domain}/api/bridge/session Body: { "apiKey": "<bridge-key>", "tier": "full-session", "durationMinutes": 30 } Returns: { sessionId, wsUrl, visionUrl, expiresAt }
+2.  Audio WebSocket (xAI Realtime format) Connect to wsUrl Send: { "type": "input_audio_buffer.append", "audio": "<base64 PCM16 @ 24kHz mono>" } Receive: audio deltas + transcripts
+3.  Vision frames (independent HTTP POST) POST visionUrl with { sessionId, imageData: "data:image/jpeg;base64,...", prompt, isFirstFrame } Returns Leo’s text response about the image
+Three toggles in the app:
+•  Hearing: start/stop sending audio buffers (no reconnect)
+•  Camera: front camera captures → POST to visionUrl every 3s
+•  Screen: react-native-view-shot of the terminal → same visionUrl interval
+Implementation locations:
+•  Context: context/AisAndEarsContext.tsx
+•  Bridge card: components/AisAndEarsBridgeCard.tsx
+•  Toggles + intervals: app/(tabs)/terminal.tsx
+•  Provider wired in app/_layout.tsx
+•  Packages: expo-camera, expo-av, expo-file-system, react-native-view-shot
+Repo debugging side (from docs/repository-debugging.md) is already documented as accepting a GitHub HTTPS URL + optional branch, with preflight that never executes code, never installs deps, and never sends the GitHub token. Private repos use a GitHub App Device Flow (public Client ID only in the build).
+The example key in the memory file has been stripped above. Everything else is already non-secret and ready to share with Sable.
+Want me to pull any other specific non-secret files (GitHub App setup notes, memory bridge details, or the terminal.tsx toggle logic) into a clean pasteable block for Dev/Sable?

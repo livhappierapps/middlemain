@@ -39,3 +39,17 @@ mtime_ms = 1791428531136
 storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:c619b4d5-e3ec-47d4-a952-2fd41395511e/2bc9d0fd-0814-4969-858f-bddbfb0edd4b/d39327a4-11bf-4850-b082-dce93a03d895"
 storage_version_token = "1791428603855589"
 content_type = "application/octet-stream"
+
+[[outputs]]
+id = "L1yDoJFUk-igDvKzCAuSH"
+uri = "file://docs/sable-integration-summary.md"
+type = "text"
+title = "Middlemain integration details for Sable"
+description = "Non-secret source paths, GitHub authorization, Memory Bridge behavior, camera/microphone/screen bridge configuration, and revocation limits."
+logical_id = "ca274ca2-d822-4abb-8e52-470b0d6088e1"
+content_hash = "sha256:b143afa10e9a89eeaa5b2876c3313590604bb2f51ac510950239bd36f417b30b"
+size = 5745
+mtime_ms = 1791849952959
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:c619b4d5-e3ec-47d4-a952-2fd41395511e/ca274ca2-d822-4abb-8e52-470b0d6088e1/221ad59c-3fdf-4bd1-8daa-d2adb6ce8fb0"
+storage_version_token = "1791849960378112"
+content_type = "text/markdown"

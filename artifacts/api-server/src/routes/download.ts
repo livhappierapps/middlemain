@@ -49,6 +49,7 @@ async function lookupApk(): Promise<string> {
 export function validateArchiveUrl(value: string): URL {
   const url = new URL(value);
   const allowed = url.hostname === "expo.dev" || url.hostname === "storage.googleapis.com" ||
+    url.hostname === "wf-artifacts.eascdn.net" ||
     url.hostname.endsWith(".expo.dev") || url.hostname.endsWith(".storage.googleapis.com");
   if (url.protocol !== "https:" || url.username || url.password || url.port || !allowed) {
     throw new Error("Untrusted archive location");

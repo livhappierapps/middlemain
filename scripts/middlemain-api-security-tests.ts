@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import type { Request, Response } from 'express';
 import { createRateLimiter } from '../artifacts/api-server/src/lib/security';
 import { validateArchiveUrl } from '../artifacts/api-server/src/routes/download';
+import { ANDROID_APK_URL } from '../artifacts/api-server/src/lib/androidRelease';
 
 const key = randomUUID();
 const testDir = mkdtempSync(join(tmpdir(), 'middlemain-api-tests-'));
@@ -77,10 +78,28 @@ test('malformed JSON errors omit stacks and hardened response headers are presen
   assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
 });
 
-test('production-like download does not invoke EAS signing tools without an approved APK', async () => {
-  const response = await fetch(base + '/download/android');
-  assert.equal(response.status, 503);
-  assert.ok(!(await response.text()).includes('eas'));
+test('production-like download serves only the approved APK or fails explicitly', async () => {
+  const response = await fetch(base + '/download/android', { signal: AbortSignal.timeout(30_000) });
+  if (!ANDROID_APK_URL) {
+    assert.equal(response.status, 503);
+    assert.ok(!(await response.text()).includes('eas'));
+    return;
+  }
+  assert.equal(validateArchiveUrl(ANDROID_APK_URL).hostname, 'expo.dev');
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('content-type'), 'application/vnd.android.package-archive');
+  const reader = response.body!.getReader();
+  const prefix: number[] = [];
+  try {
+    while (prefix.length < 4) {
+      const chunk = await reader.read();
+      assert.ok(!chunk.done, 'APK ended before its ZIP header');
+      prefix.push(...chunk.value!.subarray(0, 4 - prefix.length));
+    }
+    assert.deepEqual(prefix, [0x50, 0x4b, 0x03, 0x04]);
+  } finally {
+    await reader.cancel(); // Verify bytes without downloading the entire APK.
+  }
 });
 
 test('room links cannot forge AI publications; host and MCP credentials are separate', async () => {
@@ -131,6 +150,9 @@ test('oversized persistence fails without replacing saved history', async () => 
 test('archive URLs and limiter reject unsafe destinations and excessive callers', () => {
   assert.equal(validateArchiveUrl('https://expo.dev/artifacts/eas/example.apk').hostname, 'expo.dev');
   assert.equal(validateArchiveUrl('https://storage.googleapis.com/example.apk').hostname, 'storage.googleapis.com');
+  assert.equal(validateArchiveUrl('https://wf-artifacts.eascdn.net/builds/example.apk').hostname, 'wf-artifacts.eascdn.net');
+  assert.throws(() => validateArchiveUrl('https://wf-artifacts.eascdn.net.evil.example/example.apk'));
+  assert.throws(() => validateArchiveUrl('https://evil.wf-artifacts.eascdn.net/example.apk'));
   for (const url of ['http://expo.dev/a.apk', 'https://127.0.0.1/a.apk', 'https://expo.dev.evil.test/a.apk', 'https://user:password@expo.dev/a.apk', 'https://expo.dev:444/a.apk']) {
     assert.throws(() => validateArchiveUrl(url), /Untrusted/);
   }

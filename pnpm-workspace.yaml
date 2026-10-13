@@ -64,6 +64,7 @@ overrides:
   '@tailwindcss/oxide>@tailwindcss/oxide-win32-arm64-msvc': '-'
   '@tailwindcss/oxide>@tailwindcss/oxide-win32-x64-msvc': '-'
   '@xmldom/xmldom': ^0.9.12
+  '@expo/plist': 0.5.4
   ajv: ^8.20.0
   baseline-browser-mapping: ^2.11.0
   body-parser@2: ^2.3.0

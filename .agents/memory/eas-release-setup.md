@@ -20,3 +20,21 @@ Validate the ASC key cryptographically and look up the exact bundle identifier's
 **Why:** A PEM envelope alone does not prove usable formatting, and Apple signing credentials do not imply an App Store app record exists. Either can block submission after paying for a build.
 
 **How to apply:** Normalize only parseable PKCS#8 material into a private temporary file, require Apple's EC P-256 format, and perform a read-only app lookup first. Creating the App Store record and choosing a certificate revocation still require the creator's action or specific approval.
+
+Prefer EAS-managed signing for Middlemain's iOS release.
+
+**Why:** The user explicitly selected EAS signing.
+
+**How to apply:** Use EAS-managed remote credentials, while obtaining separate approval before revoking any existing Apple certificate.
+
+Check plist parser compatibility before treating a “malformed provisioning profile” error as an Apple credential failure.
+
+**Why:** The hardened xmldom parser requires an explicit MIME type, but legacy Expo plist callers omit it. This caused EAS to reject newly active profiles and later fail native prebuild. Supplying ASC authentication only masked the problem by allowing profile regeneration.
+
+**How to apply:** Preserve the hardened XML dependency and verify Expo/EAS plist parsing plus a native prebuild before another paid build. Do not respond to this error by revoking more certificates. Keep any required ASC key temporary and permission-restricted.
+
+Verify APK downloads through the API proxy, not just the canonical Expo URL.
+
+**Why:** Expo changed its final artifact CDN origin; a canonical URL returned 200 directly while the secured proxy rejected its redirect. A completed build alone did not prove the public download worked.
+
+**How to apply:** Inspect redirect hosts without recording signed query strings, approve only the verified exact CDN host, and test APK bytes through the proxy before announcing release.

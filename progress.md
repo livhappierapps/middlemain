@@ -25,7 +25,6 @@
 - Apply this task's changes to the main Replit version before republishing the backend; then verify production APK bytes. Publishing before applying isolated task changes repeats the older configuration.
 - The publisher's privacy URL still rendered a 404 at the last check; website policy and public App Store metadata/review remain separate work.
 - External bridge-key rotation and native-device validation remain required; do not claim scans certify all runtime paths.
-
 ## Workspace reconciliation and current checks
 - Reconciled the completed GitHub release changes into this workspace, preserving the Sable integration handoff. The later failed Android attempt used the older configuration without the pnpm pin; it did not replace the earlier completed APK or IPA.
 - Both completed artifact URLs returned HTTP 200. No additional EAS build, submission, or paid-provider request was started during this reconciliation.

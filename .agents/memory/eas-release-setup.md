@@ -15,6 +15,12 @@ Expo usage-budget confirmation tokens are bound to the confirmation mode as well
 
 **How to apply:** For an explicitly requested chat approval, preview in conversation mode from the start. If the tool issues a replacement preview, obtain fresh user approval and preserve the mode and limits exactly. Never treat a preview as permission to build.
 
+Match the cloud build's Node runtime to the tested workspace toolchain, and perform a local native-platform JavaScript export before a potentially billable native build.
+
+**Why:** Type checks, permission introspection, and a healthy web preview passed while the cloud's older Node runtime could not load Metro because it lacked Array.prototype.toReversed.
+
+**How to apply:** Pin compatible runtimes and an SDK-matched Android image across EAS profiles rather than trusting automatic image selection. Test the requested native target with Expo export from the final source; a web screenshot or typecheck is not an Android/iOS bundle check. Fix failures locally before requesting another paid attempt.
+
 Initial iOS distribution certificate creation requires interactive EAS credential setup. Supplying ASC API-key environment variables does not make the non-interactive build path create a missing certificate.
 
 **Why:** EAS's non-interactive distribution-certificate path only reuses an existing certificate. Interactive credentials:configure-build can authenticate using the ASC key without an Apple password.

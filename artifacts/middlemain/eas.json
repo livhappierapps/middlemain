@@ -5,15 +5,20 @@
   },
   "build": {
     "development": {
+      "node": "24.13.0",
       "pnpm": "10.26.1",
       "developmentClient": true,
       "distribution": "internal",
+      "android": {
+        "image": "sdk-54"
+      },
       "ios": {
         "simulator": false,
         "image": "latest"
       }
     },
     "preview": {
+      "node": "24.13.0",
       "pnpm": "10.26.1",
       "distribution": "internal",
       "env": {
@@ -25,10 +30,12 @@
         "image": "latest"
       },
       "android": {
+        "image": "sdk-54",
         "buildType": "apk"
       }
     },
     "production": {
+      "node": "24.13.0",
       "pnpm": "10.26.1",
       "env": {
         "EXPO_PUBLIC_DOMAIN": "middle-ma-in.replit.app",
@@ -39,6 +46,7 @@
         "image": "latest"
       },
       "android": {
+        "image": "sdk-54",
         "buildType": "app-bundle"
       }
     }

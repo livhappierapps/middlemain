@@ -26,3 +26,11 @@ The protocol supplied by the bridge's developer describes base64 raw PCM16 audio
 **Why:** The bridge implementation lives outside this workspace; successful recording alone does not establish its audio compatibility.
 
 **How to apply:** Verify the external bridge's current accepted format before claiming microphone delivery works. Do not assume a file extension or a green toggle proves valid audio transmission.
+
+## Native permission conflicts
+
+Verify the generated native permissions, not just the permission list in app.json. Disabling microphone permission in one media plugin can block microphone access requested by another.
+
+**Why:** The image-picker plugin's microphone opt-out produced an Android manifest removal entry that overrode the audio plugins. Expo Go's own permissions concealed this standalone-build difference.
+
+**How to apply:** Keep shared media-plugin permissions consistent and test the final Expo-introspected manifest and iOS Info.plist before using a paid build to investigate permission problems.

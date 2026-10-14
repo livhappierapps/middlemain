@@ -37,6 +37,7 @@
       },
       "permissions": [
         "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.INTERNET",
@@ -68,7 +69,7 @@
         {
           "photosPermission": "Middlemain accesses your photo library to attach screenshots and images for AI analysis in the Bridge Terminal.",
           "cameraPermission": "Middlemain uses the camera to capture photos and, when enabled, share camera frames with the AI service you select in the Bridge Terminal.",
-          "microphonePermission": false
+          "microphonePermission": "Middlemain uses the microphone for voice input in Council and in the AIs & Ears bridge when you enable Hearing."
         }
       ],
       "expo-secure-store"

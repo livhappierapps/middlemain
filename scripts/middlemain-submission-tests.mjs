@@ -87,8 +87,41 @@ test('EAS pins the package manager that reads the repository security overrides'
   assert.equal(pkg.packageManager, 'pnpm@10.26.1');
   for (const profile of ['development', 'preview', 'production']) {
     assert.equal(eas.build[profile].pnpm, '10.26.1');
+    assert.equal(eas.build[profile].ios.image, 'latest');
   }
   assert.ok(pkg.pnpm.overrides && pkg.pnpm.patchedDependencies);
+});
+
+test('generated native configuration keeps camera and microphone permissions enabled', () => {
+  const require = createRequire(new URL('../artifacts/middlemain/package.json', import.meta.url));
+  const expoCli = join(require.resolve('expo/package.json'), '..', 'bin', 'cli');
+  const appDirectory = new URL('../artifacts/middlemain/', import.meta.url).pathname;
+  const result = spawnSync(process.execPath, [expoCli, 'config', '--type', 'introspect', '--json'], {
+    cwd: appDirectory,
+    encoding: 'utf8',
+    timeout: 45_000,
+    maxBuffer: 4 * 1024 * 1024,
+    env: {
+      ...process.env, CI: '1', EXPO_OFFLINE: '1',
+      EXPO_NO_TELEMETRY: '1', EXPO_NO_DOTENV: '1',
+    },
+  });
+  assert.ifError(result.error);
+  assert.equal(result.status, 0, result.stderr);
+  const config = JSON.parse(result.stdout);
+  const generated = config._internal.modResults;
+  for (const key of ['NSCameraUsageDescription', 'NSMicrophoneUsageDescription']) {
+    assert.equal(generated.ios.infoPlist[key], config.ios.infoPlist[key]);
+    assert.ok(generated.ios.infoPlist[key].length > 20);
+  }
+  const permissions = generated.android.manifest.manifest['uses-permission'];
+  for (const name of ['android.permission.CAMERA', 'android.permission.RECORD_AUDIO']) {
+    assert.ok(config.android.permissions.includes(name), `Missing explicit ${name}`);
+    assert.ok(permissions.some(entry => entry.$['android:name'] === name
+      && entry.$['tools:node'] !== 'remove'), `Generated permission missing: ${name}`);
+    assert.ok(!permissions.some(entry => entry.$['android:name'] === name
+      && entry.$['tools:node'] === 'remove'), `A plugin blocks ${name}`);
+  }
 });
 
 test('Expo and EAS plist readers work with the hardened XML parser', () => {

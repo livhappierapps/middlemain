@@ -50,3 +50,10 @@
 - Corrected AIs & Ears microphone file operations to use the supported SDK 54 legacy API; recording/delivery errors stop Hearing and are visible. Cancelled chunks are gated against further sends. This does not verify the external bridge's audio-format compatibility.
 - Updated and synchronized the user guide and non-secret integration summary. The full suite passed 56 tests and all workspace typechecks; after the final layout adjustment, all 12 focused camera tests and the native app typecheck passed again. The Bridge browser preview rendered with its composer and ad controls above the tab bar. Native camera, microphone, and TestFlight behavior still require a device test on a newly built version.
 - No live bridge/AI request, new native build, or submission was started. Existing installed APK/IPA versions do not contain these changes.
+
+## Android APK native-permission preflight
+
+- Reproduced an Android manifest conflict using Expo's native-configuration introspection: the image-picker microphone opt-out generated `RECORD_AUDIO` with `tools:node="remove"`. Adding the explicit permission without removing that block would not restore recording.
+- Added explicit Android microphone permission and aligned the image-picker microphone configuration with the camera/audio plugins. Added a regression check of the generated Android manifest and iOS permission descriptions, plus the existing `latest` Xcode settings.
+- All 57 regression tests passed, including the generated-native-permission check. This verifies configuration, not physical camera/microphone operation or external bridge audio compatibility.
+- No Apple signing credentials or distribution certificates were changed. The provisioning-profile theory remains unproven; generated iOS camera/microphone usage descriptions are present. Only one Android APK build is approved, with possible EAS charges; no additional iOS build or store submission is authorized by that approval.

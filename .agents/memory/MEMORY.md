@@ -4,7 +4,7 @@
 - [React type alignment](react-type-alignment.md) — Mixed web/native React typings can break ref assignments; align within the native SDK's supported range.
 - [EAS Xcode version](eas-xcode.md) — iOS production builds require `"image": "latest"` in eas.json to get Xcode 26+; omitting it causes build failure.
 - [Expo E2E testing skip](expo-e2e-skip.md) — Playwright-based runTest() cannot reach the Expo mobile build via browser proxy; skip with documented reason.
-- [EAS release setup](eas-release-setup.md) — Task-agent builds need fingerprint bypass; initial iOS signing requires interactive API-key setup and explicit certificate-revocation approval.
+- [EAS release setup](eas-release-setup.md) — Verified remote revisions, bounded build approvals, signing safeguards, and sandbox fingerprint constraints.
 - [Cost transparency](cost-transparency.md) — Warn Dev before any action that may create charges; do not initiate paid API usage or builds without clear notice.
 - [Task ownership](task-ownership.md) — Review already-running work before implementing the same feature; separate main edits from queued merges.
 - [Git provider authorization](git-provider-authorization.md) — Healthy account status can coexist with rejected Git credentials; connector reconnect cards may not apply.

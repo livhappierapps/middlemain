@@ -3,11 +3,17 @@ name: EAS release setup
 description: Replit build constraints and initial Apple signing setup using an ASC API key.
 ---
 
-Run EAS builds in the assigned task agent with EAS_SKIP_AUTO_FINGERPRINT=1, not the main agent.
+Prefer the connected Expo build tools with an immutable, verified GitHub revision for EAS builds. A separate task agent is not required for that path. If a local EAS CLI build is needed, preserve EAS_SKIP_AUTO_FINGERPRINT=1.
 
-**Why:** The main-agent sandbox can block EAS's Git index writes.
+**Why:** The Replit sandbox can block the CLI's Git index writes. The connected build tool instead queues a remote build from the pushed source, without those local writes.
 
-**How to apply:** Keep the fingerprint bypass even when building through a project task.
+**How to apply:** Verify the remote revision, select the correct monorepo base directory, and use an approved build-count budget. Keep the fingerprint bypass on local CLI paths; do not spawn a helper just to bypass a sandbox restriction.
+
+Expo usage-budget confirmation tokens are bound to the confirmation mode as well as the limits.
+
+**Why:** When native confirmation was unavailable, switching an existing preview from the default mode to conversation mode invalidated its token despite unchanged limits.
+
+**How to apply:** For an explicitly requested chat approval, preview in conversation mode from the start. If the tool issues a replacement preview, obtain fresh user approval and preserve the mode and limits exactly. Never treat a preview as permission to build.
 
 Initial iOS distribution certificate creation requires interactive EAS credential setup. Supplying ASC API-key environment variables does not make the non-interactive build path create a missing certificate.
 

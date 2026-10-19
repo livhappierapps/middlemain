@@ -398,7 +398,7 @@ export default function HumanHandsScreen() {
                   <Text style={[styles.cardTitle, { fontSize: 13 }]}>Before asking AI</Text>
                 </View>
                 <Text style={styles.body}>
-                  Only the service, website, and goal above are sent to the selected AI. Its provider may charge for the request. Vault secrets are never included. Do not put passwords, API keys, recovery codes, payment details, or verification codes in these fields.
+                  The service, website, and goal above are sent as written to the selected AI; its provider may charge for the request. Vault entries are never read. Do not put passwords, API keys, recovery codes, payment details, or verification codes in these fields.
                 </Text>
                 <Pressable
                   onPress={() => setConsent((value) => !value)}
@@ -508,7 +508,7 @@ export default function HumanHandsScreen() {
             </Text>
           </>
         )}
-      </KeyboardAwareScrollViewCompat>
+      </KeyboardAwareScrollView>
     </ThemedBackground>
   );
 }

@@ -24,26 +24,21 @@ function NativeTabLayout() {
         <Icon sf={{ default: "link", selected: "link" }} />
         <Label>Connect</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="council">
-        <Icon sf={{ default: "person.3", selected: "person.3.fill" }} />
-        <Label>Council</Label>
-      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="guide">
         <Icon sf={{ default: "person", selected: "person.fill" }} />
-        <Label>Man in the MiddleMain</Label>
+        <Label>Man in</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="hands">
         <Icon sf={{ default: "hand.wave", selected: "hand.wave.fill" }} />
-        <Label>Human Hands</Label>
+        <Label>Hands</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="debug">
-        <Icon sf={{ default: "ant", selected: "ant.fill" }} />
-        <Label>Debug</Label>
+      <NativeTabs.Trigger name="more">
+        <Icon sf={{ default: "ellipsis", selected: "ellipsis" }} />
+        <Label>More</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="settings">
-        <Icon sf={{ default: "gearshape", selected: "gearshape.fill" }} />
-        <Label>Settings</Label>
-      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="council" hidden />
+      <NativeTabs.Trigger name="debug" hidden />
+      <NativeTabs.Trigger name="settings" hidden />
     </NativeTabs>
   );
 }
@@ -140,6 +135,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="council"
         options={{
+          href: null,
           title: "Council",
           tabBarIcon: ({ color, focused }) =>
             isIOS ? (
@@ -156,7 +152,8 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="guide"
         options={{
-          title: "Man in the MiddleMain",
+          title: "Man in",
+          tabBarAccessibilityLabel: "Man in the MiddleMain",
           tabBarIcon: ({ color, focused }) =>
             isIOS ? (
               <SymbolView
@@ -172,6 +169,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="debug"
         options={{
+          href: null,
           title: "Debug",
           tabBarIcon: ({ color }) =>
             isIOS ? (
@@ -185,6 +183,8 @@ function ClassicTabLayout() {
         name="hands"
         options={{
           title: "Human Hands",
+          tabBarLabel: "Hands",
+          tabBarAccessibilityLabel: "Human Hands",
           tabBarIcon: ({ color }) => (
             <MaterialCommunityIcons name="hand-wave-outline" size={21} color={color} />
           ),
@@ -193,6 +193,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="settings"
         options={{
+          href: null,
           title: "Settings",
           tabBarIcon: ({ color, focused }) =>
             isIOS ? (
@@ -204,6 +205,15 @@ function ClassicTabLayout() {
             ) : (
               <Feather name="settings" size={20} color={color} />
             ),
+        }}
+      />
+      <Tabs.Screen
+        name="more"
+        options={{
+          title: "More",
+          tabBarIcon: ({ color }) => (
+            <Feather name="more-horizontal" size={21} color={color} />
+          ),
         }}
       />
     </Tabs>

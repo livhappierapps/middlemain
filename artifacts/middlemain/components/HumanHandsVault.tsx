@@ -218,6 +218,7 @@ export function HumanHandsVault() {
       setKind('password');
       setNotice('Saved in this phone’s secure storage. It was not sent to an AI.');
     } catch {
+      await SecureStore.deleteItemAsync(secureKey(item.id)).catch(() => undefined);
       setError('Could not save securely. Check that device authentication is set up, then try again.');
     } finally {
       setSaving(false);

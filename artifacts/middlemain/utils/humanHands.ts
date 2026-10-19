@@ -13,11 +13,12 @@ export interface HumanHandsTask {
 }
 
 const SECRET_ASSIGNMENT =
-  /\b(?:password|passcode|api[\s_-]*key|access[\s_-]*token|refresh[\s_-]*token|bearer|verification[\s_-]*code|one[\s_-]*time[\s_-]*code|recovery[\s_-]*code)\b\s*(?::|=|\bis\b)\s*\S+/i;
+  /\b(?:password|passcode|api[\s_-]*key|access[\s_-]*token|refresh[\s_-]*token|token|secret|private[\s_-]*key|client[\s_-]*secret|bearer|verification[\s_-]*code|one[\s_-]*time[\s_-]*code|recovery[\s_-]*code)\b\s*(?::|=|\bis\b)\s*\S+/i;
 const BEARER_VALUE = /(?:^|\s)bearer\s+\S+/i;
+const PRIVATE_KEY_BLOCK = /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/i;
 
 export function containsCredentialMaterial(value: string): boolean {
-  return SECRET_ASSIGNMENT.test(value) || BEARER_VALUE.test(value);
+  return SECRET_ASSIGNMENT.test(value) || BEARER_VALUE.test(value) || PRIVATE_KEY_BLOCK.test(value);
 }
 
 export function normalizeHttpsUrl(value: string): string | null {

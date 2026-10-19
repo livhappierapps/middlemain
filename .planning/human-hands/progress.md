@@ -1,4 +1,5 @@
 # Human Hands progress
 
 - Inspected current app architecture and privacy/cost constraints.
-- User added a device-only secrets vault to scope. Implementing guided local checklists plus a SecureStore vault; AI guidance stays opt-in, explicitly cost-confirmed, and isolated from vault values.
+- Added the Human Hands task flow, explicit AI cost/privacy consent, local checklists, and a phone-secure vault separated from AI requests.
+- Confirmed the Expo workflow restarts, the Human Hands screen renders, focused tests pass, and workspace typechecks pass. Physical-device biometric behavior remains unverified.

@@ -13,6 +13,8 @@ test('Human Hands blocks obvious credential assignments before storage or AI req
     'verification code=123456',
     'Bearer abc123',
     'recovery code is abc-def',
+    'token: abc123',
+    '-----BEGIN PRIVATE KEY-----',
   ]) {
     assert.equal(containsCredentialMaterial(input), true, input);
   }

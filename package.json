@@ -6,7 +6,7 @@
   "scripts": {
     "guide:sync": "node scripts/sync-middlemain-guide.mjs",
     "guide:check": "node scripts/sync-middlemain-guide.mjs --check",
-    "test:middlemain": "pnpm run guide:check && node --test scripts/middlemain-*-tests.mjs artifacts/middlemain/server/serve.test.js && pnpm --filter @workspace/scripts exec tsx --test middlemain-api-security-tests.ts",
+    "test:middlemain": "pnpm run guide:check && node --test scripts/middlemain-*-tests.mjs artifacts/middlemain/server/serve.test.js && pnpm --filter @workspace/scripts exec tsx --test middlemain-api-security-tests.ts middlemain-human-hands-tests.ts",
     "preinstall": "sh -c 'rm -f package-lock.json yarn.lock; case \"$npm_config_user_agent\" in pnpm/*) ;; *) echo \"Use pnpm instead\" >&2; exit 1 ;; esac'",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",

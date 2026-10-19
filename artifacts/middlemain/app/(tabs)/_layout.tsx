@@ -1,4 +1,5 @@
 import { Feather } from "@expo/vector-icons";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { isLiquidGlassAvailable } from "expo-glass-effect";
 import { Tabs } from "expo-router";
@@ -30,6 +31,10 @@ function NativeTabLayout() {
       <NativeTabs.Trigger name="guide">
         <Icon sf={{ default: "person", selected: "person.fill" }} />
         <Label>Man in the MiddleMain</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="hands">
+        <Icon sf={{ default: "hand.wave", selected: "hand.wave.fill" }} />
+        <Label>Human Hands</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="debug">
         <Icon sf={{ default: "ant", selected: "ant.fill" }} />
@@ -174,6 +179,15 @@ function ClassicTabLayout() {
             ) : (
               <Feather name="alert-triangle" size={20} color={color} />
             ),
+        }}
+      />
+      <Tabs.Screen
+        name="hands"
+        options={{
+          title: "Human Hands",
+          tabBarIcon: ({ color }) => (
+            <MaterialCommunityIcons name="hand-wave-outline" size={21} color={color} />
+          ),
         }}
       />
       <Tabs.Screen

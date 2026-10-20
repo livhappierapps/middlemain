@@ -1,5 +1,13 @@
 # Security status and release gates
 
+## Current workspace scan — October 19, 2026
+
+- Dependency audit: **0 critical, 4 high, 0 moderate, 0 low**. The findings are `braces` 3.0.3, `image-size` 1.2.1 (two advisories), and `node-forge` 1.4.0. Local guards exist for the `braces` and `image-size` malformed-input cases; version-based scanners still report them. The `node-forge` finding remains in the Expo/EAS tooling chain and is not described as fixed.
+- Static-code scan: **0 findings**.
+- Privacy/dataflow scan: **not verified**. The latest HoundDog run failed with `HOUNDDOG_SCHEMA_MISMATCH`; treat this as a scanner failure, not a clean scan.
+- The tracked-text sweep found no `.env` or key-store files and no complete, valid PEM private-key block. It is not a complete secret scan; it did not inspect image contents or the full Git history.
+- The repository still contains tracked workspace support material and user-provided attachments. Review and exclude anything private before making it public.
+
 ## Findings
 
 The starting Replit dependency scan reported **91 findings** (12 critical, 46 high, 25 moderate, 8 low). The direct registry audit used a different snapshot (14 critical, 49 high, 22 moderate, 6 low). Keep those sources separate when comparing counts.
@@ -30,7 +38,7 @@ Manual review also found and repaired unauthenticated owner-funded Grok access a
 
 ## Scope limits
 
-The previously run static-code scan reported no findings and was not incomplete. The privacy/dataflow scan reported no findings. Thirty-three regression tests, frozen install, native typecheck, and clean local iOS prebuild passed. Earlier workspace checks, API build, and local platform exports also passed. These local checks do not substitute for native-device tests. EAS build and Apple upload outcomes are recorded separately below.
+Earlier static-code and privacy scans reported no findings. The latest static-code scan also returned zero findings, but the latest privacy/dataflow scan failed before producing results; see the dated scan above. Previously recorded tests, exports, and store-build results below describe earlier source revisions and do not validate the current workspace. Local checks do not substitute for native-device tests.
 
 ASC authentication, the matching App Store record, and EAS signing are verified. After builder-version/XML compatibility fixes and additional approval, iOS production version 1.2.0 build 1 completed, uploaded successfully, and reached Apple's VALID processing state. The updated Android APK completed; both its canonical URL and task-preview API proxy returned 200, and proxy APK bytes were verified. Production still returns 503 with its older release configuration: apply this task's changes to the main version before republishing and checking the public proxy. The publisher's privacy URL still rendered 404 at the last check.
 
@@ -40,6 +48,6 @@ Static/privacy scans do not inspect all historical Git objects, remote provider 
 
 ## Repository preflight security boundary
 
-A fresh direct registry audit still reports four high findings and zero critical findings. Installed image-size and braces malformed-input safety tests pass; version-based findings remain visible. The node-forge advisory still lists no patched release. Dependency inspection places it in Expo/EAS tooling, not the API server's dependency graph; that does not make the signing-toolchain finding fixed.
+A fresh dependency audit reports four high findings and zero critical findings. Installed image-size and braces malformed-input safety tests pass; version-based findings remain visible. The node-forge advisory still lists no patched release. Dependency inspection places it in Expo/EAS tooling, not the API server's dependency graph; that does not make the signing-toolchain finding fixed.
 
 The new repository preflight never executes uploaded code, installs dependencies, runs package hooks, or loads repository compiler plugins. Its compiler reads supplied virtual files and trusted compiler standard libraries only. Source/file/output limits, two-worker concurrency, worker heap limits, timeouts, cancellation and cleanup are enforced. Uploaded source is not persisted by this checker; request logs contain counts/status, not source or GitHub tokens. Physical-device behavior, embedded-secret detection, secure storage of saved connector credentials and external key revocation still need separate verification/remediation.

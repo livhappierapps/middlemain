@@ -1,44 +1,40 @@
 # Middlemain
 
-Native Expo developer app with AI provider connections, Bridge chat, multi-agent Council sessions, repository debugging, and offline/AI help. Built by LivHappier Apps.
+Middlemain is a mobile-first development companion built with Expo. It connects a developer's chosen AI providers with repository debugging, Bridge tools, multi-agent Council rooms, offline help, and Human Hands setup checklists.
 
-## Instructions
+## Start here
 
-- **[User guide: every main screen, control group, and tips](docs/middlemain-user-guide.md)**
-- [Private GitHub access and isolated source checking](docs/repository-debugging.md)
-- [Security findings and release gates](docs/security-status.md)
-- [Threat model](threat_model.md)
-- [Contributor/runtime constraints](replit.md)
+- **[Developer index](docs/DEVELOPER_INDEX.md)** — code map, commands, security boundaries, and release checklist.
+- [User guide](docs/middlemain-user-guide.md) — app controls, privacy, and provider-cost behavior.
+- [Repository debugging](docs/repository-debugging.md) — GitHub authorization and bounded source checks.
+- [Security status](docs/security-status.md) and [threat model](threat_model.md).
+- [Replit contributor instructions](replit.md) — workspace-specific runtime constraints.
 
-The user guide is also bundled into the app. Offline help reads it locally. AI help retrieves relevant sections into the existing request; it does not train a model or make an extra AI request.
+The user guide is bundled into the app. Offline help reads it locally; AI help adds relevant sections to an existing, user-approved request. It does not train a model or make a second request.
 
-## Run and check
+## Local development
 
-Use pnpm, not npm or yarn:
+Use the repository's pinned pnpm setup:
 
 ```sh
 pnpm install --frozen-lockfile
-pnpm run typecheck
-pnpm run test:middlemain
-pnpm --filter @workspace/api-server run build
 pnpm --filter @workspace/middlemain run dev
 ```
 
-Other services: `pnpm --filter @workspace/api-server run dev` and `pnpm --filter @workspace/council-room run dev`. Managed Replit workflows provide their ports. Tests use mocked AI/GitHub calls and isolated files, not paid provider requests.
-
-After updating the canonical guide:
+Run the main checks before changing or releasing code:
 
 ```sh
-pnpm run guide:sync
-pnpm run guide:check
+pnpm run typecheck
+pnpm run test:middlemain
+pnpm --filter @workspace/api-server run build
 ```
 
-## Release
+Managed Replit workflows provide artifact ports. See the [developer index](docs/DEVELOPER_INDEX.md) for workspace routes and release checks.
 
-Do not start a paid build until source checks, security gates, and production backend verification pass. iOS production uses the latest Xcode EAS image; Android `preview` emits an APK and `production` emits an AAB. Keep root/workspace overrides synchronized with the lockfile and preserve macOS native dependencies.
+## Costs and credentials
 
-From `artifacts/middlemain`, use `EAS_SKIP_AUTO_FINGERPRINT=1 pnpm exec eas build --platform ios --profile production`. Submit a completed build with `bash scripts/submit-ios.sh --id <build-id>`. The script inherits ASC secrets, creates a temporary private configuration/key, waits for submission, and cleans up. It looks up the App Store app record; `ASC_APP_ID` can specify an existing numeric record. `MIDDLEMAIN_SUBMIT_DRY_RUN=1` validates preparation without submitting; it is not a real submission test.
+Requests to a connected AI provider can incur charges from that provider. The app's tests use mocked provider/GitHub calls; they do not prove live service authorization. Never put secrets in source, screenshots, task descriptions, or public issues. Human Hands' vault is separate from existing provider-connection storage.
 
-After a **new security-verified** Android APK finishes, record its stable `expo.dev/artifacts/eas/*.apk` URL in `artifacts/api-server/src/lib/androidRelease.ts`, then verify `/api/download/android`. Production never runs EAS signing tools through that public endpoint. Do not publish expiring storage redirects or an older pre-fix APK.
+## License and public release
 
-Apple certificate limits require a reusable signing certificate/private key or explicit approval to revoke a named certificate. Never automatically revoke certificates that may be used by other apps. Native permissions, private GitHub authorization, store purchasing integration, and App Store metadata still need device/platform validation.
+This repository currently has no `LICENSE` file. Do not assume permission to reuse or redistribute the code until the owner selects and adds a license. The tracked workspace support files and attachments also need a public-release review before the repository is made public.

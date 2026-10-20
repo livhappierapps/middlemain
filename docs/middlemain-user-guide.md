@@ -103,6 +103,18 @@ Choose an existing connection or a supported provider connection. Google Search 
 
 Tips: use offline help for app controls. Turn search on only when current external facts are needed. Ask one focused question, keep history short, and verify citations. AI answers can be wrong even when equipped with documentation.
 
+## Human Hands: setup checklists and secrets vault
+
+Enter a service, an optional HTTPS website, and the setup goal. Select one of your existing AI connections and approve the cost/privacy notice before asking for steps. The service, website, and goal are sent as written to that provider, which may bill you. The app blocks some obvious credential formats, but this is not a complete secret detector—review the text yourself and never enter passwords, API keys, recovery codes, one-time codes, payment details, or private keys. Requests are not automatically retried.
+
+The AI can draft a checklist, but it cannot create accounts or sign in for you. Open the official site from the saved plan and complete sign-in, email/device verification, payment, legal consent, and permission grants yourself. Verify each suggestion at the service; requirements can change. Setup plans and checklist progress are stored locally on the device.
+
+The Secrets Vault stores secret values in iOS/Android secure storage and requires device authentication when saving or copying. Labels and service names are stored separately as local app data. The vault is not read by AI, does not autofill websites, and does not sync or back up. Copying places the value on the system clipboard, where other apps may be able to read it. If device authentication changes, a saved value may become inaccessible; keep the service's own recovery options.
+
+The vault is separate from Connect and other integrations. Existing AI, bridge, GitHub, memory, and webhook credentials are not migrated into the vault or automatically read from it. The browser preview cannot access the phone's secure storage.
+
+Tips: save only secrets you need, copy only when ready to paste, then clear the clipboard yourself if appropriate. Do not use this vault as the only copy of a recovery credential.
+
 ## Settings, themes, purchases, legal information, and troubleshooting
 
 Settings changes the theme/appearance and API Server URL, exposes Executive API setup and webhook settings, and provides legal/privacy information. Theme changes affect local appearance, not provider behavior. Use the theme controls to choose a readable contrast for your device.

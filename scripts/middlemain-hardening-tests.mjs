@@ -36,8 +36,8 @@ after(async () => {
 test('canonical guide includes all main surfaces and offline answers make no requests', () => {
   let calls = 0;
   globalThis.fetch = () => { calls++; throw new Error('Unexpected network request'); };
-  assert.equal(guide.APP_GUIDE_SECTIONS.length, 12);
-  for (const title of ['Home', 'Connect', 'Bridge', 'AIs & Ears', 'Memory', 'Council', 'Go Live', 'Webhooks', 'Debug', 'Guide', 'Settings', 'Privacy']) {
+  assert.equal(guide.APP_GUIDE_SECTIONS.length, 13);
+  for (const title of ['Home', 'Connect', 'Bridge', 'AIs & Ears', 'Memory', 'Council', 'Go Live', 'Webhooks', 'Debug', 'Guide', 'Human Hands', 'Settings', 'Privacy']) {
     assert.ok(guide.APP_GUIDE_SECTIONS.some(section => section.title.includes(title)), title);
   }
   assert.match(help.getOfflineHelpAnswer('private GitHub sign-in'), /registered.*GitHub App/);

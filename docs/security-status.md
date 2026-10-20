@@ -1,6 +1,6 @@
 # Security status and release gates
 
-## Current workspace scan — October 19, 2026
+## Current workspace scan — October 20, 2026
 
 - Latest pnpm audit: **0 critical, 4 high, 0 moderate, 0 low**. It reports `braces` 3.0.3, `image-size` 1.2.1 (two advisories), and `node-forge` 1.4.0. Although upstream `image-size` 2.0.4 is listed as fixed, Expo's Metro 0.83.3 asset bundler fails with that release's default export; the app retains tested malformed-input guards on 1.2.1 instead. `node-forge` remains in Expo/EAS tooling with no fixed registry release, and `braces` remains locally guarded because no fixed upstream version is available.
 - Static-code scan: **0 findings**.
@@ -42,7 +42,7 @@ Earlier static-code and privacy scans reported no findings. The latest static-co
 
 ASC authentication, the matching App Store record, and EAS signing are verified. After builder-version/XML compatibility fixes and additional approval, iOS production version 1.2.0 build 1 completed, uploaded successfully, and reached Apple's VALID processing state. The updated Android APK completed; both its canonical URL and task-preview API proxy returned 200, and proxy APK bytes were verified. Production still returns 503 with its older release configuration: apply this task's changes to the main version before republishing and checking the public proxy. The publisher's privacy URL still rendered 404 at the last check.
 
-The Guide's question composer is visible in the preview after the tab-overlap fix. The development console still reports Expo AV deprecation and an unidentified HTTP 415 resource warning. Assets rendered correctly on the settled preview, but native-device behavior remains unverified.
+The Guide's question composer is visible in the preview after the tab-overlap fix. The development console reports the existing Expo AV deprecation warning. Chromium tracing identified the preview's HTTP 415 as its own DNS-over-HTTPS request to `https://1.1.1.1/dns-query`; it is not a Middlemain API response, and the captured page had no application JavaScript exceptions. Assets rendered correctly on the settled preview, but native-device behavior remains unverified.
 
 Static/privacy scans do not inspect all historical Git objects, remote provider settings, device backups, native OS behavior, App Store metadata, or every runtime path. No paid AI requests are used as tests. The RSA-tooling advisory, external key rotation, production deployment, room host controls, and native validation must not be hidden behind a “clean security scan” claim.
 

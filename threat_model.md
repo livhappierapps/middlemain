@@ -1,30 +1,63 @@
-# Middlemain threat model
+# Middlemain Threat Model
 
-## Assets and boundaries
+## Project Overview
 
-- Customer provider keys and source/screenshots: device → explicitly selected AI/GitHub/bridge services.
-- Owner executive, xAI, and memory credentials: trusted device → HTTPS API → upstream providers. Public users must not receive or spend them.
-- Council transcripts and room tokens: native host/guests → API/WebSockets → file persistence. Shared-room URLs are capabilities, not verified user identities.
-- Signing credentials: workspace secrets → temporary EAS submission configuration → Apple/Expo. Never application bundle or Git.
-- Download: public client → API → approved Expo/GCS archive. Never arbitrary URLs, internal networks, or a public signing-tool command.
+Middlemain is a native-first Expo app with an Express/WebSocket API and a guest Council web client. Users can connect their own AI providers, import GitHub source for bounded checks, and share Council rooms. Owner-only services and signing credentials are separate from consumer features.
 
-## Prioritized STRIDE scenarios
+## Assets
 
-| Scenario | Impact | Controls / remaining limitation |
-|---|---|---|
-| Public caller spends owner xAI credits | High financial abuse | Constant-time executive authorization, request limits, bounded output, no automatic paid retries. Must publish and verify the secured API; workspace fixes do not secure the existing deployment. |
-| Caller inserts a false owner webhook digest | Spoofing/tampering | Both owner webhook write endpoints require executive authorization; trusted native webhook calls supply it. |
-| Static path traversal/symlink/forwarded-host injection | Disclosure/injection | Lexical and realpath containment, malformed/control-byte rejection, manifest allowlist, escaped HTML. Regression tests cover crafted paths and headers. |
-| Compiler reads arbitrary source/imports or executes code | Disclosure/code execution | Isolated single-file checks, limited input, fixed compiler options, no installs or execution; source consent for paid review. |
-| Guide/tool/guest text tricks AI into privileged action | Prompt injection | Treat help/tool output as data; no permission is implied by an AI answer. User-authorized external tools can still expose data; their controls and model behavior need independent review. |
-| Leaked bridge credential still works in old builds/history | Disclosure | No bundled default key. **Service-side revocation/rotation remains required.** Source removal is not revocation. |
-| Guest forges an owner AI/system publication | Spoofing/tampering | Crypto-random room IDs; separate host key for AI/system HTTP publications and streams, hash-only server persistence, native secure storage, and original-server pinning. MCP keys cannot authorize host operations. Legacy hosts must recreate a room. Guest display names remain unverified. |
-| Excessive public compiler/chat/room creation traffic | Availability/cost | Endpoint/body/rate limits, request/stream timeouts, room/client/frame/stream bounds. In-memory per-socket limits are conservative behind a proxy and not distributed abuse prevention. Production traffic/storage still needs load validation. |
-| Malformed image or deeply nested brace pattern crashes build tooling | Availability | Version-compatible parser patches and crafted-input tests. Registry scanners still flag the original package versions. |
-| RSA digest verification ambiguity in node-forge | Signing/tooling integrity | Latest parent/dependency still vulnerable. EAS is a development tool; production download cannot invoke it. No homemade crypto patch. Use trusted Apple/Expo inputs and track the upstream fix. |
-| Local device/browser compromise reads saved customer keys | Disclosure | Local storage is not advertised as encrypted. OS/device protection and upstream revocation are required; migrating credential storage to native keychain needs coordinated backup/migration tests. |
-| Fake local purchase state claims a paid entitlement | Fraud/misrepresentation | Removed simulated entitlements; purchase/restore controls explicitly unavailable until real store integration is implemented. |
+- **Customer credentials:** AI provider keys, AIs & Ears bridge keys, MCP tokens, and GitHub device-flow tokens. Some saved AI/bridge credentials still persist in AsyncStorage; do not describe them as encrypted. Their migration to OS-backed secure storage remains outstanding.
+- **Owner credentials:** executive authorization, owner Grok configuration, memory access, webhook authorization, and Apple/EAS signing material. These must stay in Replit Secrets or OS-backed storage and never enter a consumer bundle, logs, or Git.
+- **User content:** repository source, prompts, images/audio/video, Council messages, room history, and Human Hands records. Content can cross to the chosen provider or server when the user requests the relevant feature.
+- **Room capabilities:** share URLs, separate host tokens, MCP tokens, and guest identities. A share URL grants room access; it does not prove a guest's identity.
+- **Release integrity:** source, dependency patches, app bundles, download manifests, signing profiles, and store metadata. A GitHub push does not publish or verify a production build.
 
-## Verification scope
+## Trust Boundaries
 
-Static, dependency, and privacy scans supplement—not replace—manual authorization review, crafted-input tests, production probes, and real-device testing. The automated suite makes no paid provider calls. Zero scanner findings cannot establish that an app is vulnerability-free or compliant.
+- **Phone/browser ↔ API:** the client is untrusted; the API must validate every body, path, token, and action. Public health, bounded source checks, downloads, and guest-room access are distinct from owner-authorized actions.
+- **API ↔ AI/GitHub/bridge services:** provider calls use the user's selected connection where applicable. Explicit consent is required before sending source to AI; owner-funded credentials must not be used for public requests.
+- **Repository source ↔ compiler:** imported source is data only. The checker must not install dependencies, run scripts/plugins, follow untrusted config inheritance, or read outside the supplied virtual files and trusted compiler libraries.
+- **Council host ↔ guests/MCP:** guest links permit participation, but only the separate host credential can publish owner AI/system messages. MCP credentials cannot authorize host actions.
+- **Workspace ↔ GitHub/deployment/build services:** Replit Secrets are separate from tracked source. Deploy images must exclude credentials, agent-only material, planning notes, uploads, and generated release binaries. Repository visibility stays private unless the owner explicitly approves a public release.
+- **App ↔ device storage:** OS-backed SecureStore is used for some secrets, but existing AI/bridge credentials still need a migration and recovery test before claiming complete device protection.
+
+## Scan Anchors
+
+- API composition: `artifacts/api-server/src/routes/index.ts`; security-sensitive route groups: `executive.ts`, `grok.ts`, `debug.ts`, `councilRoom.ts`, `mcp.ts`, and `download.ts`.
+- Mobile boundary: `artifacts/middlemain/app/`, `context/`, and `utils/`; check saved credentials, explicit provider consent, native permissions, and storage migrations.
+- Guest surface: `artifacts/council-room/src/`; treat all guest input and room links as untrusted.
+- Repository checker: `scripts/middlemain-api-security-tests.ts` and `scripts/middlemain-repository-tests.mjs`; preserve fixed compiler options, input/resource limits, cancellation, and cleanup.
+- Development-only build tooling: Expo/EAS and patched `braces`/`image-size` packages. Do not confuse development-tool findings with shipped runtime exposure, and do not call them fixed when the registry scanner still flags them.
+
+## Threat Categories
+
+### Spoofing
+
+An attacker may imitate an owner, room host, GitHub user, or provider. Owner endpoints require executive authorization; host publishing uses a separate host token; GitHub private access uses customer-authorized, read-only device flow. Guest display names and share links are not verified identities.
+
+### Tampering
+
+Request bodies, imported code, room messages, webhook payloads, and package metadata are attacker-controlled. Validate them server-side, keep owner webhooks behind owner authorization, and never let repository scripts, plugins, or compiler settings execute against the server.
+
+### Repudiation
+
+Logs should record bounded status/count metadata for operational debugging without source text, provider keys, room tokens, or authorization headers. Do not imply that public guest names or request logs establish a verified human identity.
+
+### Information Disclosure
+
+The main risks are credentials or private source reaching Git, deployment images, logs, AI providers, screenshots, or another user's room. Keep secrets out of tracked files and release bundles; disclose what leaves the device; require consent for AI source analysis; review tracked attachments and full Git history before any public repository release.
+
+### Denial of Service
+
+Public room, download, and source-check routes can be abused for resource use or provider cost. Keep body/source limits, request and stream timeouts, concurrency caps, output bounds, and cancellation cleanup. Per-process limits are not distributed abuse prevention; production load behavior remains unverified.
+
+### Elevation of Privilege
+
+A guest, MCP client, or public caller must not gain owner API, host publishing, signing, or deployment rights through a client-side check or shared URL. Enforce permissions on the server at every sensitive route and keep build/signing tools unreachable through public download paths.
+
+## Current Security Limits
+
+- Dependency audit reports four high advisories: locally patched `braces` and `image-size` findings remain visible to version-based scanning; the `node-forge` RSA finding has no fixed npm release and is in Expo/EAS tooling.
+- Static-code scan returned zero findings. The latest privacy/dataflow scan failed schema validation; it is not a clean result.
+- Saved AI/bridge credentials still need their secure-storage migration. Physical-device recovery, native permissions, production deployment probes, load testing, external key rotation, and store review are not certified by local tests.
+- No scan or local export proves that the app is vulnerability-free. Preserve the patches and run typechecks, regression tests, security scans, local exports, and real-device checks before a paid native build or public release.

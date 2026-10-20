@@ -52,10 +52,25 @@ Thumbs.db
 artifacts/api-server/data/
 artifacts/data/
 **/static-build/
+
+# User uploads are not source files. Existing tracked files still require review.
+/attached_assets/
+
+# Signing material, local credentials, and generated release binaries
+*.pem
+*.key
 *.p8
 *.p12
+*.pfx
+*.jks
+*.keystore
+*.mobileprovision
+*.provisionprofile
 credentials.json
 google-services-account.json
 .env
 .env.*
 !.env.example
+*.apk
+*.aab
+*.ipa

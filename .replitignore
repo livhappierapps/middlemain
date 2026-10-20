@@ -6,4 +6,25 @@
 /generated-artifacts/
 /deliverables/
 /attached_assets/
-/.agents/skills/
+/.agents/
+/.planning/
+/.git/
+
+# Keep local credentials, signing material, and release builds out of deploy images.
+**/.env
+**/.env.*
+!**/.env.example
+**/*.pem
+**/*.key
+**/*.p8
+**/*.p12
+**/*.pfx
+**/*.jks
+**/*.keystore
+**/*.mobileprovision
+**/*.provisionprofile
+**/credentials.json
+**/google-services-account.json
+**/*.apk
+**/*.aab
+**/*.ipa

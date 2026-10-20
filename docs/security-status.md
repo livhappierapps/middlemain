@@ -5,8 +5,9 @@
 - Latest pnpm audit: **0 critical, 4 high, 0 moderate, 0 low**. It reports `braces` 3.0.3, `image-size` 1.2.1 (two advisories), and `node-forge` 1.4.0. Although upstream `image-size` 2.0.4 is listed as fixed, Expo's Metro 0.83.3 asset bundler fails with that release's default export; the app retains tested malformed-input guards on 1.2.1 instead. `node-forge` remains in Expo/EAS tooling with no fixed registry release, and `braces` remains locally guarded because no fixed upstream version is available.
 - Static-code scan: **0 findings**.
 - Privacy/dataflow scan: **not verified**. The latest HoundDog run failed with `HOUNDDOG_SCHEMA_MISMATCH`; treat this as a scanner failure, not a clean scan.
-- The tracked-text sweep found no `.env` or key-store files and no complete, valid PEM private-key block. It is not a complete secret scan; it did not inspect image contents or the full Git history.
-- The repository still contains tracked workspace support material and user-provided attachments. Review and exclude anything private before making it public.
+- The workspace runs as the unprivileged `runner` account (UID 1000); no world-writable tracked files were found. `sudo` is not needed or used.
+- A narrow secret-pattern sweep found matches only in reference documentation, signing-marker scripts, and tests; matched values were not printed. It is not a complete secret scan and did not inspect images or full Git history.
+- Git/deployment ignore rules now exclude common signing files, local environment files, release binaries, agent/planning material, and future user uploads. Previously tracked attachments remain in Git and need review before any public release.
 
 ## Findings
 

@@ -189,3 +189,26 @@ test('repository preflight API checks a bounded snapshot and rejects unsafe path
   assert.ok(!(await unsafe.text()).includes('/home/'));
   assert.equal(providerCalls, before);
 });
+
+test('single-file checks validate their mode and report compiler errors without using AI', async () => {
+  const callsBefore = providerCalls;
+  const headers = { 'content-type': 'application/json' };
+  const unsupported = await fetch(base + '/debug/typecheck', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ code: 'const value = 1;', mode: 'shell' }),
+  });
+  assert.equal(unsupported.status, 400);
+  assert.match((await unsupported.json()).error, /unsupported/i);
+
+  const response = await fetch(base + '/debug/typecheck', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ code: 'const value: string = 42;', mode: 'typescript' }),
+  });
+  assert.equal(response.status, 200);
+  const report = await response.json();
+  assert.equal(report.verdict, 'ERRORS');
+  assert.ok(report.errors.some((finding: { code: string }) => finding.code === 'TS2322'));
+  assert.equal(providerCalls, callsBefore);
+});

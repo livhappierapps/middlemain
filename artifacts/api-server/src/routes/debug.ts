@@ -108,6 +108,10 @@ debugRouter.post("/debug/typecheck", async (req: Request, res: Response) => {
     res.status(400).json({ error: "No code provided" });
     return;
   }
+  if (!["expo", "typescript", "javascript", "general"].includes(mode)) {
+    res.status(400).json({ error: "Unsupported source-check mode." });
+    return;
+  }
   if (Buffer.byteLength(code, "utf8") > 300_000) {
     res.status(400).json({ error: "Code too large — max 300 KB" });
     return;
@@ -120,6 +124,10 @@ debugRouter.post("/debug/typecheck", async (req: Request, res: Response) => {
   const tempDir = join(tmpdir(), `mm-debug-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const tempFile = join(tempDir, `check${ext}`);
   const start = Date.now();
+  const controller = new AbortController();
+  const cancelIfDisconnected = () => { if (!res.writableEnded) controller.abort(); };
+  req.once("aborted", cancelIfDisconnected);
+  res.once("close", cancelIfDisconnected);
 
   try {
     await mkdir(tempDir, { recursive: true });
@@ -152,9 +160,14 @@ debugRouter.post("/debug/typecheck", async (req: Request, res: Response) => {
     let compilerFailed = false;
 
     try {
-      const { stdout, stderr } = await execFileAsync(process.execPath, [require.resolve("typescript/bin/tsc"), ...flags, tempFile], { timeout: 30_000, maxBuffer: 1_000_000 });
+      const { stdout, stderr } = await execFileAsync(
+        process.execPath,
+        [require.resolve("typescript/bin/tsc"), ...flags, tempFile],
+        { timeout: 30_000, maxBuffer: 1_000_000, signal: controller.signal },
+      );
       rawOutput = (stdout + stderr).trim();
     } catch (err: any) {
+      if (controller.signal.aborted) return;
       // tsc exits non-zero when errors found — that's expected
       rawOutput = ((err.stdout ?? "") + (err.stderr ?? "")).trim();
       compilerFailed = true;
@@ -186,6 +199,7 @@ debugRouter.post("/debug/typecheck", async (req: Request, res: Response) => {
       durationMs: Date.now() - start,
     };
 
+    if (controller.signal.aborted || res.destroyed) return;
     logger.info(
       { verdict, errorCount: errors.length, durationMs: result.durationMs },
       "debug/typecheck complete"
@@ -193,9 +207,12 @@ debugRouter.post("/debug/typecheck", async (req: Request, res: Response) => {
 
     res.json(result);
   } catch (err: any) {
+    if (controller.signal.aborted || res.destroyed) return;
     logger.error({ err }, "debug/typecheck failed");
     res.status(500).json({ error: err?.message ?? "Typecheck failed" });
   } finally {
+    req.off("aborted", cancelIfDisconnected);
+    res.off("close", cancelIfDisconnected);
     activeChecks--;
     rm(tempDir, { recursive: true, force: true }).catch(() => {});
   }

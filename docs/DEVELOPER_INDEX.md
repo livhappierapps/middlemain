@@ -31,6 +31,7 @@ Use this page as the map to Middlemain's code and operating instructions. It cov
 
 - `app/(tabs)/` contains the navigable screens. `more.tsx` keeps less-used destinations reachable without crowding the main tab bar.
 - `components/` contains reusable screen pieces; `context/` owns shared app state and provider integrations.
+- Repository URL import and file checks span `app/(tabs)/debug.tsx`, `components/RepositoryPicker.tsx`, `utils/github.ts`, and `artifacts/api-server/src/routes/debug.ts`; start with [the repository debugging notes](repository-debugging.md).
 - `constants/appGuide.ts` is generated. Edit the Markdown guide instead of editing this file by hand.
 - `utils/` contains bounded network, parsing, GitHub, and feature helpers.
 - `app.json`, `eas.json`, and `scripts/` control Expo/native configuration and build support. Keep `app.json` static for Expo Launch.

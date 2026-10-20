@@ -4,7 +4,7 @@
 
 Debug accepts an HTTPS GitHub repository URL, with an optional branch. It lists up to 300 supported source/configuration files and imports the file the user chooses, pinned to a commit. Pasting code remains available.
 
-Dry Run checks the selected JS/TS file with the server's TypeScript compiler, or validates JSON locally. It does **not** follow source imports/reference paths, install the repository's dependencies, execute repository scripts, start EAS, or prove that a native build will pass. Missing project dependencies and imports can appear as diagnostics in an isolated-file check.
+**Check file** validates JSON locally or checks one JS/TS file with the server's TypeScript compiler. It does **not** follow source imports/reference paths, install repository dependencies, execute repository scripts, start EAS, or prove that a native build will pass. Missing project dependencies and imports can appear as diagnostics in an isolated-file check. A running compiler check can be cancelled; cancellation aborts the compiler process and removes its temporary files.
 
 After loading a repository, **Repository preflight — no AI / EAS calls** checks a bounded source snapshot at the displayed branch and full commit. It sends source to Middlemain's API, not an AI provider; the GitHub token is not included. Review source for embedded credentials before uploading—filename filtering is not a secret scan.
 
@@ -16,7 +16,7 @@ Even **NO DEFINITE SOURCE ERRORS** is not an EAS/native-build guarantee. Unsuppo
 
 AI Analyze uses the customer's own saved provider connection, never the owner's server credits. It requires an explicit consent checkbox, limits source to 60,000 characters and output to 2,048 tokens, sends one request, and does not automatically retry. A stopped or timed-out request may already have incurred a provider charge. Review private source for secrets before sending it to any AI.
 
-GitHub imports have a 30-second request timeout, a 3 MB metadata response limit, and a 150 KB selected-file limit. Generated folders, large files, and obvious credential filenames are skipped. Results may be partial. Compiler checks are capped at two concurrent requests and cannot report success when the compiler fails to complete.
+GitHub imports have a 30-second request timeout, a 3 MB metadata response limit, and a 150 KB selected-file limit. Generated folders, large files, and obvious credential filenames are skipped. Results may be partial. Compiler checks are capped at two concurrent requests, reject unsupported modes, and cannot report success when the compiler fails to complete.
 
 ## Private repository setup — configured, real-device test pending
 
@@ -58,3 +58,10 @@ For screen-by-screen instructions and cost/privacy tips, see [the canonical user
 - The Replit shared GitHub App client ID was saved and the Expo development preview was restarted. No native private-repository authorization, selected-private-repository import, GitHub revocation, or live paid AI request was performed.
 
 Native private-repository authorization must also be checked on a real device with the registered GitHub App. Mocked requests and the browser preview do not verify that flow or live paid-provider responses.
+
+### Rechecked on October 20, 2026
+
+- Workspace typechecks and the Middlemain regression suite pass.
+- Single-file API tests confirm unsupported check modes are rejected and a real TypeScript error is reported without calling an AI provider.
+- Local Expo exports for web, iOS, and Android pass. No EAS build or paid AI request was started.
+- The Debug screen was checked at a phone-sized preview. Private GitHub authorization and physical-device keyboard behavior still need device verification.

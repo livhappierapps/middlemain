@@ -84,7 +84,7 @@ export function RepositoryPicker({ onSelect, onReset, onBusyChange }: { onSelect
       if (mounted.current) setBusy(false);
     }
   }
-  return <View style={{ paddingHorizontal: 16, marginBottom: 16, gap: 8 }}>
+  return <View style={{ marginHorizontal: 16, marginBottom: 16, gap: 8, padding: 14, backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius }}>
     <Text style={{ ...text, fontWeight: '600' }}>Load code from GitHub</Text>
     <TextInput accessibilityLabel="GitHub repository URL" editable={!busy} value={url} onChangeText={v => { setUrl(v); reset(); }} autoCapitalize="none" autoCorrect={false} keyboardType="url" placeholder="https://github.com/owner/repository" placeholderTextColor={theme.textMuted} style={input} />
     <TextInput accessibilityLabel="GitHub branch, optional" editable={!busy} value={branch} onChangeText={v => { setBranch(v); reset(); }} autoCapitalize="none" autoCorrect={false} placeholder="Branch (leave blank for default)" placeholderTextColor={theme.textMuted} style={input} />

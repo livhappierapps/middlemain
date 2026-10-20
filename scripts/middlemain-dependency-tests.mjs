@@ -7,27 +7,23 @@ import { spawnSync } from 'node:child_process';
 
 const require = createRequire(import.meta.url);
 const root = new URL('../', import.meta.url).pathname;
-function installedModule(name, version, patched = false) {
-  const prefix = patched ? `${name}@${version}_patch_hash=` : `${name}@${version}`;
+function patchedModule(name, version) {
   const entry = readdirSync(join(root, 'node_modules/.pnpm'))
-    .find(directory => directory.startsWith(prefix));
-  assert.ok(entry, `Missing installed package ${name}@${version}`);
+    .find(directory => directory.startsWith(`${name}@${version}_patch_hash=`));
+  assert.ok(entry, `Missing installed patch for ${name}`);
   return join(root, 'node_modules/.pnpm', entry, 'node_modules', name);
 }
-const imageModule = installedModule('image-size', '2.0.4');
-const bracesModule = installedModule('braces', '3.0.3', true);
+const imageModule = patchedModule('image-size', '1.2.1');
+const bracesModule = patchedModule('braces', '3.0.3');
 
-test('upstream image-size 2.0.4 keeps PNG dimensions and rejects malformed JXL/HEIF/ICNS boxes promptly', () => {
-  const imageSizeModule = require(imageModule);
-  const imageSize = imageSizeModule.default || imageSizeModule.imageSize || imageSizeModule;
-  assert.equal(typeof imageSize, 'function');
+test('image-size patch keeps PNG dimensions and rejects zero-length JXL/HEIF/ICNS boxes promptly', () => {
+  const imageSize = require(imageModule);
   const png = readFileSync(join(root, 'artifacts/middlemain/assets/images/icon.png'));
   const size = imageSize(png);
   assert.ok(size.width > 0 && size.height > 0);
   const proof = `
     const assert = require('node:assert/strict');
-    const imageSizeModule = require(${JSON.stringify(imageModule)});
-    const size = imageSizeModule.default || imageSizeModule.imageSize || imageSizeModule;
+    const size = require(${JSON.stringify(imageModule)});
     const box = (type, length, payload = '') => {
       const b = Buffer.alloc(Math.max(8, payload.length + 8));
       b.writeUInt32BE(length); b.write(type, 4); b.write(payload, 8); return b;

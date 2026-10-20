@@ -2,7 +2,7 @@
 
 ## Current workspace scan — October 19, 2026
 
-- Dependency audit before the upstream `image-size` update: **0 critical, 4 high, 0 moderate, 0 low**. It reported `braces` 3.0.3, `image-size` 1.2.1 (two advisories), and `node-forge` 1.4.0. `image-size` is now pinned to the upstream fixed 2.0.4 release; the post-update audit is pending. The `node-forge` finding remains in the Expo/EAS tooling chain with no fixed registry release, and `braces` 3.0.3 remains locally guarded because no fixed upstream version is available.
+- Latest pnpm audit: **0 critical, 4 high, 0 moderate, 0 low**. It reports `braces` 3.0.3, `image-size` 1.2.1 (two advisories), and `node-forge` 1.4.0. Although upstream `image-size` 2.0.4 is listed as fixed, Expo's Metro 0.83.3 asset bundler fails with that release's default export; the app retains tested malformed-input guards on 1.2.1 instead. `node-forge` remains in Expo/EAS tooling with no fixed registry release, and `braces` remains locally guarded because no fixed upstream version is available.
 - Static-code scan: **0 findings**.
 - Privacy/dataflow scan: **not verified**. The latest HoundDog run failed with `HOUNDDOG_SCHEMA_MISMATCH`; treat this as a scanner failure, not a clean scan.
 - The tracked-text sweep found no `.env` or key-store files and no complete, valid PEM private-key block. It is not a complete secret scan; it did not inspect image contents or the full Git history.
@@ -48,6 +48,6 @@ Static/privacy scans do not inspect all historical Git objects, remote provider 
 
 ## Repository preflight security boundary
 
-A fresh dependency audit before the `image-size` 2.0.4 update reported four high findings and zero critical findings. The `image-size` update is covered by a malformed-input regression test. The `braces` advisory remains mitigated by a local depth guard; the node-forge advisory still lists no patched release. Dependency inspection places node-forge in Expo/EAS tooling, not the API server's dependency graph; that does not make the signing-toolchain finding fixed.
+An attempted `image-size` 2.0.4 update passed isolated parser tests but failed the Expo web export because Metro 0.83.3 received a non-callable default export. The compatible 1.2.1 package and its malformed-input guards are retained and covered by regression tests. The `braces` advisory remains mitigated by a local depth guard; the node-forge advisory still lists no patched release. Dependency inspection places node-forge in Expo/EAS tooling, not the API server's dependency graph; that does not make the signing-toolchain finding fixed.
 
 The new repository preflight never executes uploaded code, installs dependencies, runs package hooks, or loads repository compiler plugins. Its compiler reads supplied virtual files and trusted compiler standard libraries only. Source/file/output limits, two-worker concurrency, worker heap limits, timeouts, cancellation and cleanup are enforced. Uploaded source is not persisted by this checker; request logs contain counts/status, not source or GitHub tokens. Physical-device behavior, embedded-secret detection, secure storage of saved connector credentials and external key revocation still need separate verification/remediation.

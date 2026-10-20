@@ -1,10 +1,10 @@
 ---
 name: Open-source release
-description: User is considering an open-source release for Middlemain; no license or public visibility has been selected.
+description: User selected MIT for Middlemain; public repository visibility is not approved.
 ---
 
-The user is considering open-sourcing Middlemain so other developers can use and inspect it. This is not yet approval to change repository visibility or choose legal terms.
+The user selected the MIT License for Middlemain so other developers can use and inspect it. This is not approval to change repository visibility.
 
-**Why:** the user wants the project to be useful to other developers, but has not selected a license or authorized a public repository.
+**Why:** the user wants the project to be useful to other developers and explicitly chose MIT, but did not authorize a public repository.
 
-**How to apply:** keep source preparation separate from publishing. Before making any repository public, get the user's license and visibility decision, review tracked workspace support files and attachments, and inspect Git history for sensitive content.
+**How to apply:** keep source preparation separate from publishing. Before making any repository public, get explicit visibility approval, review tracked workspace support files and attachments, and inspect Git history for sensitive content.

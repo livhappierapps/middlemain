@@ -77,13 +77,13 @@ The test suite uses mocks and bounded fixtures; it does not prove access to a li
 
 ## Public-source checklist
 
-This repository does not yet include a license. Before making it public:
+The project has an MIT license, but repository visibility has not been changed. Before making it public:
 
-1. Choose and add a license; do not infer legal terms from the app's price or ownership.
+1. Confirm the owner has rights to license all first-party code and preserve third-party notices.
 2. Review tracked `attached_assets/` and workspace-specific `.agents/` content. A `.gitignore` entry does not remove files already tracked or erase them from Git history.
 3. Scan the full Git history and any screenshots, logs, sample configs, and integration handoffs for credentials or personal information.
 4. Confirm third-party skill, image, font, and other asset redistribution rights.
-5. Resolve all high-severity dependency findings and rerun the privacy/dataflow scan; a failed scan is not a clean result.
+5. Resolve remaining high-severity dependency findings and rerun the privacy/dataflow scan; a failed scan is not a clean result.
 6. Verify that the public privacy-policy URL and store metadata are live and accurate.
 
 Keep public repository visibility separate from a normal private GitHub push. Do not change visibility or publish a public mirror without the owner's explicit decision.

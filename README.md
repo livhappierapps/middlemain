@@ -37,4 +37,4 @@ Requests to a connected AI provider can incur charges from that provider. The ap
 
 ## License and public release
 
-This repository currently has no `LICENSE` file. Do not assume permission to reuse or redistribute the code until the owner selects and adds a license. The tracked workspace support files and attachments also need a public-release review before the repository is made public.
+The project is licensed under the [MIT License](LICENSE). GitHub visibility has not been changed. The tracked workspace support files and attachments still need a public-release review before the repository is made public.

@@ -21,5 +21,5 @@ Prepare the current workspace for a maintainable developer-facing release withou
 ## Errors and blockers
 - A previous preview emitted an unexplained HTTP 415; the screen rendered, but the resource was not identified.
 - Store builds and app-store approvals may require account-owner actions and fresh cost approval.
-- The repository has no license and is not ready to publish publicly: tracked workspace material and attachments need review, and the current dependency/privacy scan gates are not clear.
+- MIT is selected, but the repository is not ready to publish publicly: tracked workspace material and attachments need review, and dependency/privacy scan gates are not clear.
 - No EAS build or GitHub push was performed.

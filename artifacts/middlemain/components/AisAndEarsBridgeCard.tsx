@@ -9,7 +9,7 @@ export function AisAndEarsBridgeCard() {
   const { theme } = useTheme();
   const {
     config, updateConfig,
-    status, errorMsg, session,
+    status, errorMsg, credentialStorageReady, credentialStorageError, session,
     connect, disconnect,
   } = useAisAndEars();
 
@@ -92,8 +92,9 @@ export function AisAndEarsBridgeCard() {
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
+            disabled={!credentialStorageReady}
             onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); connect(); }}
-            style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#00ff88', backgroundColor: '#00ff8818' }}
+            style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#00ff88', backgroundColor: '#00ff8818', opacity: credentialStorageReady ? 1 : 0.45 }}
           >
             <Text style={{ color: '#00ff88', fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>Connect</Text>
           </TouchableOpacity>
@@ -115,6 +116,16 @@ export function AisAndEarsBridgeCard() {
           {errorMsg}
         </Text>
       )}
+      {credentialStorageError && (
+        <Text accessibilityRole="alert" style={{ color: theme.destructive, fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 6 }}>
+          {credentialStorageError}
+        </Text>
+      )}
+      {!credentialStorageReady && !credentialStorageError && (
+        <Text style={{ color: theme.textMuted, fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 6 }}>
+          Securing saved bridge settings…
+        </Text>
+      )}
 
       {/* Config fields — hidden when connected */}
       {status !== 'connected' && (
@@ -123,6 +134,7 @@ export function AisAndEarsBridgeCard() {
           <TextInput
             style={inputStyle}
             value={config.domain}
+            editable={credentialStorageReady}
             onChangeText={(v) => updateConfig({ domain: v })}
             placeholder="https://your-ais-and-ears.replit.app"
             placeholderTextColor={theme.textMuted}
@@ -136,6 +148,7 @@ export function AisAndEarsBridgeCard() {
             <TextInput
               style={[inputStyle, { flex: 1 }]}
               value={config.apiKey}
+              editable={credentialStorageReady}
               onChangeText={(v) => updateConfig({ apiKey: v })}
               placeholder="bridge_..."
               placeholderTextColor={theme.textMuted}
@@ -143,7 +156,7 @@ export function AisAndEarsBridgeCard() {
               autoCapitalize="none"
               autoCorrect={false}
             />
-            <TouchableOpacity onPress={() => setShowKey((v) => !v)} style={{ padding: 8, marginTop: 6 }}>
+            <TouchableOpacity disabled={!credentialStorageReady} onPress={() => setShowKey((v) => !v)} style={{ padding: 8, marginTop: 6 }}>
               <Feather name={showKey ? 'eye-off' : 'eye'} size={16} color={theme.textMuted} />
             </TouchableOpacity>
           </View>
@@ -153,12 +166,14 @@ export function AisAndEarsBridgeCard() {
             {[15, 30, 60].map((m) => (
               <TouchableOpacity
                 key={m}
+                disabled={!credentialStorageReady}
                 onPress={() => updateConfig({ durationMinutes: m })}
                 style={{
                   paddingHorizontal: 16, paddingVertical: 7, borderRadius: 6,
                   borderWidth: 1,
                   borderColor: config.durationMinutes === m ? '#00ff88' : theme.border,
                   backgroundColor: config.durationMinutes === m ? '#00ff8818' : 'transparent',
+                  opacity: credentialStorageReady ? 1 : 0.45,
                 }}
               >
                 <Text style={{ color: config.durationMinutes === m ? '#00ff88' : theme.textMuted, fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>

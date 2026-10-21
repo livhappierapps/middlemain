@@ -58,7 +58,7 @@ function PulseView({ color, size = 10 }: { color: string; size?: number }) {
 
 export default function HomeScreen() {
   const { theme } = useTheme();
-  const { connections, serverGrokAvailable, addServerGrokConnection } = useAI();
+  const { connections, serverGrokAvailable, credentialStorageReady, addServerGrokConnection } = useAI();
   const { tier } = usePurchase();
   const insets = useSafeAreaInsets();
   const hasServerConn = connections.some((c) => c.provider === 'server');
@@ -126,6 +126,7 @@ export default function HomeScreen() {
         {/* Quick-setup banner — server Grok detected */}
         {serverGrokAvailable && !hasServerConn && (
           <TouchableOpacity
+            disabled={!credentialStorageReady}
             onPress={() => { addServerGrokConnection(); }}
             style={{
               backgroundColor: theme.secondary + '18',
@@ -137,6 +138,7 @@ export default function HomeScreen() {
               alignItems: 'center',
               gap: 10,
               marginBottom: 14,
+              opacity: credentialStorageReady ? 1 : 0.45,
             }}
           >
             <Feather name="zap" size={18} color={theme.secondary} />

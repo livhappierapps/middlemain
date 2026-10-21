@@ -6,6 +6,9 @@ This is the canonical guide for the native app, its offline help, and its AI hel
 
 1. Open **Connect** and add your own AI provider connection.
 2. Select a provider, a model identifier supported by your account, and your API key. Save it and optionally use **Test**.
+
+On iOS and Android, AI-provider and AIs & Ears bridge keys are saved in device secure storage. The updated app migrates existing saved keys automatically. Browser preview keeps keys in memory for the current session only; they are not saved across reloads.
+
 3. Open **Bridge** for individual chat, **Council** for multiple participants, or **Debug** for source checks.
 4. Open **Main / Guide** for offline help or an explicitly selected paid AI answer.
 

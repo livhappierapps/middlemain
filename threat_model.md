@@ -6,7 +6,7 @@ Middlemain is a native-first Expo app with an Express/WebSocket API and a guest 
 
 ## Assets
 
-- **Customer credentials:** AI provider keys, AIs & Ears bridge keys, MCP tokens, and GitHub device-flow tokens. Some saved AI/bridge credentials still persist in AsyncStorage; do not describe them as encrypted. Their migration to OS-backed secure storage remains outstanding.
+- **Customer credentials:** AI provider keys, AIs & Ears bridge keys, MCP tokens, and GitHub device-flow tokens. iOS/Android AI and bridge keys migrate to Expo SecureStore; browser preview keeps those values in session memory only. Migration preserves the old settings if secure storage fails. Previous device backups are not retroactively erased.
 - **Owner credentials:** executive authorization, owner Grok configuration, memory access, webhook authorization, and Apple/EAS signing material. These must stay in Replit Secrets or OS-backed storage and never enter a consumer bundle, logs, or Git.
 - **User content:** repository source, prompts, images/audio/video, Council messages, room history, and Human Hands records. Content can cross to the chosen provider or server when the user requests the relevant feature.
 - **Room capabilities:** share URLs, separate host tokens, MCP tokens, and guest identities. A share URL grants room access; it does not prove a guest's identity.
@@ -19,7 +19,7 @@ Middlemain is a native-first Expo app with an Express/WebSocket API and a guest 
 - **Repository source ↔ compiler:** imported source is data only. The checker must not install dependencies, run scripts/plugins, follow untrusted config inheritance, or read outside the supplied virtual files and trusted compiler libraries.
 - **Council host ↔ guests/MCP:** guest links permit participation, but only the separate host credential can publish owner AI/system messages. MCP credentials cannot authorize host actions.
 - **Workspace ↔ GitHub/deployment/build services:** Replit Secrets are separate from tracked source. Deploy images must exclude credentials, agent-only material, planning notes, uploads, and generated release binaries. Repository visibility stays private unless the owner explicitly approves a public release.
-- **App ↔ device storage:** OS-backed SecureStore is used for some secrets, but existing AI/bridge credentials still need a migration and recovery test before claiming complete device protection.
+- **App ↔ device storage:** AI/bridge keys use OS-backed SecureStore on iOS/Android. Migration and recovery still require a physical-device test; old backups can retain pre-migration copies. Browser preview is session-only, not device-secure storage.
 
 ## Scan Anchors
 
@@ -59,5 +59,5 @@ A guest, MCP client, or public caller must not gain owner API, host publishing, 
 
 - Dependency audit reports four high advisories: locally patched `braces` and `image-size` findings remain visible to version-based scanning; the `node-forge` RSA finding has no fixed npm release and is in Expo/EAS tooling.
 - Static-code scan returned zero findings. The latest privacy/dataflow scan failed schema validation; it is not a clean result.
-- Saved AI/bridge credentials still need their secure-storage migration. Physical-device recovery, native permissions, production deployment probes, load testing, external key rotation, and store review are not certified by local tests.
+- AI/bridge credential migration is implemented and has automated coverage. Physical-device migration/recovery, native permissions, production deployment probes, load testing, external key rotation, and store review are not certified by local tests.
 - No scan or local export proves that the app is vulnerability-free. Preserve the patches and run typechecks, regression tests, security scans, local exports, and real-device checks before a paid native build or public release.

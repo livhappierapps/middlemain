@@ -33,7 +33,7 @@ After a guide edit, run `pnpm run guide:sync` and `pnpm run guide:check`. Do not
 - The API's TypeScript compiler is a runtime dependency. Its isolated checks need fixed options, limited input, and no package installation.
 - Owner-funded Grok, Executive API, and inbound owner webhooks require executive authorization. New room AI/system publications require a separate room host key; guest links and MCP keys cannot authorize them.
 - Keep host keys in native secure storage, separate from share links/MCP tokens. Pin room publication to the server that created it. Old hosts without a key create a new room; preserve prior history.
-- Keys not yet migrated to native keychain remain local storage, not a promise of encryption. Do not claim that submitted messages, guest names, source, or images never leave the device.
+- AI-provider and AIs & Ears bridge keys use Expo SecureStore on iOS/Android, with a one-time legacy migration that preserves old data if secure storage fails. Browser preview keeps those keys in session memory only. Other keys not yet migrated remain local storage, not a promise of encryption; do not claim submitted messages, guest names, source, or images never leave the device.
 - No purchase simulation or unverified paid entitlements. Store purchases/restore remain explicitly unavailable until real integration is tested.
 - Keep error messages explicit, secrets out of logs, and room writes atomic. Invalid persisted history must not be silently overwritten.
 

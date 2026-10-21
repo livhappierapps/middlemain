@@ -18,10 +18,12 @@ Must use `expo-clipboard@~8.0.8` (not the latest) for Expo SDK 54 compatibility.
 
 **Why:** Installing the latest expo-clipboard gets SDK 56 version which causes Metro bundler errors.
 
-## API keys are device-local
-User API keys (Grok, OpenAI, etc.) are stored in AsyncStorage on device only — never sent to Middlemain servers. The server-side `XAI_API_KEY` secret is only for the owner's dev/testing server proxy.
+## AI and bridge credentials use secure, state-marked storage
+On iOS/Android, AI-provider and AIs & Ears bridge keys use Expo SecureStore; browser preview keeps them in session memory only. Legacy AsyncStorage values are migrated before plaintext metadata is cleared. Persisted `secure`/`cleared` state must stay authoritative so a failed key deletion cannot resurrect a cleared credential. AI keys are sent to the selected provider; bridge keys are sent only to the bridge session endpoint. The server-side `XAI_API_KEY` remains separate and is for the owner's server proxy.
 
-**Why:** The app is distributed to other developers who bring their own keys. The server proxy is a convenience for the owner only.
+**Why:** Credentials should not remain in app preferences or browser storage, and asynchronous secure deletion can fail. A cleared-state marker prevents a stale device-keychain value from being loaded again.
+
+**How to apply:** Keep keys out of AsyncStorage and persistent web storage; secure-write before saving sanitized metadata, preserve legacy data on migration failure, and surface storage errors instead of silently falling back.
 
 ## Server proxy detection
 On app startup, AIContext calls `GET /api/grok/status`. If `configured: true`, a cyan "Dev's Grok is ready" banner appears on Home and Connect screens. Tapping it calls `addServerGrokConnection()` which creates a `provider: 'server'` connection with `baseUrl: getServerBase()`.

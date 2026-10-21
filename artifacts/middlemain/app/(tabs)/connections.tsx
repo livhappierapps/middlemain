@@ -185,7 +185,10 @@ function ConnectionForm({
 
 export default function ConnectionsScreen() {
   const { theme } = useTheme();
-  const { connections, addConnection, updateConnection, deleteConnection, testConnection, serverGrokAvailable, addServerGrokConnection } = useAI();
+  const {
+    connections, addConnection, updateConnection, deleteConnection, testConnection,
+    serverGrokAvailable, addServerGrokConnection, credentialStorageReady, credentialStorageError,
+  } = useAI();
   const insets = useSafeAreaInsets();
   const [showForm, setShowForm] = useState(false);
   const [editTarget, setEditTarget] = useState<AIConnection | null>(null);
@@ -207,6 +210,7 @@ export default function ConnectionsScreen() {
   };
 
   const handleSave = (data: Omit<AIConnection, 'id'>) => {
+    if (!credentialStorageReady) return;
     if (editTarget) {
       updateConnection(editTarget.id, data);
     } else {
@@ -240,6 +244,19 @@ export default function ConnectionsScreen() {
               {editTarget ? 'EDIT CONNECTION' : 'NEW CONNECTION'}
             </NeonText>
           </View>
+          {credentialStorageError ? (
+            <Text accessibilityRole="alert" style={{ color: theme.destructive, marginBottom: 12 }}>
+              {credentialStorageError}
+            </Text>
+          ) : !credentialStorageReady ? (
+            <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 12 }}>
+              Securing saved connections…
+            </Text>
+          ) : Platform.OS === 'web' ? (
+            <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 12 }}>
+              Browser preview keeps API keys in memory for this session. The installed app saves them in device secure storage.
+            </Text>
+          ) : null}
           <ConnectionForm
             initial={editTarget ?? undefined}
             onSave={handleSave}
@@ -261,14 +278,28 @@ export default function ConnectionsScreen() {
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 20 }}>
           <NeonText size={20} weight="700" letterSpacing={3}>CONNECTIONS</NeonText>
           <TouchableOpacity
+            disabled={!credentialStorageReady}
             onPress={() => { setShowForm(true); setEditTarget(null); }}
-            style={{ width: 36, height: 36, borderRadius: 18, borderWidth: 1.5, borderColor: theme.primary, alignItems: 'center', justifyContent: 'center', shadowColor: theme.primary, shadowOffset: { width: 0, height: 0 }, shadowRadius: 8, shadowOpacity: 0.6 }}
+            style={{ width: 36, height: 36, borderRadius: 18, borderWidth: 1.5, borderColor: theme.primary, alignItems: 'center', justifyContent: 'center', shadowColor: theme.primary, shadowOffset: { width: 0, height: 0 }, shadowRadius: 8, shadowOpacity: 0.6, opacity: credentialStorageReady ? 1 : 0.45 }}
           >
             <Feather name="plus" size={20} color={theme.primary} />
           </TouchableOpacity>
         </View>
 
         <ServerGrokNotice />
+        {credentialStorageError ? (
+          <Text accessibilityRole="alert" style={{ color: theme.destructive, paddingHorizontal: 16, marginBottom: 12 }}>
+            {credentialStorageError}
+          </Text>
+        ) : !credentialStorageReady ? (
+          <Text style={{ color: theme.textMuted, fontSize: 12, paddingHorizontal: 16, marginBottom: 12 }}>
+            Securing saved connections…
+          </Text>
+        ) : Platform.OS === 'web' ? (
+          <Text style={{ color: theme.textMuted, fontSize: 12, paddingHorizontal: 16, marginBottom: 12 }}>
+            Browser preview keeps API keys in memory for this session. The installed app saves them in device secure storage.
+          </Text>
+        ) : null}
 
         {/* AIs & Ears Bridge */}
         <View style={{ paddingTop: 4 }}>
@@ -295,6 +326,7 @@ export default function ConnectionsScreen() {
         {/* Server Grok quick-setup */}
         {serverGrokAvailable && !connections.some((c) => c.provider === 'server') && (
           <TouchableOpacity
+            disabled={!credentialStorageReady}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               addServerGrokConnection();
@@ -307,6 +339,7 @@ export default function ConnectionsScreen() {
               borderColor: theme.secondary,
               borderRadius: theme.radius,
               padding: 14,
+              opacity: credentialStorageReady ? 1 : 0.45,
               flexDirection: 'row',
               alignItems: 'center',
               gap: 12,

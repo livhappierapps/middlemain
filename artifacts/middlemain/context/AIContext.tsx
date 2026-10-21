@@ -1,9 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { resilientFetch } from '@/utils/resilientFetch';
 import { serverAuthHeaders } from '@/utils/serverAuth';
+import { createCredentialStore, readOrMigrateCredential, type CredentialState } from '@/utils/secureCredentialStore';
 import { streamSSE } from '@/utils/streamSSE';
 import { appHelpContext } from '@/utils/appHelp';
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { Platform } from 'react-native';
 import { fetch } from 'expo/fetch';
 
 export type AIProvider = 'xai' | 'openai' | 'anthropic' | 'gemini' | 'custom' | 'server';
@@ -13,6 +15,7 @@ export interface AIConnection {
   name: string;
   provider: AIProvider;
   apiKey: string;
+  credentialState?: CredentialState;
   model: string;
   visionModel?: string;
   baseUrl?: string;
@@ -82,6 +85,8 @@ function pickModel(conn: AIConnection, hasImage: boolean): string {
 interface AIContextValue {
   connections: AIConnection[];
   activeConnection: AIConnection | null;
+  credentialStorageReady: boolean;
+  credentialStorageError: string | null;
   serverGrokAvailable: boolean;
   serverGrokStatus: ServerGrokStatus;
   refreshServerGrokStatus: () => Promise<void>;
@@ -125,10 +130,18 @@ interface AIContextValue {
 }
 
 const STORAGE_KEY = '@middlemain_connections';
+const CREDENTIAL_STORAGE_ERROR =
+  'Could not protect saved AI keys in device secure storage. Existing settings were preserved; keep the app installed and try again.';
+const credentialStore = createCredentialStore(
+  Platform.OS,
+  () => import('expo-secure-store'),
+);
 
 const AIContext = createContext<AIContextValue>({
   connections: [],
   activeConnection: null,
+  credentialStorageReady: false,
+  credentialStorageError: null,
   serverGrokAvailable: false,
   serverGrokStatus: 'checking',
   refreshServerGrokStatus: async () => {},
@@ -273,8 +286,19 @@ async function callAI(
 
 export function AIProvider({ children }: { children: React.ReactNode }) {
   const [connections, setConnections] = useState<AIConnection[]>([]);
+  const [credentialStorageReady, setCredentialStorageReady] = useState(false);
+  const [credentialStorageError, setCredentialStorageError] = useState<string | null>(null);
   const [serverGrokAvailable, setServerGrokAvailable] = useState(false);
   const [serverGrokStatus, setServerGrokStatus] = useState<ServerGrokStatus>('checking');
+  const persistenceQueue = useRef<Promise<void>>(Promise.resolve());
+
+  const queueCredentialStorage = useCallback((operation: () => Promise<void>) => {
+    const next = persistenceQueue.current.then(operation, operation);
+    persistenceQueue.current = next.then(
+      () => setCredentialStorageError(null),
+      () => setCredentialStorageError(CREDENTIAL_STORAGE_ERROR),
+    );
+  }, []);
 
   const refreshServerGrokStatus = useCallback(async () => {
     try {
@@ -291,16 +315,99 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then((data) => {
-      if (data) { try { setConnections(JSON.parse(data)); } catch {} }
+    let cancelled = false;
+    queueCredentialStorage(async () => {
+      const data = await AsyncStorage.getItem(STORAGE_KEY);
+      if (!data) {
+        if (!cancelled) {
+          setConnections([]);
+          setCredentialStorageReady(true);
+        }
+        return;
+      }
+
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(data);
+      } catch {
+        throw new Error('Saved AI connection data is invalid.');
+      }
+      if (
+        !Array.isArray(parsed)
+        || parsed.some((connection) => !connection || typeof connection !== 'object' || typeof connection.id !== 'string')
+      ) {
+        throw new Error('Saved AI connection data is invalid.');
+      }
+
+      const stored = parsed as AIConnection[];
+      const hydrated: AIConnection[] = [];
+      let requiresSanitization = false;
+      for (const connection of stored) {
+        const legacyKey = typeof connection.apiKey === 'string' ? connection.apiKey.trim() : '';
+        const result = await readOrMigrateCredential(
+          credentialStore,
+          'ai-connection',
+          connection.id,
+          legacyKey,
+          connection.credentialState,
+        );
+        if (legacyKey || connection.credentialState !== result.state) {
+          requiresSanitization = true;
+        }
+        hydrated.push({
+          ...connection,
+          apiKey: result.value,
+          credentialState: result.state,
+        });
+      }
+
+      if (requiresSanitization) {
+        await AsyncStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify(hydrated.map((connection) => ({ ...connection, apiKey: '' }))),
+        );
+      }
+      if (!cancelled) {
+        setConnections(hydrated);
+        setCredentialStorageReady(true);
+      }
     });
     void refreshServerGrokStatus();
-  }, [refreshServerGrokStatus]);
+    return () => {
+      cancelled = true;
+    };
+  }, [queueCredentialStorage, refreshServerGrokStatus]);
 
-  const persist = useCallback((conns: AIConnection[]) => {
+  const persist = useCallback((conns: AIConnection[], removedIds: string[] = []) => {
+    if (!credentialStorageReady) return;
     setConnections(conns);
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(conns));
-  }, []);
+    queueCredentialStorage(async () => {
+      for (const connection of conns) {
+        const apiKey = connection.apiKey?.trim() ?? '';
+        if (apiKey) {
+          await credentialStore.set('ai-connection', connection.id, apiKey);
+        }
+      }
+
+      await AsyncStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify(conns.map((connection) => ({
+          ...connection,
+          apiKey: '',
+          credentialState: connection.apiKey?.trim() ? 'secure' : 'cleared',
+        }))),
+      );
+
+      for (const connection of conns) {
+        if (!connection.apiKey?.trim()) {
+          await credentialStore.delete('ai-connection', connection.id);
+        }
+      }
+      for (const id of removedIds) {
+        await credentialStore.delete('ai-connection', id);
+      }
+    });
+  }, [credentialStorageReady, queueCredentialStorage]);
 
   const addConnection = useCallback(
     (conn: Omit<AIConnection, 'id'>): string => {
@@ -318,7 +425,7 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
   );
 
   const deleteConnection = useCallback(
-    (id: string) => persist(connections.filter((c) => c.id !== id)),
+    (id: string) => persist(connections.filter((c) => c.id !== id), [id]),
     [connections, persist],
   );
 
@@ -647,7 +754,8 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AIContext.Provider value={{
-      connections, activeConnection, serverGrokAvailable, serverGrokStatus, refreshServerGrokStatus,
+      connections, activeConnection, credentialStorageReady, credentialStorageError,
+      serverGrokAvailable, serverGrokStatus, refreshServerGrokStatus,
       addConnection, updateConnection, deleteConnection,
       setActiveConnection, addServerGrokConnection,
       testConnection, sendMessage, sendGuideMessage, sendMessageWithTools,

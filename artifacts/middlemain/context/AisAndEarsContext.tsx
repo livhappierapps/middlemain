@@ -6,6 +6,7 @@ import { Platform } from 'react-native';
 import { resilientFetch } from '@/utils/resilientFetch';
 import { fetch } from 'expo/fetch';
 import { deliverVisionFrame } from '@/utils/bridgeVision';
+import { createCredentialStore, readOrMigrateCredential, type CredentialState } from '@/utils/secureCredentialStore';
 
 const WS_PING_INTERVAL_MS = 15_000;
 const WS_PING_TIMEOUT_MS = 10_000;
@@ -13,6 +14,12 @@ const WS_MAX_RECONNECT_ATTEMPTS = 8;
 const WS_RECONNECT_BASE_MS = 1_000;
 
 const CONFIG_KEY = '@aie_bridge_config';
+const CREDENTIAL_STORAGE_ERROR =
+  'Could not protect the saved bridge key in device secure storage. Existing settings were preserved; keep the app installed and try again.';
+const credentialStore = createCredentialStore(
+  Platform.OS,
+  () => import('expo-secure-store'),
+);
 const CHUNK_MS = 2500;
 const VISION_INTERVAL_MS = 3000;
 
@@ -35,11 +42,14 @@ interface Config {
   domain: string;
   apiKey: string;
   durationMinutes: number;
+  credentialState?: CredentialState;
 }
 
 interface AisAndEarsContextValue {
   config: Config;
   updateConfig: (patch: Partial<Config>) => void;
+  credentialStorageReady: boolean;
+  credentialStorageError: string | null;
   session: Session | null;
   status: BridgeStatus;
   errorMsg: string | null;
@@ -92,9 +102,12 @@ export function AisAndEarsProvider({ children }: { children: React.ReactNode }) 
     apiKey: '',
     durationMinutes: 30,
   });
+  const configRef = useRef<Config>({ domain: '', apiKey: '', durationMinutes: 30 });
+  const [credentialStorageReady, setCredentialStorageReady] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
   const [status, setStatus] = useState<BridgeStatus>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [credentialStorageError, setCredentialStorageError] = useState<string | null>(null);
   const [hearingOn, setHearingOn] = useState(false);
   const [cameraOn, setCameraOn] = useState(false);
   const [screenOn, setScreenOn] = useState(false);
@@ -110,6 +123,15 @@ export function AisAndEarsProvider({ children }: { children: React.ReactNode }) 
   const hearingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const audioGenerationRef = useRef(0);
   const listeners = useRef<Set<(msg: BridgeMessage) => void>>(new Set());
+  const persistenceQueue = useRef<Promise<void>>(Promise.resolve());
+
+  const queueCredentialStorage = useCallback((operation: () => Promise<void>) => {
+    const next = persistenceQueue.current.then(operation, operation);
+    persistenceQueue.current = next.then(
+      () => setCredentialStorageError(null),
+      () => setCredentialStorageError(CREDENTIAL_STORAGE_ERROR),
+    );
+  }, []);
 
   const emit = useCallback((msg: BridgeMessage) => {
     listeners.current.forEach((cb) => cb(msg));
@@ -121,25 +143,79 @@ export function AisAndEarsProvider({ children }: { children: React.ReactNode }) 
   }, []);
 
   useEffect(() => {
-    AsyncStorage.getItem(CONFIG_KEY).then((raw) => {
+    let cancelled = false;
+    queueCredentialStorage(async () => {
+      const raw = await AsyncStorage.getItem(CONFIG_KEY);
+      let stored: Config = { domain: '', apiKey: '', durationMinutes: 30 };
       if (raw) {
-        try { setConfigState((prev) => ({ ...prev, ...JSON.parse(raw) })); } catch {}
+        const parsed: unknown = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+          throw new Error('Saved bridge settings are invalid.');
+        }
+        const saved = parsed as Partial<Config>;
+        stored = {
+          domain: typeof saved.domain === 'string' ? saved.domain : '',
+          apiKey: typeof saved.apiKey === 'string' ? saved.apiKey.trim() : '',
+          durationMinutes: typeof saved.durationMinutes === 'number'
+            && [15, 30, 60].includes(saved.durationMinutes)
+            ? saved.durationMinutes
+            : 30,
+          credentialState: saved.credentialState === 'secure' || saved.credentialState === 'cleared'
+            ? saved.credentialState
+            : undefined,
+        };
+      }
+
+      const result = await readOrMigrateCredential(
+        credentialStore,
+        'ais-and-ears-bridge',
+        'primary',
+        stored.apiKey,
+        stored.credentialState,
+      );
+      if (raw && (stored.apiKey || stored.credentialState !== result.state)) {
+        await AsyncStorage.setItem(
+          CONFIG_KEY,
+          JSON.stringify({ ...stored, apiKey: '', credentialState: result.state }),
+        );
+      }
+      const hydrated = { ...stored, apiKey: result.value, credentialState: result.state };
+      if (!cancelled) {
+        configRef.current = hydrated;
+        setConfigState(hydrated);
+        setCredentialStorageReady(true);
       }
     });
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [queueCredentialStorage]);
 
   const updateConfig = useCallback((patch: Partial<Config>) => {
-    setConfigState((prev) => {
-      const next = {
-        ...prev,
-        ...patch,
-        ...(patch.apiKey !== undefined ? { apiKey: patch.apiKey.trim() } : {}),
-        ...(patch.domain !== undefined ? { domain: patch.domain.trim() } : {}),
-      };
-      AsyncStorage.setItem(CONFIG_KEY, JSON.stringify(next));
-      return next;
+    if (!credentialStorageReady) return;
+    const next = {
+      ...configRef.current,
+      ...patch,
+      ...(patch.apiKey !== undefined ? { apiKey: patch.apiKey.trim() } : {}),
+      ...(patch.domain !== undefined ? { domain: patch.domain.trim() } : {}),
+    };
+    next.credentialState = next.apiKey ? 'secure' : 'cleared';
+    configRef.current = next;
+    setConfigState(next);
+    queueCredentialStorage(async () => {
+      const apiKey = next.apiKey.trim();
+      if (apiKey) {
+        await credentialStore.set('ais-and-ears-bridge', 'primary', apiKey);
+      }
+      await AsyncStorage.setItem(
+        CONFIG_KEY,
+        JSON.stringify({ ...next, apiKey: '', credentialState: next.credentialState }),
+      );
+      if (!apiKey) {
+        await credentialStore.delete('ais-and-ears-bridge', 'primary');
+      }
     });
-  }, []);
+  }, [credentialStorageReady, queueCredentialStorage]);
 
   const stopAudio = useCallback(async () => {
     audioGenerationRef.current += 1;
@@ -228,6 +304,10 @@ export function AisAndEarsProvider({ children }: { children: React.ReactNode }) 
   }, [stopAudio, stopWsPing, emit]);
 
   const connect = useCallback(async () => {
+    if (!credentialStorageReady) {
+      setErrorMsg('Bridge settings are still being secured. Please wait and try again.');
+      return;
+    }
     const domain = config.domain.trim().replace(/\/$/, '');
     if (!domain) {
       setErrorMsg('Enter the AIs & Ears app URL first.');
@@ -269,7 +349,7 @@ export function AisAndEarsProvider({ children }: { children: React.ReactNode }) 
       setErrorMsg(err.message ?? 'Connection failed');
       emit({ type: 'bridge_error', content: `Bridge error: ${err.message}` });
     }
-  }, [config, emit, setupWebSocket]);
+  }, [config, credentialStorageReady, emit, setupWebSocket]);
 
   const sendVisionFrame = useCallback(async (imageData: string, source: 'camera' | 'screen', signal?: AbortSignal): Promise<string | null> => {
     if (!session) throw new Error('No active bridge session. Reconnect AIs & Ears in Connect.');
@@ -390,7 +470,7 @@ export function AisAndEarsProvider({ children }: { children: React.ReactNode }) 
   return (
     <AisAndEarsCtx.Provider value={{
       config, updateConfig,
-      session, status, errorMsg,
+      credentialStorageReady, credentialStorageError, session, status, errorMsg,
       hearingOn, cameraOn, screenOn,
       connect, disconnect,
       toggleHearing, toggleCamera, toggleScreen,

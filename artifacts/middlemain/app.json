@@ -17,7 +17,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "app.middlemain.bridge",
-      "buildNumber": "1",
+      "buildNumber": "2",
       "infoPlist": {
         "NSCameraUsageDescription": "Middlemain uses the camera to capture photos and, when enabled, share camera frames with the AI service you select in the Bridge Terminal.",
         "NSPhotoLibraryUsageDescription": "Middlemain accesses your photo library to attach screenshots and images for AI analysis in the Bridge Terminal.",
@@ -30,7 +30,7 @@
     },
     "android": {
       "package": "app.middlemain.bridge",
-      "versionCode": 3,
+      "versionCode": 4,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#080010"

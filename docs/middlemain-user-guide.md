@@ -7,7 +7,7 @@ This is the canonical guide for the native app, its offline help, and its AI hel
 1. Open **Connect** and add your own AI provider connection.
 2. Select a provider, a model identifier supported by your account, and your API key. Save it and optionally use **Test**.
 
-On iOS and Android, AI-provider and AIs & Ears bridge keys are saved in device secure storage. The updated app migrates existing saved keys automatically. Browser preview keeps keys in memory for the current session only; they are not saved across reloads.
+On iOS and Android, AI-provider, AIs & Ears bridge, and Memory Machine MCP tokens are saved in device secure storage. The updated app migrates existing saved tokens when secure storage is available; if migration fails, existing settings are preserved and an error is shown. Browser preview keeps these tokens in memory for the current session only; they are not saved across reloads.
 
 3. Open **Bridge** for individual chat, **Council** for multiple participants, or **Debug** for source checks.
 4. Open **Main / Guide** for offline help or an explicitly selected paid AI answer.
@@ -46,7 +46,7 @@ Tips: use HTTPS for remote services and avoid displaying password managers, priv
 
 ## Memory Bridge and advertised MCP tools
 
-In Connect, enter your Memory Bridge service URL and token, then Connect. The app discovers the service's advertised tools. Tool help describes the remote tool's name, purpose, and input schema. Supply the fields it requests; Disconnect closes the connection. The app cannot guarantee that every remote tool exists or that its description is trustworthy.
+In Connect, enter your Memory Bridge service URL and token, then Connect. The token is stored in device secure storage on iOS and Android; browser preview retains it only for the current session. The app discovers the service's advertised tools. Tool help describes the remote tool's name, purpose, and input schema. Supply the fields it requests; Disconnect closes the connection. The app cannot guarantee that every remote tool exists or that its description is trustworthy.
 
 Tool-enabled Bridge chat can request available tools when authorized. Review what a tool will send or change. Memory search, save, and recent-memory features depend on the connected service and permissions; they are not a guarantee of unlimited or permanent memory.
 

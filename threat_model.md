@@ -19,7 +19,7 @@ Middlemain is a native-first Expo app with an Express/WebSocket API and a guest 
 - **Repository source ↔ compiler:** imported source is data only. The checker must not install dependencies, run scripts/plugins, follow untrusted config inheritance, or read outside the supplied virtual files and trusted compiler libraries.
 - **Council host ↔ guests/MCP:** guest links permit participation, but only the separate host credential can publish owner AI/system messages. MCP credentials cannot authorize host actions.
 - **Workspace ↔ GitHub/deployment/build services:** Replit Secrets are separate from tracked source. Deploy images must exclude credentials, agent-only material, planning notes, uploads, and generated release binaries. Repository visibility stays private unless the owner explicitly approves a public release.
-- **App ↔ device storage:** AI/bridge keys use OS-backed SecureStore on iOS/Android. Migration and recovery still require a physical-device test; old backups can retain pre-migration copies. Browser preview is session-only, not device-secure storage.
+- **App ↔ device storage:** AI-provider, AIs & Ears bridge, and Memory Machine MCP tokens use OS-backed SecureStore on iOS/Android; only non-secret MCP metadata remains in AsyncStorage. Migration and recovery still require a physical-device test, and old backups can retain pre-migration copies. Browser preview is session-only, not device-secure storage.
 
 ## Scan Anchors
 

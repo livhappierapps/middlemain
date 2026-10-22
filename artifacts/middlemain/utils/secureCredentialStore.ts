@@ -1,6 +1,39 @@
 export type ExpoSecureStoreModule = typeof import('expo-secure-store');
-export type CredentialNamespace = 'ai-connection' | 'ais-and-ears-bridge';
+export type CredentialNamespace = 'ai-connection' | 'ais-and-ears-bridge' | 'memory-mcp';
 export type CredentialState = 'secure' | 'cleared';
+
+export interface MCPCredentialMetadata {
+  url: string;
+  legacyToken: string;
+  credentialState?: CredentialState;
+}
+
+export function parseMCPCredentialMetadata(raw: string | null): MCPCredentialMetadata {
+  if (raw === null) return { url: '', legacyToken: '' };
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error('Saved Memory Machine settings are invalid.');
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Saved Memory Machine settings are invalid.');
+  }
+
+  const saved = parsed as Record<string, unknown>;
+  return {
+    url: typeof saved.url === 'string' ? saved.url : '',
+    legacyToken: typeof saved.token === 'string' ? saved.token.trim() : '',
+    credentialState: saved.credentialState === 'secure' || saved.credentialState === 'cleared'
+      ? saved.credentialState
+      : undefined,
+  };
+}
+
+export function serializeMCPCredentialMetadata(url: string, credentialState: CredentialState): string {
+  return JSON.stringify({ url, credentialState });
+}
 
 export interface CredentialStore {
   get(namespace: CredentialNamespace, id: string): Promise<string | null>;

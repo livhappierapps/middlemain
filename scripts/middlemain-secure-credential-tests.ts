@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   createCredentialStore,
+  parseMCPCredentialMetadata,
   readOrMigrateCredential,
+  serializeMCPCredentialMetadata,
   type ExpoSecureStoreModule,
 } from '../artifacts/middlemain/utils/secureCredentialStore';
 
@@ -58,12 +60,15 @@ test('web credentials remain in memory and never call native secure storage', as
   const firstSession = createCredentialStore('web', loadNative);
 
   await firstSession.set('ais-and-ears-bridge', 'primary', 'bridge-secret');
+  await firstSession.set('memory-mcp', 'primary', 'memory-token');
   assert.equal(await firstSession.get('ais-and-ears-bridge', 'primary'), 'bridge-secret');
+  assert.equal(await firstSession.get('memory-mcp', 'primary'), 'memory-token');
   assert.equal(nativeLoadCount, 0);
   assert.equal(native.setCount, 0);
 
   const nextSession = createCredentialStore('web', loadNative);
   assert.equal(await nextSession.get('ais-and-ears-bridge', 'primary'), null);
+  assert.equal(await nextSession.get('memory-mcp', 'primary'), null);
 });
 
 test('legacy credentials migrate once and existing secure values take precedence', async () => {
@@ -88,6 +93,59 @@ test('a cleared marker deletes stale secure credentials instead of restoring the
   const result = await readOrMigrateCredential(store, 'ai-connection', 'one', 'legacy-secret', 'cleared');
   assert.deepEqual(result, { value: '', migratedLegacyValue: false, state: 'cleared' });
   assert.equal(native.values.has(key), false);
+});
+
+test('Memory Machine token migrates to secure storage and sanitized metadata omits it', async () => {
+  const native = createNativeStore();
+  const store = createCredentialStore('android', async () => native.module);
+  const legacyToken = 'legacy-memory-token';
+  const saved = parseMCPCredentialMetadata(JSON.stringify({
+    url: 'https://memory.example/api/mcp',
+    token: legacyToken,
+  }));
+
+  const credential = await readOrMigrateCredential(
+    store,
+    'memory-mcp',
+    'primary',
+    saved.legacyToken,
+    saved.credentialState,
+  );
+  const metadata = serializeMCPCredentialMetadata(saved.url, credential.state);
+
+  assert.equal(credential.value, legacyToken);
+  assert.equal(await store.get('memory-mcp', 'primary'), legacyToken);
+  assert.deepEqual(JSON.parse(metadata), {
+    url: 'https://memory.example/api/mcp',
+    credentialState: 'secure',
+  });
+  assert.equal(metadata.includes(legacyToken), false);
+});
+
+test('Memory Machine cleared marker takes precedence over a stale legacy token', async () => {
+  const native = createNativeStore();
+  const store = createCredentialStore('ios', async () => native.module);
+  native.values.set('middlemain.credential.memory-mcp.primary', 'stale-secure-token');
+  const saved = parseMCPCredentialMetadata(JSON.stringify({
+    url: 'https://memory.example/api/mcp',
+    token: 'stale-legacy-token',
+    credentialState: 'cleared',
+  }));
+  const credential = await readOrMigrateCredential(
+    store,
+    'memory-mcp',
+    'primary',
+    saved.legacyToken,
+    saved.credentialState,
+  );
+
+  assert.equal(credential.value, '');
+  assert.equal(native.values.has('middlemain.credential.memory-mcp.primary'), false);
+});
+
+test('invalid Memory Machine settings are rejected before migration', () => {
+  assert.throws(() => parseMCPCredentialMetadata('{broken'), /settings are invalid/i);
+  assert.throws(() => parseMCPCredentialMetadata('[]'), /settings are invalid/i);
 });
 
 test('secure-storage unavailability fails closed without saving the credential', async () => {

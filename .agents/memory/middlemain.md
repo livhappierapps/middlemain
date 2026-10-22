@@ -18,10 +18,10 @@ Must use `expo-clipboard@~8.0.8` (not the latest) for Expo SDK 54 compatibility.
 
 **Why:** Installing the latest expo-clipboard gets SDK 56 version which causes Metro bundler errors.
 
-## AI and bridge credentials use secure, state-marked storage
-On iOS/Android, AI-provider and AIs & Ears bridge keys use Expo SecureStore; browser preview keeps them in session memory only. Legacy AsyncStorage values are migrated before plaintext metadata is cleared. Persisted `secure`/`cleared` state must stay authoritative so a failed key deletion cannot resurrect a cleared credential. AI keys are sent to the selected provider; bridge keys are sent only to the bridge session endpoint. The server-side `XAI_API_KEY` remains separate and is for the owner's server proxy.
+## User-managed credentials use secure, state-marked storage
+On iOS/Android, AI-provider, AIs & Ears bridge, and Memory Machine MCP tokens use Expo SecureStore; browser preview keeps them in session memory only. Legacy AsyncStorage values are migrated before plaintext metadata is cleared. Persisted `secure`/`cleared` state must stay authoritative so a failed key deletion cannot resurrect a cleared credential. AI keys go to the selected provider, the bridge key goes to its session endpoint, and the MCP token goes to its configured endpoint. The server-side `XAI_API_KEY` remains separate and is for the owner's server proxy.
 
-**Why:** Credentials should not remain in app preferences or browser storage, and asynchronous secure deletion can fail. A cleared-state marker prevents a stale device-keychain value from being loaded again.
+**Why:** User-provided credentials should not remain in app preferences or persistent browser storage, and asynchronous secure deletion can fail. A cleared-state marker prevents a stale device-keychain value from being loaded again.
 
 **How to apply:** Keep keys out of AsyncStorage and persistent web storage; secure-write before saving sanitized metadata, preserve legacy data on migration failure, and surface storage errors instead of silently falling back.
 

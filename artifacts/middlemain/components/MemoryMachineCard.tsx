@@ -1,7 +1,7 @@
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import React, { useState } from 'react';
-import { ActivityIndicator, Modal, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Modal, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useMCP } from '@/context/MCPContext';
 import { useTheme } from '@/context/ThemeContext';
 
@@ -34,7 +34,11 @@ function exampleValue(name: string, schema: ToolInputProperty): unknown {
 
 export function MemoryMachineCard() {
   const { theme } = useTheme();
-  const { config, updateConfig, status, errorMsg, tools, connect, disconnect } = useMCP();
+  const {
+    config, updateConfig, status, errorMsg, credentialStorageReady, credentialStorageError,
+    tools, connect, disconnect,
+  } = useMCP();
+  const storageBlocked = !credentialStorageReady || !!credentialStorageError;
   const [showToken, setShowToken] = useState(false);
   const [helpToolName, setHelpToolName] = useState<string | null>(null);
   const helpTool = tools.find((tool) => tool.name === helpToolName) ?? null;
@@ -133,7 +137,8 @@ export function MemoryMachineCard() {
         ) : (
           <TouchableOpacity
             onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); connect(); }}
-            style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: MEMORY_COLOR, backgroundColor: MEMORY_DIM }}
+            disabled={storageBlocked}
+            style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: MEMORY_COLOR, backgroundColor: MEMORY_DIM, opacity: storageBlocked ? 0.45 : 1 }}
           >
             <Text style={{ color: MEMORY_COLOR, fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>Connect</Text>
           </TouchableOpacity>
@@ -172,6 +177,19 @@ export function MemoryMachineCard() {
           {errorMsg}
         </Text>
       )}
+      {credentialStorageError ? (
+        <Text style={{ color: theme.destructive, fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 6 }}>
+          {credentialStorageError}
+        </Text>
+      ) : !credentialStorageReady ? (
+        <Text style={{ color: theme.textMuted, fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 6 }}>
+          Securing saved Memory Machine settings…
+        </Text>
+      ) : Platform.OS === 'web' ? (
+        <Text style={{ color: theme.textMuted, fontSize: 10, fontFamily: 'Inter_400Regular', marginTop: 6 }}>
+          Browser preview keeps this token in memory for this session only.
+        </Text>
+      ) : null}
 
       {/* Config fields — hidden when connected */}
       {status !== 'connected' && (
@@ -181,6 +199,7 @@ export function MemoryMachineCard() {
             style={inputStyle}
             value={config.url}
             onChangeText={(v) => updateConfig({ url: v })}
+            editable={!storageBlocked}
             placeholder="https://your-memory-machine.replit.app/api/mcp"
             placeholderTextColor={theme.textMuted}
             autoCapitalize="none"
@@ -194,6 +213,7 @@ export function MemoryMachineCard() {
               style={[inputStyle, { flex: 1 }]}
               value={config.token}
               onChangeText={(v) => updateConfig({ token: v })}
+              editable={!storageBlocked}
               placeholder="Paste from Memory Machine Settings → Memory Bridge"
               placeholderTextColor={theme.textMuted}
               secureTextEntry={!showToken}

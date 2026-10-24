@@ -10,5 +10,6 @@
 - [Git provider authorization](git-provider-authorization.md) — Healthy account status can coexist with rejected Git credentials; connector reconnect cards may not apply.
 - [Private developer edition](developer-edition.md) — Public release first; owner-only Dev’s Crash Pad, Council participation, and approval-controlled Dev/Leo tools afterward.
 - [Open-source release](open-source-release.md) — User selected MIT; keep repository visibility unchanged until private-material review and explicit publication approval.
+- [Release priority](release-priority.md) — Release-only scope: no new features; automate preparation and give only necessary owner actions, one at a time.
 - [pnpm patch cache](pnpm-patch-cache.md) — Verify installed safety guards, not just patch hashes; a forced frozen install can repair stale patched-package contents.
 - [Untrusted preflight](untrusted-preflight-security.md) — Repository checks must not become project runners; validate worker behavior through the actual API bundle.

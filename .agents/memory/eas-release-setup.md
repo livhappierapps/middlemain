@@ -3,11 +3,17 @@ name: EAS release setup
 description: Replit build constraints and initial Apple signing setup using an ASC API key.
 ---
 
-Prefer the connected Expo build tools with an immutable, verified GitHub revision for EAS builds. A separate task agent is not required for that path. If a local EAS CLI build is needed, preserve EAS_SKIP_AUTO_FINGERPRINT=1.
+Follow the current Expo skill first: do not use EAS CLI. For supported, approved test builds, use the connected Expo tools with an immutable, verified GitHub revision. Use Replit's supported Expo Launch flow for App Store publishing.
 
 **Why:** The Replit sandbox can block the CLI's Git index writes. The connected build tool instead queues a remote build from the pushed source, without those local writes.
 
-**How to apply:** Verify the remote revision, select the correct monorepo base directory, and use an approved build-count budget. Keep the fingerprint bypass on local CLI paths; do not spawn a helper just to bypass a sandbox restriction.
+**How to apply:** Verify the remote revision, select the correct monorepo base directory, and use an approved build-count budget. Do not spawn a helper to bypass a publishing restriction.
+
+Store signing and internal/ad-hoc signing are separate configurations. A successful App Store build does not prove that an internal-distribution profile has credentials.
+
+**Why:** A configured store-signing path coexisted with missing internal-distribution credentials, so choosing an internal test build introduced an avoidable signing blocker.
+
+**How to apply:** Verify the requested distribution's signing before spending a build attempt. Prefer the existing TestFlight/store-signing route when internal signing is not configured, rather than adding device-registration work for the user.
 
 Expo usage-budget confirmation tokens are bound to the confirmation mode as well as the limits.
 

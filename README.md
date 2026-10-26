@@ -35,6 +35,14 @@ Managed Replit workflows provide artifact ports. See the [developer index](docs/
 
 Requests to a connected AI provider can incur charges from that provider. The app's tests use mocked provider/GitHub calls; they do not prove live service authorization. Never put secrets in source, screenshots, task descriptions, or public issues. Human Hands' vault is separate from existing provider-connection storage.
 
+### Bridge connection stability
+
+Bridge Terminal checks the selected provider's model-list endpoint (or the server's status endpoint), without generating replies, replaying messages, or uploading media. The quality badge is green through 500ms, yellow above 500ms, and red above 1000ms; unavailable checks show offline.
+
+Slow or failed checks retry after 1, 2, 4, 8, 16, then at most 30 seconds between attempts. Healthy checks reset backoff and resume every 8 seconds. Requests time out after 10 seconds. Retry scheduling, attempts, failures, and recovery appear in the terminal without credentials or response bodies. Authorization/configuration errors pause retries until a manual check, settings change, or return to the screen. Checks stop on background/navigation and cancel when the connection changes.
+
+The server-key switch starts off and requires manual selection. Bridge never switches keys on latency or failure, and personal memory does not transfer to the server connection. Custom providers must support a model-list endpoint for these checks. A successful connectivity check is not proof that model access, memory, or the separate AIs & Ears media bridge works.
+
 ## License and public release
 
 The project is licensed under the [MIT License](LICENSE). GitHub visibility has not been changed. The tracked workspace support files and attachments still need a public-release review before the repository is made public.

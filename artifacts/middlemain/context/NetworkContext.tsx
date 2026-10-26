@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { bridgeQuality } from '@/utils/bridgeStability';
 
 export type ConnectionQuality = 'good' | 'fair' | 'poor' | 'offline';
 
@@ -15,10 +16,7 @@ const PROBE_INTERVAL_MS = 8_000;
 const TIMEOUT_MS = 5_000;
 
 function qualityFromPing(ping: number | null): ConnectionQuality {
-  if (ping === null) return 'offline';
-  if (ping < 300) return 'good';
-  if (ping < 900) return 'fair';
-  return 'poor';
+  return bridgeQuality(ping);
 }
 
 const NetworkCtx = createContext<NetworkState>({

@@ -3,13 +3,15 @@ import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { isLiquidGlassAvailable } from 'expo-glass-effect';
-import { router } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Image,
+  AppState,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -20,11 +22,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AdBanner } from '@/components/AdBanner';
 import { BridgeCameraPreview } from '@/components/BridgeCameraPreview';
 import { bridgeBottomClearance } from '@/utils/bridgeVision';
+import { bridgeHandshake, bridgeQuality, monitorBridge } from '@/utils/bridgeStability';
 import { AICursorOverlay, CursorAction, parseCursorAction, stripCursorBlock } from '@/components/AICursorOverlay';
 import { NetworkStatusBar } from '@/components/NetworkStatusBar';
 import { NeonText } from '@/components/NeonText';
 import { ThemedBackground } from '@/components/ThemedBackground';
-import { ChatMessage, OpenAITool, useAI } from '@/context/AIContext';
+import { ChatMessage, OpenAITool, PROVIDER_DEFAULTS, useAI } from '@/context/AIContext';
 import { useMCP } from '@/context/MCPContext';
 import { useAisAndEars } from '@/context/AisAndEarsContext';
 import { useSkills } from '@/context/SkillsContext';
@@ -84,6 +87,10 @@ export default function TerminalScreen() {
   const [controlOn, setControlOn] = useState(false);
   const [cursorAction, setCursorAction] = useState<CursorAction | null>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+  const [handshakePing, setHandshakePing] = useState<number | null>(null);
+  const [handshakeRevision, setHandshakeRevision] = useState(0);
+  const [serverKeyOptIn, setServerKeyOptIn] = useState(false);
+  const personalConnRef = useRef('');
 
   const scrollRef = useRef<ScrollView>(null);
   const screenCaptureRef = useRef<View>(null);
@@ -93,13 +100,40 @@ export default function TerminalScreen() {
 
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
 
-  const selectedConn = connections.find((c) => c.id === selectedConnId) ?? activeConnection ?? null;
+  const requestedConn = selectedConnId
+    ? connections.find((c) => c.id === selectedConnId) ?? null
+    : activeConnection?.provider !== 'server' ? activeConnection : null;
+  const selectedConn = requestedConn?.provider === 'server' && !serverKeyOptIn ? null : requestedConn;
   const selectedSkill = skills.find((s) => s.id === selectedSkillId);
 
   const appendLine = (line: Omit<TerminalLine, 'id' | 'timestamp'>) => {
     setLines((prev) => [...prev, { ...line, id: genId(), timestamp: new Date().toLocaleTimeString() }]);
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
   };
+
+  const handshakeConn = selectedConn?.provider === 'server' && !serverKeyOptIn ? null : selectedConn;
+  useFocusEffect(useCallback(() => {
+    setHandshakePing(null);
+    if (!handshakeConn) return;
+    let stop: (() => void) | undefined;
+    const start = () => {
+      stop?.();
+      const base = handshakeConn.baseUrl || (handshakeConn.provider === 'server'
+        ? `https://${process.env.EXPO_PUBLIC_DOMAIN}/api`
+        : PROVIDER_DEFAULTS[handshakeConn.provider].baseUrl);
+      stop = monitorBridge({
+        handshake: signal => bridgeHandshake(base, handshakeConn.provider, handshakeConn.apiKey, signal),
+        sample: setHandshakePing,
+        log: content => appendLine({ type: 'system', content: `>>> ${content}` }),
+      });
+    };
+    if (AppState.currentState === 'active') start();
+    const listener = AppState.addEventListener('change', state => {
+      if (state === 'active') start();
+      else { stop?.(); stop = undefined; }
+    });
+    return () => { stop?.(); listener.remove(); };
+  }, [handshakeConn?.id, handshakeConn?.baseUrl, handshakeConn?.apiKey, handshakeConn?.provider, handshakeRevision]));
 
   // Subscribe to AIs & Ears bridge messages
   useEffect(() => {
@@ -340,11 +374,16 @@ export default function TerminalScreen() {
   };
 
   const selectConnection = async (connId: string) => {
-    setSelectedConnId(connId);
     if (isStreaming) return;
-    if (greetedConnsRef.current.has(connId)) return;
     const conn = connections.find((c) => c.id === connId);
     if (!conn) return;
+    if (conn.provider === 'server' && !serverKeyOptIn) {
+      appendLine({ type: 'system', content: '>>> Server key is off. Enable the manual server-key switch to use it; personal memory will not transfer.' });
+      return;
+    }
+    if (conn.provider !== 'server') setServerKeyOptIn(false);
+    setSelectedConnId(connId);
+    if (greetedConnsRef.current.has(connId)) return;
     greetedConnsRef.current.add(connId);
 
     appendLine({ type: 'system', content: `>>> Handshaking with ${conn.name}…` });
@@ -461,7 +500,11 @@ export default function TerminalScreen() {
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
           <NeonText size={15} weight="700" letterSpacing={3}>BRIDGE TERMINAL</NeonText>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <NetworkStatusBar />
+            <NetworkStatusBar connection={{
+              quality: bridgeQuality(handshakePing), pingMs: handshakePing,
+              isOnline: handshakePing !== null,
+              checkNow: () => setHandshakeRevision(value => value + 1),
+            }} />
             <TouchableOpacity onPress={copyLast} style={{ padding: 6 }}>
               <Feather name="copy" size={17} color={theme.textMuted} />
             </TouchableOpacity>
@@ -558,6 +601,33 @@ export default function TerminalScreen() {
           </View>
         </View>
 
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+          <Switch
+            value={serverKeyOptIn}
+            disabled={isStreaming}
+            accessibilityLabel="Use server key manually. Personal memory does not transfer."
+            onValueChange={enabled => {
+              if (enabled) {
+                const server = connections.find(conn => conn.provider === 'server');
+                if (!server) {
+                  appendLine({ type: 'system', content: '>>> No server connection configured. Add one in Connect first.' });
+                  return;
+                }
+                personalConnRef.current = selectedConn?.provider !== 'server' ? selectedConn?.id ?? '' : '';
+                setServerKeyOptIn(true);
+                setSelectedConnId(server.id);
+                appendLine({ type: 'system', content: '>>> Server key selected manually. Personal memory does not transfer. Automatic key switching is disabled.' });
+              } else {
+                setServerKeyOptIn(false);
+                setSelectedConnId(personalConnRef.current || connections.find(conn => conn.provider !== 'server')?.id || '');
+                appendLine({ type: 'system', content: '>>> Server key off. Returned to personal connection; no automatic fallback.' });
+              }
+            }}
+          />
+          <Text style={{ color: theme.textMuted, fontSize: 10, flex: 1 }}>
+            Server key (manual only) · OFF by default{'\n'}Personal memory does not transfer. Provider charges may apply.
+          </Text>
+        </View>
         {/* AI selector */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
           <View style={{ flexDirection: 'row', gap: 6 }}>

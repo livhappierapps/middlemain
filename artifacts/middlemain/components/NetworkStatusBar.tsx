@@ -7,7 +7,7 @@ import { useTheme } from '@/context/ThemeContext';
 const QUALITY_COLOR: Record<ConnectionQuality, string> = {
   good: '#00ff88',
   fair: '#ffcc00',
-  poor: '#ff6600',
+  poor: '#ff2244',
   offline: '#ff2244',
 };
 
@@ -18,8 +18,11 @@ const QUALITY_LABEL: Record<ConnectionQuality, string> = {
   offline: 'OFFLINE',
 };
 
-export function NetworkStatusBar() {
-  const { quality, pingMs, isOnline, checkNow } = useNetwork();
+export function NetworkStatusBar({ connection }: {
+  connection?: { quality: ConnectionQuality; pingMs: number | null; isOnline: boolean; checkNow: () => void };
+}) {
+  const network = useNetwork();
+  const { quality, pingMs, isOnline, checkNow } = connection ?? network;
   const { theme } = useTheme();
   const slideAnim = useRef(new Animated.Value(0)).current;
   const prevOnline = useRef(isOnline);
@@ -63,6 +66,8 @@ export function NetworkStatusBar() {
 
       {/* Inline status pill */}
       <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel={`Connection quality: ${label}${pingMs === null ? '' : `, ${pingMs} milliseconds`}. Check again.`}
         onPress={checkNow}
         style={{
           flexDirection: 'row', alignItems: 'center', gap: 4,

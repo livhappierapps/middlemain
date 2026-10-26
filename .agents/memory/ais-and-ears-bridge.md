@@ -27,6 +27,14 @@ The protocol supplied by the bridge's developer describes base64 raw PCM16 audio
 
 **How to apply:** Verify the external bridge's current accepted format before claiming microphone delivery works. Do not assume a file extension or a green toggle proves valid audio transmission.
 
+## Key continuity during connection recovery
+
+Never automatically switch Bridge Terminal from a personal AI key to a server key. Server use must default off and require a manual opt-in.
+
+**Why:** The user explicitly requires key continuity: switching away from a personal connection with memory mid-conversation breaks the experience.
+
+**How to apply:** Recovery checks must keep the selected connection and must not replay conversation messages, media uploads, or tool actions. Preserve visible terminal retry logs without logging secrets.
+
 ## Native permission conflicts
 
 Verify the generated native permissions, not just the permission list in app.json. Disabling microphone permission in one media plugin can block microphone access requested by another.

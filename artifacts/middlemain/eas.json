@@ -37,7 +37,7 @@
       },
       "ios": {
         "buildConfiguration": "Release",
-        "image": "latest"
+        "image": "sdk-54"
       },
       "android": {
         "buildType": "app-bundle"

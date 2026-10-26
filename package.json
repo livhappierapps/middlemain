@@ -112,7 +112,14 @@
       "@expo/ngrok-bin>@expo/ngrok-bin-sunos-x64": "-",
       "@expo/ngrok-bin>@expo/ngrok-bin-win32-ia32": "-",
       "@expo/ngrok-bin>@expo/ngrok-bin-win32-x64": "-"
-    }
+    },
+    "onlyBuiltDependencies": [
+      "@swc/core",
+      "dtrace-provider",
+      "esbuild",
+      "msw",
+      "unrs-resolver"
+    ]
   },
   "dependencies": {
     "eas-cli": "^20.1.0"

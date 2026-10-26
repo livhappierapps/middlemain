@@ -38,6 +38,7 @@ minimumReleaseAgeExclude:
 
 onlyBuiltDependencies:
   - '@swc/core'
+  - dtrace-provider
   - esbuild
   - msw
   - unrs-resolver

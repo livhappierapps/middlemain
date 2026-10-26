@@ -136,3 +136,12 @@ overrides:
   rollup>@rollup/rollup-win32-ia32-msvc: '-'
   rollup>@rollup/rollup-win32-x64-gnu: '-'
   rollup>@rollup/rollup-win32-x64-msvc: '-'
+
+allowBuilds:
+  '@swc/core': true
+  dtrace-provider: false
+  esbuild: true
+  msw: true
+  unrs-resolver: true
+
+strictDepBuilds: false

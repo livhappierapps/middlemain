@@ -1,5 +1,13 @@
 # Security status and release gates
 
+## Release recheck — November 1, 2026
+
+- The published API health endpoint returned HTTP 200 with `{"status":"ok"}`.
+- The linked privacy-policy page rendered as Middlemain's actual policy in a browser. Its initial HTML is a generic site shell; HTTP text alone is insufficient to determine whether this client-rendered route works. The rendered policy still says the Memory Machine token uses ordinary app storage, which is outdated for the latest secure-storage source; its publisher should reconcile that wording before release.
+- Expo reports a completed production/STORE iOS build, version 1.2.0 build 1, from a different source revision. Build completion does not establish upload, TestFlight availability, review submission, or inclusion of the latest Bridge changes.
+- Replit reports no Expo Launch session for this project. The owner must start the supported App Store publishing flow; no replacement native build or submission was initiated during this recheck.
+- Account agreements, payments, store metadata, screenshots, privacy disclosures, and physical-device validation are not verified by these checks. Earlier dated scan findings below remain historical, not fresh scan results.
+
 ## Current workspace scan — October 20, 2026
 
 - Latest pnpm audit: **0 critical, 4 high, 0 moderate, 0 low**. It reports `braces` 3.0.3, `image-size` 1.2.1 (two advisories), and `node-forge` 1.4.0. Although upstream `image-size` 2.0.4 is listed as fixed, Expo's Metro 0.83.3 asset bundler fails with that release's default export; the app retains tested malformed-input guards on 1.2.1 instead. `node-forge` remains in Expo/EAS tooling with no fixed registry release, and `braces` remains locally guarded because no fixed upstream version is available.

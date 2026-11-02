@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, AppState, Platform } from 'react-native';
+import { Alert, AppState, Linking, Platform } from 'react-native';
 import {
   ONE_TIME_FALLBACK_PRICE,
   ONE_TIME_SKUS,
@@ -28,6 +28,16 @@ const IAP: IapModule | null = (() => {
 
 export type SubscriptionTier = 'free' | SubscriptionPlanId;
 
+export interface BillingIssue {
+  /** 'grace': renewal failed but access continues; 'retry': Apple is still retrying the payment. */
+  kind: 'grace' | 'retry';
+  sku: string;
+  /** Epoch ms when the grace period ends, if StoreKit reports it. */
+  graceEndsAt: number | null;
+}
+
+export const APPLE_SUBSCRIPTIONS_URL = 'https://apps.apple.com/account/subscriptions';
+
 interface PurchaseContextValue {
   tier: SubscriptionTier;
   isPro: boolean;
@@ -39,6 +49,8 @@ interface PurchaseContextValue {
   busySku: string | null;
   /** SKU waiting for Ask to Buy / payment approval. Access unlocks automatically once approved. */
   pendingApprovalSku: string | null;
+  /** Renewal payment problem reported by StoreKit; access is kept during the grace period. */
+  billingIssue: BillingIssue | null;
   /** Localized store price for a SKU, falling back to the configured USD price. */
   priceFor: (sku: string) => string;
   purchaseSubscription: (plan: SubscriptionPlanId) => Promise<void>;
@@ -53,6 +65,29 @@ const PENDING_KEY = '@middlemain_pending_approval_v1';
 
 export const PENDING_APPROVAL_MESSAGE =
   "Waiting for approval. You'll get access automatically once it's approved. You can close this screen.";
+
+/** Plain, friendly copy for a purchase that did not go through. Never retried automatically. */
+function failureMessage(e: any): { title: string; body: string } | null {
+  const code = String(e?.code ?? '').toLowerCase();
+  const msg = String(e?.message ?? '').toLowerCase();
+  if (code === 'user-cancelled' || code === 'e_user_cancelled' || msg.includes('cancel')) {
+    return { title: 'Purchase cancelled', body: 'No problem. You were not charged.' };
+  }
+  if (code === 'already-owned') return null; // handled by refreshing entitlements
+  if (code === 'network-error' || code === 'service-timeout' || code === 'service-disconnected') {
+    return { title: 'No connection', body: "We couldn't reach the App Store, so nothing was charged. Try again when you're back online." };
+  }
+  if (code === 'item-unavailable' || code === 'sku-not-found') {
+    return { title: 'Not available right now', body: "This item isn't available at the moment. You were not charged." };
+  }
+  if (msg.includes('declin') || msg.includes('insufficient') || msg.includes('payment') || msg.includes('billing') || code === 'purchase-error' || code === 'billing-unavailable') {
+    return {
+      title: "Payment didn't go through",
+      body: 'Your payment method was declined or needs attention, so you were not charged. You can update it in your Apple Account settings and try again whenever you like.',
+    };
+  }
+  return { title: 'Purchase not completed', body: 'Something went wrong, so you were not charged. Please try again whenever you like.' };
+}
 
 function isDeferredError(e: any): boolean {
   const code = String(e?.code ?? '').toLowerCase();
@@ -88,6 +123,7 @@ const PurchaseContext = createContext<PurchaseContextValue>({
   loading: false,
   busySku: null,
   pendingApprovalSku: null,
+  billingIssue: null,
   priceFor: (sku) => FALLBACK_PRICE[sku] ?? '',
   purchaseSubscription: notAvailable,
   purchaseAdRemoval: notAvailable,
@@ -106,6 +142,8 @@ export function PurchaseProvider({ children }: { children: React.ReactNode }) {
   /** SKUs granted this session from a verified transaction; kept while StoreKit's entitlement list catches up. */
   const recentGrants = useRef(new Map<string, number>());
   const lastDeferredAlert = useRef(0);
+  const lastFailureAlert = useRef(0);
+  const [billingIssue, setBillingIssue] = useState<BillingIssue | null>(null);
   const [prices, setPrices] = useState<Record<string, string>>({});
   const mounted = useRef(true);
   const storeChecked = useRef(false);
@@ -129,6 +167,28 @@ export function PurchaseProvider({ children }: { children: React.ReactNode }) {
       for (const p of purchases ?? []) {
         if (KNOWN_SKUS.has(p.productId)) next.add(p.productId);
       }
+      // Billing Grace Period / Billing Retry (iOS). During grace the subscriber keeps full access.
+      let issue: BillingIssue | null = null;
+      if (Platform.OS === 'ios' && IAP.subscriptionStatusIOS) {
+        try {
+          const statuses = await IAP.subscriptionStatusIOS(SUBSCRIPTION_SKUS[0]);
+          for (const st of statuses ?? []) {
+            const info: any = st.renewalInfo ?? {};
+            const sku = String(info.autoRenewPreference ?? SUBSCRIPTION_SKUS[0]);
+            if (st.state === 'inGracePeriod') {
+              next.add(KNOWN_SKUS.has(sku) ? sku : SUBSCRIPTION_SKUS[0]); // no lockout during grace
+              issue = { kind: 'grace', sku, graceEndsAt: typeof info.gracePeriodExpirationDate === 'number' ? info.gracePeriodExpirationDate : null };
+              break;
+            }
+            if (st.state === 'inBillingRetryPeriod' || info.isInBillingRetry) {
+              issue = issue ?? { kind: 'retry', sku, graceEndsAt: null };
+            }
+          }
+        } catch (e) {
+          if (__DEV__) console.warn('[IAP] subscriptionStatusIOS failed', e);
+        }
+      }
+      if (mounted.current) setBillingIssue(issue);
       const now = Date.now();
       for (const [sku, at] of recentGrants.current) {
         if (now - at < 120_000) next.add(sku);
@@ -226,6 +286,18 @@ export function PurchaseProvider({ children }: { children: React.ReactNode }) {
     refreshEntitlements();
   }, [persist, refreshEntitlements, setPendingApproval, showDeferred]);
 
+  const showFailure = useCallback((e: any, sku?: string | null) => {
+    setBusySku(null);
+    // A cancelled or failed payment leaves nothing pending for that item.
+    if (sku) setPendingApprovalSkuState((cur) => { if (cur === sku) { AsyncStorage.removeItem(PENDING_KEY).catch(() => {}); return null; } return cur; });
+    if (String(e?.code ?? '').toLowerCase() === 'already-owned') { refreshEntitlements(); return; }
+    const m = failureMessage(e);
+    if (!m) return;
+    if (Date.now() - lastFailureAlert.current < 3000) return; // listener + promise report the same failure
+    lastFailureAlert.current = Date.now();
+    Alert.alert(m.title, m.body);
+  }, [refreshEntitlements]);
+
   const handlePurchaseError = useCallback((error: any) => {
     setBusySku(null);
     if (isDeferredError(error)) {
@@ -233,9 +305,8 @@ export function PurchaseProvider({ children }: { children: React.ReactNode }) {
       showDeferred();
       return;
     }
-    if (IAP?.isUserCancelledError?.(error)) return;
-    Alert.alert('Purchase not completed', IAP?.getUserFriendlyErrorMessage?.(error) ?? error?.message ?? 'Please try again. You were not charged.');
-  }, [setPendingApproval, showDeferred]);
+    showFailure(error, error?.productId ? String(error.productId) : null);
+  }, [setPendingApproval, showDeferred, showFailure]);
 
   useEffect(() => {
     mounted.current = true;
@@ -255,6 +326,8 @@ export function PurchaseProvider({ children }: { children: React.ReactNode }) {
     // replays at launch (Ask to Buy approvals, interrupted purchases, renewals) are never missed.
     const updateSub = iap.purchaseUpdatedListener((purchase: IapPurchase) => { void handlePurchase(purchase); });
     const errorSub = iap.purchaseErrorListener((error) => { handlePurchaseError(error); });
+    // StoreKit billing-issue message (iOS 16.4+): re-read status so the gentle banner appears.
+    const billingSub = iap.subscriptionBillingIssueListener?.(() => { refreshEntitlements(); });
 
     (async () => {
       try {
@@ -273,6 +346,7 @@ export function PurchaseProvider({ children }: { children: React.ReactNode }) {
       mounted.current = false;
       updateSub.remove();
       errorSub.remove();
+      billingSub?.remove();
       iap.endConnection().catch(() => {});
     };
   }, [loadProducts, refreshEntitlements, handlePurchase, handlePurchaseError]);
@@ -307,11 +381,11 @@ export function PurchaseProvider({ children }: { children: React.ReactNode }) {
         showDeferred();
         return;
       }
-      setBusySku(null);
-      if (IAP.isUserCancelledError?.(e)) return;
-      Alert.alert('Purchase not completed', e?.message ?? 'Please try again. You were not charged.');
+      // StoreKit 2 creates no transaction for a cancelled/declined purchase, so there is nothing
+      // left to finish; we never re-request a charge automatically.
+      showFailure(e, sku);
     }
-  }, [connected, handlePurchase, setPendingApproval, showDeferred]);
+  }, [connected, handlePurchase, setPendingApproval, showDeferred, showFailure]);
 
   const purchaseSubscription = useCallback(async (plan: SubscriptionPlanId) => {
     const p = SUBSCRIPTION_PLANS.find((x) => x.id === plan);
@@ -339,14 +413,27 @@ export function PurchaseProvider({ children }: { children: React.ReactNode }) {
     }
   }, [refreshEntitlements, handlePurchase]);
 
+  /** Opens Apple's subscription management (in-app sheet on iOS, falling back to the App Store page). */
   const manageSubscriptions = useCallback(async () => {
-    if (!IAP) return notAvailable();
     try {
-      await IAP.deepLinkToSubscriptions({ skuAndroid: undefined, packageNameAndroid: 'app.middlemain.bridge' } as any);
+      if (IAP && Platform.OS === 'ios' && IAP.showManageSubscriptionsIOS) {
+        await IAP.showManageSubscriptionsIOS();
+        refreshEntitlements();
+        return;
+      }
+      if (IAP) {
+        await IAP.deepLinkToSubscriptions({ packageNameAndroid: 'app.middlemain.bridge' } as any);
+        return;
+      }
     } catch {
-      Alert.alert('Manage subscriptions', 'Open Settings > your name > Subscriptions to manage Middlemain Pro.');
+      // fall through to the web URL
     }
-  }, []);
+    try {
+      await Linking.openURL(APPLE_SUBSCRIPTIONS_URL);
+    } catch {
+      Alert.alert('Manage or cancel subscription', 'Open Settings > your name > Subscriptions to manage or cancel Middlemain Pro.');
+    }
+  }, [refreshEntitlements]);
 
   const value = useMemo<PurchaseContextValue>(() => {
     const tier = tierFromOwned(owned);
@@ -360,6 +447,7 @@ export function PurchaseProvider({ children }: { children: React.ReactNode }) {
       loading,
       busySku,
       pendingApprovalSku,
+      billingIssue,
       priceFor: (sku: string) => prices[sku] ?? FALLBACK_PRICE[sku] ?? '',
       purchaseSubscription,
       purchaseAdRemoval,
@@ -367,7 +455,7 @@ export function PurchaseProvider({ children }: { children: React.ReactNode }) {
       restorePurchases,
       manageSubscriptions,
     };
-  }, [owned, connected, loading, busySku, pendingApprovalSku, prices, purchaseSubscription, purchaseAdRemoval, purchaseThemeExpansion, restorePurchases, manageSubscriptions]);
+  }, [owned, connected, loading, busySku, pendingApprovalSku, billingIssue, prices, purchaseSubscription, purchaseAdRemoval, purchaseThemeExpansion, restorePurchases, manageSubscriptions]);
 
   return <PurchaseContext.Provider value={value}>{children}</PurchaseContext.Provider>;
 }

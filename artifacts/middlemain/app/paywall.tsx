@@ -16,6 +16,7 @@ import {
   THEME_EXPANSION_SKU,
 } from '@/constants/products';
 import { EXPANSION_THEME_KEYS } from '@/constants/themes';
+import { BillingIssueBanner } from '@/components/BillingIssueBanner';
 import { PENDING_APPROVAL_MESSAGE, usePurchase } from '@/context/PurchaseContext';
 import { useTheme } from '@/context/ThemeContext';
 
@@ -64,6 +65,8 @@ export default function PaywallScreen() {
             </View>
           ))}
         </View>
+
+        <BillingIssueBanner style={{ marginBottom: 14 }} />
 
         {pendingApprovalSku && (
           <View accessibilityLiveRegion="polite" style={{ flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: theme.secondary, borderRadius: theme.radius, padding: 12, marginBottom: 14, backgroundColor: theme.secondary + '18' }}>
@@ -151,11 +154,9 @@ export default function PaywallScreen() {
               {busySku === 'restore' ? 'Restoring…' : 'Restore Purchases'}
             </Text>
           </TouchableOpacity>
-          {isPro && (
-            <TouchableOpacity onPress={manageSubscriptions}>
-              <Text style={{ color: theme.primary, fontSize: 13, fontFamily: 'Inter_600SemiBold', textDecorationLine: 'underline' }}>Manage Subscription</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity onPress={manageSubscriptions} accessibilityRole="link">
+            <Text style={{ color: theme.primary, fontSize: 13, fontFamily: 'Inter_600SemiBold', textDecorationLine: 'underline' }}>Manage or cancel subscription</Text>
+          </TouchableOpacity>
         </View>
 
         <Text style={{ color: theme.textMuted, fontSize: 11, fontFamily: 'Inter_400Regular', lineHeight: 17, marginTop: 22 }}>

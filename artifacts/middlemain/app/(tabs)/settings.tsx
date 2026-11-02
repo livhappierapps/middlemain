@@ -23,6 +23,7 @@ import { NeonText } from '@/components/NeonText';
 import { ThemedBackground } from '@/components/ThemedBackground';
 import { ThemeSelector } from '@/components/ThemeSelector';
 import { SUBSCRIPTION_PLANS, TERMS_OF_USE_URL } from '@/constants/products';
+import { BillingIssueBanner } from '@/components/BillingIssueBanner';
 import { usePurchase } from '@/context/PurchaseContext';
 import { useCouncil } from '@/context/CouncilContext';
 import { useAI } from '@/context/AIContext';
@@ -245,14 +246,13 @@ export default function SettingsScreen() {
                 {busySku === 'restore' ? 'Restoring…' : 'Restore Purchases'}
               </Text>
             </TouchableOpacity>
-            {isPro && (
-              <TouchableOpacity onPress={manageSubscriptions}>
-                <Text style={{ color: theme.textMuted, fontSize: 12, fontFamily: 'Inter_400Regular', textAlign: 'center', textDecorationLine: 'underline' }}>
-                  Manage Subscription
-                </Text>
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity onPress={manageSubscriptions} accessibilityRole="link">
+              <Text style={{ color: theme.textMuted, fontSize: 12, fontFamily: 'Inter_400Regular', textAlign: 'center', textDecorationLine: 'underline' }}>
+                Manage or cancel subscription
+              </Text>
+            </TouchableOpacity>
           </View>
+          <BillingIssueBanner />
         </View>
 
         {/* API Server URL */}

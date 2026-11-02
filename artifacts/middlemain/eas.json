@@ -43,7 +43,7 @@
       },
       "ios": {
         "buildConfiguration": "Release",
-        "image": "latest"
+        "image": "sdk-54"
       },
       "android": {
         "image": "sdk-54",

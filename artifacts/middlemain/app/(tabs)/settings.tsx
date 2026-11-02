@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Clipboard from 'expo-clipboard';
 import Constants from 'expo-constants';
 import * as Haptics from 'expo-haptics';
+import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import React, { useEffect, useState } from 'react';
 import {
@@ -21,6 +22,7 @@ import { NeonCard } from '@/components/NeonCard';
 import { NeonText } from '@/components/NeonText';
 import { ThemedBackground } from '@/components/ThemedBackground';
 import { ThemeSelector } from '@/components/ThemeSelector';
+import { SUBSCRIPTION_PLANS, TERMS_OF_USE_URL } from '@/constants/products';
 import { usePurchase } from '@/context/PurchaseContext';
 import { useCouncil } from '@/context/CouncilContext';
 import { useAI } from '@/context/AIContext';
@@ -68,60 +70,9 @@ function SettingRow({ icon, label, value, onPress, accent }: { icon: string; lab
   );
 }
 
-function PricingCard({
-  label,
-  price,
-  period,
-  note,
-  active,
-  onPress,
-  color,
-}: {
-  label: string;
-  price: string;
-  period: string;
-  note?: string;
-  active: boolean;
-  onPress: () => void;
-  color: string;
-}) {
-  const { theme } = useTheme();
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      style={{
-        flex: 1,
-        backgroundColor: theme.card + 'E6',
-        borderRadius: theme.radius,
-        borderWidth: active ? 2 : 1,
-        borderColor: active ? color : theme.border,
-        padding: 14,
-        alignItems: 'center',
-        shadowColor: active ? color : 'transparent',
-        shadowOffset: { width: 0, height: 0 },
-        shadowRadius: 10,
-        shadowOpacity: active ? 0.6 : 0,
-        elevation: active ? 6 : 1,
-      }}
-    >
-      <Text style={{ color: theme.textMuted, fontSize: 10, fontFamily: 'Inter_600SemiBold', letterSpacing: 1.5 }}>{label}</Text>
-      <Text style={{ color: color, fontSize: 22, fontFamily: 'Inter_700Bold', marginVertical: 4, textShadowColor: color, textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8 }}>
-        {price}
-      </Text>
-      <Text style={{ color: theme.textMuted, fontSize: 11, fontFamily: 'Inter_400Regular' }}>{period}</Text>
-      {note && <Text style={{ color: color, fontSize: 10, fontFamily: 'Inter_600SemiBold', marginTop: 4 }}>{note}</Text>}
-      {active && (
-        <View style={{ marginTop: 8, backgroundColor: color + '22', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4 }}>
-          <Text style={{ color: color, fontSize: 9, fontFamily: 'Inter_700Bold', letterSpacing: 1 }}>CURRENT PLAN</Text>
-        </View>
-      )}
-    </TouchableOpacity>
-  );
-}
-
 export default function SettingsScreen() {
   const { theme } = useTheme();
-  const { tier, hasRemovedAds, purchasesAvailable, purchaseMonthly, purchaseAnnual, purchaseAdRemoval, restorePurchases } = usePurchase();
+  const { tier, isPro, hasRemovedAds, hasThemeExpansion, restorePurchases, manageSubscriptions, busySku } = usePurchase();
   const { webhookUrl, setWebhookUrl, testWebhook, historyLimit, setHistoryLimit, apiUrl, setApiUrl } = useCouncil();
   const { refreshServerGrokStatus } = useAI();
   const insets = useSafeAreaInsets();
@@ -154,48 +105,6 @@ export default function SettingsScreen() {
       if (val) setExecKey(val);
     });
   }, []);
-
-  const handlePurchaseMonthly = async () => {
-    if (!purchasesAvailable) { await purchaseMonthly(); return; }
-    Alert.alert('Subscribe Monthly', 'Middlemain Pro — $3.99/month\n\nUnlimited AI bridge sessions, priority support, and all future features.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Subscribe', onPress: async () => {
-          await purchaseMonthly();
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          Alert.alert('Welcome to Pro!', 'Thank you for supporting Middlemain.');
-        },
-      },
-    ]);
-  };
-
-  const handlePurchaseAnnual = async () => {
-    if (!purchasesAvailable) { await purchaseAnnual(); return; }
-    Alert.alert('Subscribe Annually', 'Middlemain Pro — $29.99/year\nSave 37% vs monthly.\n\nUnlimited AI bridge sessions, priority support, and all future features.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Subscribe', onPress: async () => {
-          await purchaseAnnual();
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          Alert.alert('Welcome to Pro!', 'Thank you for supporting Middlemain.');
-        },
-      },
-    ]);
-  };
-
-  const handleAdRemoval = async () => {
-    if (!purchasesAvailable) { await purchaseAdRemoval(); return; }
-    Alert.alert('Remove Ads', 'Remove all ads for a one-time payment of $1.99.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove Ads — $1.99', onPress: async () => {
-          await purchaseAdRemoval();
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          Alert.alert('Ads Removed!', 'Enjoy Middlemain ad-free.');
-        },
-      },
-    ]);
-  };
 
   const handleSaveXaiKey = async () => {
     if (!xaiKeyInput.trim()) {
@@ -310,45 +219,40 @@ export default function SettingsScreen() {
         {/* Subscription */}
         <SectionHeader title="SUBSCRIPTION" />
         <View style={{ paddingHorizontal: 16 }}>
-          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
-            <PricingCard
-              label="MONTHLY"
-              price="$3.99"
-              period="per month"
-              active={tier === 'monthly'}
-              onPress={handlePurchaseMonthly}
-              color={theme.primary}
-            />
-            <PricingCard
-              label="ANNUAL"
-              price="$29.99"
-              period="per year"
-              note="Save 37%"
-              active={tier === 'annual'}
-              onPress={handlePurchaseAnnual}
-              color={theme.secondary}
-            />
-          </View>
-          {!hasRemovedAds && (
-            <TouchableOpacity
-              onPress={handleAdRemoval}
-              style={{ backgroundColor: theme.card + 'E6', borderRadius: theme.radius, borderWidth: 1, borderColor: theme.border, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 }}
-            >
-              <Feather name="x-circle" size={20} color={theme.accent} />
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: theme.text, fontSize: 14, fontFamily: 'Inter_500Medium' }}>Remove Ads</Text>
-                <Text style={{ color: theme.textMuted, fontSize: 12, fontFamily: 'Inter_400Regular' }}>One-time · $1.99</Text>
-              </View>
-              <Text style={{ color: theme.accent, fontSize: 13, fontFamily: 'Inter_600SemiBold', textShadowColor: theme.accent, textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 6 }}>
-                BUY
+          <TouchableOpacity
+            onPress={() => router.push('/paywall')}
+            style={{ backgroundColor: theme.card + 'E6', borderRadius: theme.radius, borderWidth: 1, borderColor: isPro ? theme.primary : theme.border, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 }}
+          >
+            <Feather name="zap" size={20} color={theme.primary} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: theme.text, fontSize: 14, fontFamily: 'Inter_600SemiBold' }}>
+                {isPro ? `Middlemain Pro · ${SUBSCRIPTION_PLANS.find((p) => p.id === tier)?.label ?? ''}` : 'Middlemain Pro'}
               </Text>
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity onPress={restorePurchases}>
-            <Text style={{ color: theme.textMuted, fontSize: 12, fontFamily: 'Inter_400Regular', textAlign: 'center', textDecorationLine: 'underline' }}>
-              Restore Purchases
+              <Text style={{ color: theme.textMuted, fontSize: 12, fontFamily: 'Inter_400Regular' }}>
+                {isPro ? 'Active. Tap to change plan.' : 'Weekly, monthly, 6-month or yearly plans'}
+              </Text>
+              <Text style={{ color: theme.textMuted, fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 2 }}>
+                {`Remove Ads: ${hasRemovedAds ? 'owned' : 'not owned'} · Theme Pack: ${hasThemeExpansion ? 'owned' : 'not owned'}`}
+              </Text>
+            </View>
+            <Text style={{ color: theme.primary, fontSize: 13, fontFamily: 'Inter_600SemiBold', textShadowColor: theme.primary, textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 6 }}>
+              {isPro ? 'PLANS' : 'VIEW PLANS'}
             </Text>
           </TouchableOpacity>
+          <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 22 }}>
+            <TouchableOpacity onPress={restorePurchases} disabled={busySku !== null}>
+              <Text style={{ color: theme.textMuted, fontSize: 12, fontFamily: 'Inter_400Regular', textAlign: 'center', textDecorationLine: 'underline' }}>
+                {busySku === 'restore' ? 'Restoring…' : 'Restore Purchases'}
+              </Text>
+            </TouchableOpacity>
+            {isPro && (
+              <TouchableOpacity onPress={manageSubscriptions}>
+                <Text style={{ color: theme.textMuted, fontSize: 12, fontFamily: 'Inter_400Regular', textAlign: 'center', textDecorationLine: 'underline' }}>
+                  Manage Subscription
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
 
         {/* API Server URL */}
@@ -798,6 +702,8 @@ export default function SettingsScreen() {
           <SettingRow icon="globe" label="Middlemain on the Web" onPress={() => WebBrowser.openBrowserAsync('https://livhappierapps.com/apps/middlemain')} accent={theme.accent} />
           <SettingRow icon="shield" label="Privacy Policy" onPress={() => WebBrowser.openBrowserAsync('https://livhappierapps.com/apps/middlemain/privacypolicy')} accent={theme.primary} />
           <SettingRow icon="file-text" label="Terms & Conditions" onPress={() => WebBrowser.openBrowserAsync('https://livhappierapps.com/apps/middlemain/terms')} accent={theme.primary} />
+          <SettingRow icon="file" label="Terms of Use (Apple EULA)" onPress={() => WebBrowser.openBrowserAsync(TERMS_OF_USE_URL)} accent={theme.primary} />
+          <SettingRow icon="book-open" label="Legal, Pricing & Subscriptions" onPress={() => router.push('/legal?tab=terms')} accent={theme.primary} />
           <SettingRow icon="info" label="App Version" value={APP_VERSION} />
           <SettingRow icon="code" label="Open Source" value="MIT License" />
         </View>

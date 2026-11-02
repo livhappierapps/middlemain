@@ -78,7 +78,9 @@ test('in-app data summary discloses remote storage instead of claiming no collec
   assert.match(legal, /uninstalling does not delete copies/);
   assert.match(legal, /apps\/middlemain\/privacypolicy/);
   assert.doesNotMatch(legal, /INFORMATION WE DO NOT COLLECT|Since we do not collect your data/);
-  assert.match(legal, /subscriptions are not enabled in this build/);
+  assert.match(legal, /SUBSCRIPTIONS AND IN-APP PURCHASES/);
+  assert.match(legal, /PRICE_CHANGE_DISCLAIMER/);
+  assert.match(legal, /TERMS_OF_USE_URL/);
 });
 
 test('EAS pins compatible build runtimes and the package manager for security overrides', () => {

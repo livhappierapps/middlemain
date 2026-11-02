@@ -3,7 +3,7 @@
     "name": "Middlemain",
     "slug": "middlemain",
     "owner": "livhappierapps",
-    "version": "1.2.0",
+    "version": "1.3.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "middlemain",
@@ -72,7 +72,8 @@
           "microphonePermission": "Middlemain uses the microphone for voice input in Council and in the AIs & Ears bridge when you enable Hearing."
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-iap"
     ],
     "experiments": {
       "typedRoutes": true,

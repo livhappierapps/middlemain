@@ -20,6 +20,7 @@ import { NeonText } from '@/components/NeonText';
 import { ServerGrokNotice } from '@/components/ServerGrokNotice';
 import { ThemedBackground } from '@/components/ThemedBackground';
 import { useAI } from '@/context/AIContext';
+import { BillingIssueBanner } from '@/components/BillingIssueBanner';
 import { usePurchase } from '@/context/PurchaseContext';
 import { useTheme } from '@/context/ThemeContext';
 
@@ -99,6 +100,7 @@ export default function HomeScreen() {
         contentContainerStyle={{ paddingTop: topInset + 20, paddingBottom: Platform.OS === 'web' ? 34 : 20, paddingHorizontal: 16 }}
         showsVerticalScrollIndicator={false}
       >
+        <BillingIssueBanner style={{ marginBottom: 12 }} />
         {/* Logo */}
         <View style={{ alignItems: 'center', marginBottom: 8 }}>
           <Animated.View style={glitchStyle}>

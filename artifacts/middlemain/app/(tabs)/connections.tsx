@@ -395,7 +395,7 @@ export default function ConnectionsScreen() {
           </Text>
         </View>
       </ScrollView>
-      <AdBanner onUpgradePress={() => router.push('/(tabs)/settings')} />
+      <AdBanner onUpgradePress={() => router.push('/paywall')} />
     </ThemedBackground>
   );
 }

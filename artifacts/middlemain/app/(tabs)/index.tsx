@@ -288,7 +288,7 @@ export default function HomeScreen() {
           </Text>
         </TouchableOpacity>
       </ScrollView>
-      <AdBanner onUpgradePress={() => router.push('/(tabs)/settings')} />
+      <AdBanner onUpgradePress={() => router.push('/paywall')} />
     </ThemedBackground>
   );
 }

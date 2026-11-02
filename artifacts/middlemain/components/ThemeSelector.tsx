@@ -1,15 +1,21 @@
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { router } from 'expo-router';
 import React from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { ThemeKey, themes } from '@/constants/themes';
 import { useTheme } from '@/context/ThemeContext';
 
 export function ThemeSelector() {
-  const { themeKey, setTheme, theme } = useTheme();
+  const { themeKey, setTheme, theme, isThemeLocked } = useTheme();
 
   const handleSelect = (key: ThemeKey) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (isThemeLocked(key)) {
+      // Theme Expansion Pack not owned yet: send the user to the paywall.
+      router.push('/paywall');
+      return;
+    }
     setTheme(key);
   };
 
@@ -18,6 +24,7 @@ export function ThemeSelector() {
       {(Object.keys(themes) as ThemeKey[]).map((key) => {
         const t = themes[key];
         const active = key === themeKey;
+        const locked = isThemeLocked(key);
         return (
           <TouchableOpacity
             key={key}
@@ -53,6 +60,11 @@ export function ThemeSelector() {
               {active && (
                 <View style={{ position: 'absolute', top: 4, right: 4 }}>
                   <Feather name="check" size={10} color={t.primary} />
+                </View>
+              )}
+              {locked && (
+                <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#00000088', justifyContent: 'center', alignItems: 'center' }}>
+                  <Feather name="lock" size={16} color="#FFFFFF" />
                 </View>
               )}
             </View>

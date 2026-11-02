@@ -865,7 +865,7 @@ export default function TerminalScreen() {
         </View>
       </View>
 
-      <AdBanner onUpgradePress={() => router.push('/(tabs)/settings')} />
+      <AdBanner onUpgradePress={() => router.push('/paywall')} />
       </View>
     </KeyboardAvoidingView>
     </ThemedBackground>

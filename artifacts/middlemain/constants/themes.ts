@@ -239,3 +239,15 @@ export const themes: Record<ThemeKey, ThemeColors> = {
 };
 
 export const defaultTheme: ThemeKey = 'cyberpunk';
+
+/**
+ * Theme Expansion Pack (IAP app.middlemain.bridge.themes.expansion1).
+ * Add the new pack's theme keys here once they are designed: add each key to
+ * ThemeKey, define it in `themes`, then list it below. Listed themes show a
+ * lock in ThemeSelector and open the paywall until the pack is purchased.
+ */
+export const EXPANSION_THEME_KEYS: ThemeKey[] = [];
+
+export function isExpansionTheme(key: ThemeKey): boolean {
+  return EXPANSION_THEME_KEYS.includes(key);
+}

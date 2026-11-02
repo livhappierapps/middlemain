@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Platform } from 'react-native';
+import { Alert, AppState, Platform } from 'react-native';
 import {
   ONE_TIME_FALLBACK_PRICE,
   ONE_TIME_SKUS,
@@ -37,6 +37,8 @@ interface PurchaseContextValue {
   purchasesAvailable: boolean;
   loading: boolean;
   busySku: string | null;
+  /** SKU waiting for Ask to Buy / payment approval. Access unlocks automatically once approved. */
+  pendingApprovalSku: string | null;
   /** Localized store price for a SKU, falling back to the configured USD price. */
   priceFor: (sku: string) => string;
   purchaseSubscription: (plan: SubscriptionPlanId) => Promise<void>;
@@ -47,6 +49,17 @@ interface PurchaseContextValue {
 }
 
 const CACHE_KEY = '@middlemain_entitlements_v1';
+const PENDING_KEY = '@middlemain_pending_approval_v1';
+
+export const PENDING_APPROVAL_MESSAGE =
+  "Waiting for approval. You'll get access automatically once it's approved. You can close this screen.";
+
+function isDeferredError(e: any): boolean {
+  const code = String(e?.code ?? '').toLowerCase();
+  return code === 'deferred-payment' || code === 'pending' || code === 'e_deferred_payment';
+}
+
+const KNOWN_SKUS = new Set<string>([...SUBSCRIPTION_SKUS, ...ONE_TIME_SKUS]);
 
 const FALLBACK_PRICE: Record<string, string> = {
   ...ONE_TIME_FALLBACK_PRICE,
@@ -74,6 +87,7 @@ const PurchaseContext = createContext<PurchaseContextValue>({
   purchasesAvailable: false,
   loading: false,
   busySku: null,
+  pendingApprovalSku: null,
   priceFor: (sku) => FALLBACK_PRICE[sku] ?? '',
   purchaseSubscription: notAvailable,
   purchaseAdRemoval: notAvailable,
@@ -87,6 +101,11 @@ export function PurchaseProvider({ children }: { children: React.ReactNode }) {
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(!!IAP);
   const [busySku, setBusySku] = useState<string | null>(null);
+  const [pendingApprovalSku, setPendingApprovalSkuState] = useState<string | null>(null);
+  const handledTx = useRef(new Set<string>());
+  /** SKUs granted this session from a verified transaction; kept while StoreKit's entitlement list catches up. */
+  const recentGrants = useRef(new Map<string, number>());
+  const lastDeferredAlert = useRef(0);
   const [prices, setPrices] = useState<Record<string, string>>({});
   const mounted = useRef(true);
   const storeChecked = useRef(false);
@@ -108,12 +127,21 @@ export function PurchaseProvider({ children }: { children: React.ReactNode }) {
       const purchases = await IAP.getAvailablePurchases({ onlyIncludeActiveItemsIOS: true });
       const next = new Set<string>();
       for (const p of purchases ?? []) {
-        if (SUBSCRIPTION_SKUS.includes(p.productId) || ONE_TIME_SKUS.includes(p.productId)) next.add(p.productId);
+        if (KNOWN_SKUS.has(p.productId)) next.add(p.productId);
+      }
+      const now = Date.now();
+      for (const [sku, at] of recentGrants.current) {
+        if (now - at < 120_000) next.add(sku);
+        else recentGrants.current.delete(sku);
       }
       if (!mounted.current) return;
       storeChecked.current = true;
       setOwned(next);
       persist(next);
+      setPendingApprovalSkuState((cur) => {
+        if (cur && next.has(cur)) { AsyncStorage.removeItem(PENDING_KEY).catch(() => {}); return null; }
+        return cur;
+      });
     } catch (e) {
       if (__DEV__) console.warn('[IAP] getAvailablePurchases failed', e);
     }
@@ -137,6 +165,78 @@ export function PurchaseProvider({ children }: { children: React.ReactNode }) {
     if (mounted.current) setPrices(map);
   }, []);
 
+  const setPendingApproval = useCallback((sku: string | null) => {
+    setPendingApprovalSkuState(sku);
+    if (sku) AsyncStorage.setItem(PENDING_KEY, sku).catch(() => {});
+    else AsyncStorage.removeItem(PENDING_KEY).catch(() => {});
+  }, []);
+
+  const showDeferred = useCallback(() => {
+    // requestPurchase and the error listener can both report the same deferral; alert once.
+    if (Date.now() - lastDeferredAlert.current < 3000) return;
+    lastDeferredAlert.current = Date.now();
+    Alert.alert('Waiting for approval', PENDING_APPROVAL_MESSAGE);
+  }, []);
+
+  /**
+   * expo-iap/OpenIAP only delivers a purchase after StoreKit 2 has verified its signature
+   * (unverified transactions are rejected natively). Grant access instantly, then finish the
+   * transaction right away so nothing stays pending in the queue.
+   */
+  const handlePurchase = useCallback(async (purchase: IapPurchase) => {
+    const sku = purchase.productId;
+    if (!KNOWN_SKUS.has(sku)) return;
+    const state = (purchase as { purchaseState?: string }).purchaseState;
+    if (state === 'pending') {
+      // Android pending payment / not yet approved: show the waiting message, never a spinner.
+      setBusySku(null);
+      setPendingApproval(sku);
+      showDeferred();
+      return;
+    }
+    const txKey = String((purchase as { transactionId?: string | null }).transactionId ?? purchase.id ?? sku);
+    const firstTime = !handledTx.current.has(txKey);
+    handledTx.current.add(txKey);
+    recentGrants.current.set(sku, Date.now());
+
+    setOwned((cur) => {
+      if (cur.has(sku)) return cur;
+      const next = new Set(cur);
+      next.add(sku);
+      persist(next);
+      return next;
+    });
+    setBusySku((cur) => (cur === sku ? null : cur));
+    setPendingApprovalSkuState((cur) => {
+      if (cur === sku) {
+        AsyncStorage.removeItem(PENDING_KEY).catch(() => {});
+        if (firstTime) Alert.alert('Approved', 'Your purchase was approved and is now unlocked.');
+        return null;
+      }
+      return cur;
+    });
+
+    try {
+      await IAP?.finishTransaction({ purchase, isConsumable: false });
+    } catch (e) {
+      // Already finished (e.g. replayed at launch) is harmless; access is already granted.
+      if (__DEV__) console.warn('[IAP] finishTransaction failed', e);
+    }
+    // Pick up plan changes within the subscription group.
+    refreshEntitlements();
+  }, [persist, refreshEntitlements, setPendingApproval, showDeferred]);
+
+  const handlePurchaseError = useCallback((error: any) => {
+    setBusySku(null);
+    if (isDeferredError(error)) {
+      if (error?.productId) setPendingApproval(String(error.productId));
+      showDeferred();
+      return;
+    }
+    if (IAP?.isUserCancelledError?.(error)) return;
+    Alert.alert('Purchase not completed', IAP?.getUserFriendlyErrorMessage?.(error) ?? error?.message ?? 'Please try again. You were not charged.');
+  }, [setPendingApproval, showDeferred]);
+
   useEffect(() => {
     mounted.current = true;
     AsyncStorage.getItem(CACHE_KEY).then((raw) => {
@@ -149,30 +249,12 @@ export function PurchaseProvider({ children }: { children: React.ReactNode }) {
     if (!IAP) return () => { mounted.current = false; };
 
     const iap = IAP;
-    const updateSub = iap.purchaseUpdatedListener(async (purchase: IapPurchase) => {
-      const sku = purchase.productId;
-      if (!SUBSCRIPTION_SKUS.includes(sku) && !ONE_TIME_SKUS.includes(sku)) return;
-      try {
-        // StoreKit 2 verifies the transaction signature on-device before it is delivered here.
-        await iap.finishTransaction({ purchase, isConsumable: false });
-      } catch (e) {
-        if (__DEV__) console.warn('[IAP] finishTransaction failed', e);
-      }
-      setOwned((cur) => {
-        const next = new Set(cur);
-        next.add(sku);
-        persist(next);
-        return next;
-      });
-      setBusySku(null);
-      // Pick up upgrades/downgrades within the subscription group.
-      refreshEntitlements();
-    });
-    const errorSub = iap.purchaseErrorListener((error) => {
-      setBusySku(null);
-      if (iap.isUserCancelledError?.(error)) return;
-      Alert.alert('Purchase not completed', iap.getUserFriendlyErrorMessage?.(error) ?? error.message ?? 'Please try again.');
-    });
+    AsyncStorage.getItem(PENDING_KEY).then((v) => { if (v) setPendingApprovalSkuState(v); }).catch(() => {});
+
+    // Registered before initConnection so StoreKit's Transaction.updates / Transaction.unfinished
+    // replays at launch (Ask to Buy approvals, interrupted purchases, renewals) are never missed.
+    const updateSub = iap.purchaseUpdatedListener((purchase: IapPurchase) => { void handlePurchase(purchase); });
+    const errorSub = iap.purchaseErrorListener((error) => { handlePurchaseError(error); });
 
     (async () => {
       try {
@@ -193,7 +275,14 @@ export function PurchaseProvider({ children }: { children: React.ReactNode }) {
       errorSub.remove();
       iap.endConnection().catch(() => {});
     };
-  }, [loadProducts, refreshEntitlements, persist]);
+  }, [loadProducts, refreshEntitlements, handlePurchase, handlePurchaseError]);
+
+  // Re-check entitlements whenever the app returns to the foreground (approvals, renewals, refunds).
+  useEffect(() => {
+    if (!IAP) return;
+    const sub = AppState.addEventListener('change', (st) => { if (st === 'active' && connected) refreshEntitlements(); });
+    return () => sub.remove();
+  }, [connected, refreshEntitlements]);
 
   const buy = useCallback(async (sku: string, type: 'subs' | 'in-app') => {
     if (!IAP) return notAvailable();
@@ -203,18 +292,26 @@ export function PurchaseProvider({ children }: { children: React.ReactNode }) {
     }
     setBusySku(sku);
     try {
-      if (type === 'subs') {
-        await IAP.requestPurchase({ type: 'subs', request: { apple: { sku }, google: { skus: [sku] } } });
-      } else {
-        await IAP.requestPurchase({ type: 'in-app', request: { apple: { sku }, google: { skus: [sku] } } });
-      }
-      // Result arrives through purchaseUpdatedListener / purchaseErrorListener.
+      const result = type === 'subs'
+        ? await IAP.requestPurchase({ type: 'subs', request: { apple: { sku }, google: { skus: [sku] } } })
+        : await IAP.requestPurchase({ type: 'in-app', request: { apple: { sku }, google: { skus: [sku] } } });
+      // The verified purchase is also delivered to purchaseUpdatedListener; handling it here too
+      // means access unlocks the instant StoreKit returns, whichever arrives first.
+      const list = (Array.isArray(result) ? result : result ? [result] : []) as IapPurchase[];
+      for (const p of list) if (p?.productId) await handlePurchase(p);
+      setBusySku((cur) => (cur === sku ? null : cur));
     } catch (e: any) {
+      if (isDeferredError(e)) {
+        setBusySku(null);
+        setPendingApproval(sku);
+        showDeferred();
+        return;
+      }
       setBusySku(null);
       if (IAP.isUserCancelledError?.(e)) return;
-      Alert.alert('Purchase not completed', e?.message ?? 'Please try again.');
+      Alert.alert('Purchase not completed', e?.message ?? 'Please try again. You were not charged.');
     }
-  }, [connected]);
+  }, [connected, handlePurchase, setPendingApproval, showDeferred]);
 
   const purchaseSubscription = useCallback(async (plan: SubscriptionPlanId) => {
     const p = SUBSCRIPTION_PLANS.find((x) => x.id === plan);
@@ -229,13 +326,18 @@ export function PurchaseProvider({ children }: { children: React.ReactNode }) {
     try {
       await IAP.restorePurchases();
       await refreshEntitlements();
+      // Replays any unfinished transactions so they are granted and finished.
+      try {
+        const unfinished = await IAP.getPendingTransactionsIOS?.();
+        for (const p of (unfinished ?? []) as IapPurchase[]) await handlePurchase(p);
+      } catch {}
       Alert.alert('Restore complete', 'Any purchases tied to your Apple ID have been restored.');
     } catch (e: any) {
       Alert.alert('Restore failed', e?.message ?? 'Please try again.');
     } finally {
       setBusySku(null);
     }
-  }, [refreshEntitlements]);
+  }, [refreshEntitlements, handlePurchase]);
 
   const manageSubscriptions = useCallback(async () => {
     if (!IAP) return notAvailable();
@@ -257,6 +359,7 @@ export function PurchaseProvider({ children }: { children: React.ReactNode }) {
       purchasesAvailable: !!IAP && connected,
       loading,
       busySku,
+      pendingApprovalSku,
       priceFor: (sku: string) => prices[sku] ?? FALLBACK_PRICE[sku] ?? '',
       purchaseSubscription,
       purchaseAdRemoval,
@@ -264,7 +367,7 @@ export function PurchaseProvider({ children }: { children: React.ReactNode }) {
       restorePurchases,
       manageSubscriptions,
     };
-  }, [owned, connected, loading, busySku, prices, purchaseSubscription, purchaseAdRemoval, purchaseThemeExpansion, restorePurchases, manageSubscriptions]);
+  }, [owned, connected, loading, busySku, pendingApprovalSku, prices, purchaseSubscription, purchaseAdRemoval, purchaseThemeExpansion, restorePurchases, manageSubscriptions]);
 
   return <PurchaseContext.Provider value={value}>{children}</PurchaseContext.Provider>;
 }

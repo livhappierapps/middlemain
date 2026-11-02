@@ -16,7 +16,7 @@ import {
   THEME_EXPANSION_SKU,
 } from '@/constants/products';
 import { EXPANSION_THEME_KEYS } from '@/constants/themes';
-import { usePurchase } from '@/context/PurchaseContext';
+import { PENDING_APPROVAL_MESSAGE, usePurchase } from '@/context/PurchaseContext';
 import { useTheme } from '@/context/ThemeContext';
 
 const PRO_BENEFITS = [
@@ -29,7 +29,7 @@ export default function PaywallScreen() {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const {
-    tier, isPro, hasRemovedAds, hasThemeExpansion, busySku, priceFor,
+    tier, isPro, hasRemovedAds, hasThemeExpansion, busySku, pendingApprovalSku, priceFor,
     purchaseSubscription, purchaseAdRemoval, purchaseThemeExpansion, restorePurchases, manageSubscriptions,
   } = usePurchase();
   const [selected, setSelected] = useState<SubscriptionPlanId>('yearly');
@@ -64,6 +64,13 @@ export default function PaywallScreen() {
             </View>
           ))}
         </View>
+
+        {pendingApprovalSku && (
+          <View accessibilityLiveRegion="polite" style={{ flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: theme.secondary, borderRadius: theme.radius, padding: 12, marginBottom: 14, backgroundColor: theme.secondary + '18' }}>
+            <Feather name="clock" size={16} color={theme.secondary} />
+            <Text style={{ color: theme.text, fontSize: 13, fontFamily: 'Inter_400Regular', flex: 1 }}>{PENDING_APPROVAL_MESSAGE}</Text>
+          </View>
+        )}
 
         {isPro && (
           <View style={{ borderWidth: 1, borderColor: theme.primary, borderRadius: theme.radius, padding: 12, marginBottom: 14, backgroundColor: theme.primary + '18' }}>

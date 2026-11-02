@@ -14,7 +14,7 @@
       },
       "ios": {
         "simulator": false,
-        "image": "latest"
+        "image": "sdk-54"
       }
     },
     "preview": {
@@ -27,7 +27,7 @@
       },
       "ios": {
         "buildConfiguration": "Release",
-        "image": "latest"
+        "image": "sdk-54"
       },
       "android": {
         "image": "sdk-54",

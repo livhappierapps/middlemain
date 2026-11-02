@@ -90,7 +90,7 @@ test('EAS pins compatible build runtimes and the package manager for security ov
   for (const profile of ['development', 'preview', 'production']) {
     assert.equal(eas.build[profile].node, '24.13.0');
     assert.equal(eas.build[profile].pnpm, '10.26.1');
-    assert.equal(eas.build[profile].ios.image, 'latest');
+    assert.equal(eas.build[profile].ios.image, 'sdk-54'); // 'latest' (Xcode 27) fails to build SDK 54
     assert.equal(eas.build[profile].android.image, 'sdk-54');
   }
   assert.ok(pkg.pnpm.overrides && pkg.pnpm.patchedDependencies);

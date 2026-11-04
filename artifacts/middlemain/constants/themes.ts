@@ -6,7 +6,13 @@ export type ThemeKey =
   | 'matrix'
   | 'serene'
   | 'monochrome'
-  | 'prism';
+  | 'prism'
+  | 'cyberpunkMorning'
+  | 'cpmMuted'
+  | 'cyberpunkRain'
+  | 'cprMuted'
+  | 'sunsetGlitter'
+  | 'grittyComic';
 
 export interface ThemeColors {
   name: ThemeKey;
@@ -33,6 +39,8 @@ export interface ThemeColors {
   destructiveForeground: string;
   input: string;
   radius: number;
+  /** Scrim drawn over a background image to keep text readable (hex with alpha). */
+  overlay?: string;
 }
 
 export const themes: Record<ThemeKey, ThemeColors> = {
@@ -236,6 +244,162 @@ export const themes: Record<ThemeKey, ThemeColors> = {
     input: '#2a2a45',
     radius: 12,
   },
+  cyberpunkMorning: {
+    name: 'cyberpunkMorning',
+    displayName: 'Cyberpunk Morning',
+    background: '#1a0a1e',
+    surface: '#251629',
+    card: '#2e2032',
+    primary: '#ff5fa2',
+    secondary: '#ffb86b',
+    accent: '#c77dff',
+    text: '#ffffff',
+    textMuted: '#e8c8dc',
+    border: '#5e2345',
+    tint: '#ff5fa2',
+    foreground: '#ffffff',
+    cardForeground: '#ffffff',
+    primaryForeground: '#1a0a1e',
+    secondaryForeground: '#1a0a1e',
+    muted: '#2e2032',
+    mutedForeground: '#e8c8dc',
+    accentForeground: '#1a0a1e',
+    destructive: '#ff5c7a',
+    destructiveForeground: '#ffffff',
+    input: '#5e2345',
+    radius: 12,
+    overlay: '#1a0a1ecc',
+  },
+  cpmMuted: {
+    name: 'cpmMuted',
+    displayName: 'CPM (Muted)',
+    background: '#2a1d24',
+    surface: '#34282e',
+    card: '#3d3137',
+    primary: '#f2a7b8',
+    secondary: '#c9b6e4',
+    accent: '#ffd3b0',
+    text: '#ffffff',
+    textMuted: '#e6d2da',
+    border: '#664650',
+    tint: '#f2a7b8',
+    foreground: '#ffffff',
+    cardForeground: '#ffffff',
+    primaryForeground: '#2a1d24',
+    secondaryForeground: '#2a1d24',
+    muted: '#3d3137',
+    mutedForeground: '#e6d2da',
+    accentForeground: '#2a1d24',
+    destructive: '#ff5c7a',
+    destructiveForeground: '#ffffff',
+    input: '#664650',
+    radius: 12,
+    overlay: '#2a1d24d0',
+  },
+  cyberpunkRain: {
+    name: 'cyberpunkRain',
+    displayName: 'Cyberpunk Rain',
+    background: '#04121f',
+    surface: '#101d2a',
+    card: '#1a2733',
+    primary: '#3fc8ff',
+    secondary: '#ff4fd8',
+    accent: '#7df9ff',
+    text: '#ffffff',
+    textMuted: '#a9cbe0',
+    border: '#154862',
+    tint: '#3fc8ff',
+    foreground: '#ffffff',
+    cardForeground: '#ffffff',
+    primaryForeground: '#04121f',
+    secondaryForeground: '#04121f',
+    muted: '#1a2733',
+    mutedForeground: '#a9cbe0',
+    accentForeground: '#04121f',
+    destructive: '#ff5c7a',
+    destructiveForeground: '#ffffff',
+    input: '#154862',
+    radius: 12,
+    overlay: '#04121fb3',
+  },
+  cprMuted: {
+    name: 'cprMuted',
+    displayName: 'CPR (Muted)',
+    background: '#141c26',
+    surface: '#1f2730',
+    card: '#293039',
+    primary: '#8fb8d8',
+    secondary: '#c3cfdb',
+    accent: '#a7c7c2',
+    text: '#ffffff',
+    textMuted: '#b4c2cf',
+    border: '#384a5b',
+    tint: '#8fb8d8',
+    foreground: '#ffffff',
+    cardForeground: '#ffffff',
+    primaryForeground: '#141c26',
+    secondaryForeground: '#141c26',
+    muted: '#293039',
+    mutedForeground: '#b4c2cf',
+    accentForeground: '#141c26',
+    destructive: '#ff5c7a',
+    destructiveForeground: '#ffffff',
+    input: '#384a5b',
+    radius: 12,
+    overlay: '#141c26b8',
+  },
+  sunsetGlitter: {
+    name: 'sunsetGlitter',
+    displayName: 'Sunset Glitter',
+    background: '#140c26',
+    surface: '#1f1830',
+    card: '#292139',
+    primary: '#ffa25c',
+    secondary: '#c08bff',
+    accent: '#ffd36b',
+    text: '#ffffff',
+    textMuted: '#c9bde0',
+    border: '#5a3936',
+    tint: '#ffa25c',
+    foreground: '#ffffff',
+    cardForeground: '#ffffff',
+    primaryForeground: '#140c26',
+    secondaryForeground: '#140c26',
+    muted: '#292139',
+    mutedForeground: '#c9bde0',
+    accentForeground: '#140c26',
+    destructive: '#ff5c7a',
+    destructiveForeground: '#ffffff',
+    input: '#5a3936',
+    radius: 12,
+    overlay: '#140c26b0',
+  },
+  grittyComic: {
+    name: 'grittyComic',
+    displayName: 'Gritty Comic',
+    background: '#0a0c24',
+    surface: '#16182e',
+    card: '#202137',
+    primary: '#ff3fa4',
+    secondary: '#4fd8ff',
+    accent: '#ffe94f',
+    text: '#ffffff',
+    textMuted: '#a9a8d8',
+    border: '#531b4a',
+    tint: '#ff3fa4',
+    foreground: '#ffffff',
+    cardForeground: '#ffffff',
+    primaryForeground: '#0a0c24',
+    secondaryForeground: '#0a0c24',
+    muted: '#202137',
+    mutedForeground: '#a9a8d8',
+    accentForeground: '#0a0c24',
+    destructive: '#ff5c7a',
+    destructiveForeground: '#ffffff',
+    input: '#531b4a',
+    radius: 12,
+    overlay: '#0a0c2499',
+  },
 };
 
 export const defaultTheme: ThemeKey = 'cyberpunk';
@@ -246,7 +410,14 @@ export const defaultTheme: ThemeKey = 'cyberpunk';
  * ThemeKey, define it in `themes`, then list it below. Listed themes show a
  * lock in ThemeSelector and open the paywall until the pack is purchased.
  */
-export const EXPANSION_THEME_KEYS: ThemeKey[] = [];
+export const EXPANSION_THEME_KEYS: ThemeKey[] = [
+  'cyberpunkMorning',
+  'cpmMuted',
+  'cyberpunkRain',
+  'cprMuted',
+  'sunsetGlitter',
+  'grittyComic',
+];
 
 export function isExpansionTheme(key: ThemeKey): boolean {
   return EXPANSION_THEME_KEYS.includes(key);

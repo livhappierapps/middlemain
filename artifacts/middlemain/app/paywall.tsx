@@ -3,7 +3,7 @@ import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import React, { useState } from 'react';
-import { ActivityIndicator, Platform, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, Platform, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   AUTO_RENEW_DISCLOSURE,
@@ -15,7 +15,8 @@ import {
   TERMS_OF_USE_URL,
   THEME_EXPANSION_SKU,
 } from '@/constants/products';
-import { EXPANSION_THEME_KEYS } from '@/constants/themes';
+import { EXPANSION_THEME_KEYS, themes } from '@/constants/themes';
+import { themeBackgrounds } from '@/constants/backgrounds';
 import { BillingIssueBanner } from '@/components/BillingIssueBanner';
 import { PENDING_APPROVAL_MESSAGE, usePurchase } from '@/context/PurchaseContext';
 import { useTheme } from '@/context/ThemeContext';
@@ -140,13 +141,32 @@ export default function PaywallScreen() {
         />
         <OneTimeRow
           icon="droplet"
-          title="Theme Expansion Pack"
+          title="Theme Expansion Pack One"
           subtitle={hasThemeExpansion ? 'Purchased' : themePackReady ? `One-time · ${priceFor(THEME_EXPANSION_SKU)}` : 'Coming soon'}
           owned={hasThemeExpansion}
           busy={busySku === THEME_EXPANSION_SKU}
           disabled={busy || hasThemeExpansion || !themePackReady}
           onPress={purchaseThemeExpansion}
         />
+        {themePackReady && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingVertical: 10 }}>
+            {EXPANSION_THEME_KEYS.map((k) => (
+              <View key={k} style={{ width: 84, alignItems: 'center', gap: 4 }}>
+                <View style={{ width: 84, height: 126, borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: themes[k].primary }}>
+                  {themeBackgrounds[k] != null && (
+                    <Image source={themeBackgrounds[k]!} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                  )}
+                  {!hasThemeExpansion && (
+                    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#00000066', justifyContent: 'center', alignItems: 'center' }}>
+                      <Feather name="lock" size={18} color="#FFFFFF" />
+                    </View>
+                  )}
+                </View>
+                <Text style={{ color: theme.textMuted, fontSize: 10, fontFamily: 'Inter_600SemiBold', textAlign: 'center' }} numberOfLines={2}>{themes[k].displayName}</Text>
+              </View>
+            ))}
+          </ScrollView>
+        )}
 
         <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 22, marginTop: 18 }}>
           <TouchableOpacity onPress={restorePurchases} disabled={busy}>

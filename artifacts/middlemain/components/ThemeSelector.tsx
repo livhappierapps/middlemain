@@ -2,9 +2,11 @@ import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import React from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { ThemeKey, themes } from '@/constants/themes';
 import { useTheme } from '@/context/ThemeContext';
+import { themeBackgrounds } from '@/constants/backgrounds';
+import { isExpansionTheme } from '@/constants/themes';
 
 export function ThemeSelector() {
   const { themeKey, setTheme, theme, isThemeLocked } = useTheme();
@@ -53,6 +55,9 @@ export function ThemeSelector() {
                 alignItems: 'center',
               }}
             >
+              {isExpansionTheme(key) && themeBackgrounds[key] != null && (
+                <Image source={themeBackgrounds[key]!} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' }} resizeMode="cover" />
+              )}
               <View style={{ flexDirection: 'row', gap: 3 }}>
                 <View style={{ width: 10, height: 28, borderRadius: 2, backgroundColor: t.primary, shadowColor: t.primary, shadowOffset: { width: 0, height: 0 }, shadowRadius: 4, shadowOpacity: 0.8 }} />
                 <View style={{ width: 10, height: 28, borderRadius: 2, backgroundColor: t.secondary, shadowColor: t.secondary, shadowOffset: { width: 0, height: 0 }, shadowRadius: 4, shadowOpacity: 0.8 }} />
@@ -65,6 +70,7 @@ export function ThemeSelector() {
               {locked && (
                 <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#00000088', justifyContent: 'center', alignItems: 'center' }}>
                   <Feather name="lock" size={16} color="#FFFFFF" />
+                  <Text style={{ color: '#FFFFFF', fontSize: 8, fontFamily: 'Inter_600SemiBold', marginTop: 2 }}>UNLOCK</Text>
                 </View>
               )}
             </View>

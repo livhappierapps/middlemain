@@ -3,11 +3,17 @@ name: Private developer edition
 description: Owner-requested release ordering, Crash Pad assistant, Council participation, and approval-controlled developer privileges.
 ---
 
-Finish the public release first: the owner wants a current public-release APK to test before shipping. Only after the public release is done should work begin on the owner-only special developer edition.
+Keep the owner-only developer edition separate from public Middlemain. The owner now requests preparing it under the name “MainInTheMiddle,” with its own private GitHub repository and private iOS/Android distribution.
 
-**Why:** The user explicitly requested this ordering and wants the consumer app shipped before adding private developer features.
+**Why:** The owner explicitly named the personal edition and requires its conversation-handoff features to stay out of the public release.
 
-**How to apply:** Keep developer-edition scope out of the public release and require owner test sign-off before store submission.
+**How to apply:** Do not rename the public app, change its identifiers, or put personal credentials or private conversation data into either repository. Use separate application identity and authorization for the private edition. Hosting and native builds still require advance cost notice and approval.
+
+The desired private feature is an explicit conversation handoff from Grok into MainInTheMiddle, reusing the owner's authorized Memory Machine and AIs & Ears connections.
+
+**Why:** The user wants to continue a conversation without manually rebuilding its context, including when consumer Grok usage is exhausted.
+
+**How to apply:** Transfer only history actually supplied through an authorized handoff. Do not equate consumer Grok conversation IDs with xAI API response IDs, claim access to unexported consumer memory, or promise that subscription usage covers API calls.
 
 The private edition should include a tab called “Dev’s Crash Pad,” include Dev in every Council session, and give Dev and Leo extra developer permissions with a simple approval toast for app control. The owner wants coding assistance, agent coaching, and EAS build help.
 

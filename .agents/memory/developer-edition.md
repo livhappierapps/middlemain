@@ -15,6 +15,12 @@ The desired private feature is an explicit conversation handoff from Grok into M
 
 **How to apply:** Transfer only history actually supplied through an authorized handoff. Do not equate consumer Grok conversation IDs with xAI API response IDs, claim access to unexported consumer memory, or promise that subscription usage covers API calls.
 
+Memory Machine is also getting a separate private edition, “Leo’s Memory Machine,” with its own private repository. The owner wants Whiz to connect it to the personal edition for nightly memory dumps and an always-on feature.
+
+**Why:** The user explicitly requested coordination between the two private editions, not reuse of public-release storage.
+
+**How to apply:** Agree on the connection direction and authenticated endpoint with Whiz before wiring it. Keep personal memories out of public Council rooms and repositories. Nightly work must run on an authorized backend rather than depend on an iPhone staying active; disclose hosting and API costs before enabling it.
+
 The private edition should include a tab called “Dev’s Crash Pad,” include Dev in every Council session, and give Dev and Leo extra developer permissions with a simple approval toast for app control. The owner wants coding assistance, agent coaching, and EAS build help.
 
 **Why:** The user requested a private development workspace with these assistant roles and broader capabilities.

@@ -41,13 +41,28 @@ export interface CredentialStore {
   delete(namespace: CredentialNamespace, id: string): Promise<void>;
 }
 
+/**
+ * expo-secure-store only accepts keys matching [A-Za-z0-9._-]; any other
+ * character (e.g. '%', '@', '/', ':') makes get/set throw "Invalid key" on iOS.
+ * Encode disallowed chars as `_xHH` so ids stay unique and deterministic.
+ */
+export function toSecureStoreKeyPart(value: string): string {
+  return Array.from(value)
+    .map((ch) => (/^[A-Za-z0-9.\-]$/.test(ch) ? ch : `_x${Array.from(new TextEncoder().encode(ch)).map((b) => b.toString(16).padStart(2, '0')).join('')}`))
+    .join('');
+}
+
+export function isValidSecureStoreKey(key: string): boolean {
+  return /^[A-Za-z0-9._-]+$/.test(key);
+}
+
 export function createCredentialStore(
   platform: string,
   loadNativeStore: () => Promise<ExpoSecureStoreModule>,
   webSession = new Map<string, string>(),
 ): CredentialStore {
   const storageKey = (namespace: CredentialNamespace, id: string) =>
-    `middlemain.credential.${namespace}.${encodeURIComponent(id)}`;
+    `middlemain.credential.${toSecureStoreKeyPart(namespace)}.${toSecureStoreKeyPart(id)}`;
 
   return {
     async get(namespace, id) {

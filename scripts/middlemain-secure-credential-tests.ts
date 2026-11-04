@@ -39,7 +39,7 @@ test('iOS credentials use device-only keychain access and can be removed', async
   const store = createCredentialStore('ios', async () => native.module);
 
   await store.set('ai-connection', 'conn id', 'provider-secret');
-  assert.equal(native.values.get('middlemain.credential.ai-connection.conn%20id'), 'provider-secret');
+  assert.equal(native.values.get('middlemain.credential.ai-connection.conn_x20id'), 'provider-secret');
   assert.equal(
     (native.lastOptions as { keychainAccessible?: string }).keychainAccessible,
     'device-only',
@@ -154,4 +154,20 @@ test('secure-storage unavailability fails closed without saving the credential',
 
   await assert.rejects(store.set('ai-connection', 'one', 'secret'), /secure storage is unavailable/i);
   assert.equal(native.setCount, 0);
+});
+
+test('secure-store keys only use characters expo-secure-store accepts', async () => {
+  const { toSecureStoreKeyPart, isValidSecureStoreKey } = await import('../artifacts/middlemain/utils/secureCredentialStore');
+  const seen: string[] = [];
+  const store = createCredentialStore('ios', async () => ({
+    isAvailableAsync: async () => true,
+    WHEN_UNLOCKED_THIS_DEVICE_ONLY: 6,
+    setItemAsync: async (k: string) => { seen.push(k); },
+    getItemAsync: async (k: string) => { seen.push(k); return null; },
+    deleteItemAsync: async (k: string) => { seen.push(k); },
+  }) as unknown as ExpoSecureStoreModule);
+  await store.set('mcp' as never, 'https://x.y/api@mcp %_id', 'v');
+  await store.get('mcp' as never, 'a/b:c');
+  for (const k of seen) assert.ok(isValidSecureStoreKey(k), k);
+  assert.notEqual(toSecureStoreKeyPart('a_b'), toSecureStoreKeyPart('a/b'));
 });

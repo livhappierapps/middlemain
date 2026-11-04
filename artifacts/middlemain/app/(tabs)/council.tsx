@@ -692,8 +692,9 @@ function AutoModeModal({
 
 // ─── Live room persistence key ────────────────────────────────────────────────
 const LIVE_ROOM_STORAGE_KEY = '@middlemain/liveRoom';
-const LIVE_ROOM_MCP_TOKEN_KEY = '@middlemain/liveRoomMcpToken';
-const LIVE_ROOM_HOST_TOKEN_KEY = '@middlemain/liveRoomHostToken';
+// SecureStore keys must match [A-Za-z0-9._-] — '@' and '/' made every save fail on iOS.
+const LIVE_ROOM_MCP_TOKEN_KEY = 'middlemain.liveRoomMcpToken';
+const LIVE_ROOM_HOST_TOKEN_KEY = 'middlemain.liveRoomHostToken';
 
 async function persistLiveRoomToken(roomId: string, token: string | null, kind: 'mcp' | 'host' = 'mcp'): Promise<boolean> {
   try {
@@ -706,8 +707,11 @@ async function persistLiveRoomToken(roomId: string, token: string | null, kind: 
     delete room.hostToken;
     await AsyncStorage.setItem(LIVE_ROOM_STORAGE_KEY, JSON.stringify(room));
     if (Platform.OS === 'web') return token === null;
+    if (!(await SecureStore.isAvailableAsync())) return false;
     if (token) {
-      await SecureStore.setItemAsync(kind === 'host' ? LIVE_ROOM_HOST_TOKEN_KEY : LIVE_ROOM_MCP_TOKEN_KEY, token);
+      await SecureStore.setItemAsync(kind === 'host' ? LIVE_ROOM_HOST_TOKEN_KEY : LIVE_ROOM_MCP_TOKEN_KEY, token, {
+        keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+      });
     } else {
       await SecureStore.deleteItemAsync(kind === 'host' ? LIVE_ROOM_HOST_TOKEN_KEY : LIVE_ROOM_MCP_TOKEN_KEY);
     }

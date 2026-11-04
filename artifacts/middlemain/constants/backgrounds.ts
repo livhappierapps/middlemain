@@ -15,4 +15,9 @@ export const themeBackgrounds: Partial<Record<ThemeKey, number>> = {
   cprMuted:         require('../assets/images/backgrounds/bg-cpr-muted.jpg'),
   sunsetGlitter:    require('../assets/images/backgrounds/bg-sunset-glitter.jpg'),
   grittyComic:      require('../assets/images/backgrounds/bg-gritty-comic.jpg'),
+  cyberpunkGoddess: require('../assets/images/backgrounds/bg-cyberpunk-goddess.jpg'),
+  chromeGoddess:    require('../assets/images/backgrounds/bg-chrome-goddess.jpg'),
+  goldenGoddess:    require('../assets/images/backgrounds/bg-golden-goddess.jpg'),
+  roseGoldGoddess:  require('../assets/images/backgrounds/bg-rose-gold-goddess.jpg'),
+  anarchyGoddess:   require('../assets/images/backgrounds/bg-anarchy-goddess.jpg'),
 };

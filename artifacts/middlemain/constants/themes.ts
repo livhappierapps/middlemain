@@ -12,7 +12,12 @@ export type ThemeKey =
   | 'cyberpunkRain'
   | 'cprMuted'
   | 'sunsetGlitter'
-  | 'grittyComic';
+  | 'grittyComic'
+  | 'cyberpunkGoddess'
+  | 'chromeGoddess'
+  | 'goldenGoddess'
+  | 'roseGoldGoddess'
+  | 'anarchyGoddess';
 
 export interface ThemeColors {
   name: ThemeKey;
@@ -400,6 +405,136 @@ export const themes: Record<ThemeKey, ThemeColors> = {
     radius: 12,
     overlay: '#0a0c2499',
   },
+  cyberpunkGoddess: {
+    name: 'cyberpunkGoddess',
+    displayName: 'Cyberpunk Goddess',
+    background: '#120d14',
+    surface: '#1d191f',
+    card: '#272229',
+    primary: '#ff4fb8',
+    secondary: '#4fe8ff',
+    accent: '#d8d8e8',
+    text: '#ffffff',
+    textMuted: '#c9c0cc',
+    border: '#592045',
+    tint: '#ff4fb8',
+    foreground: '#ffffff',
+    cardForeground: '#ffffff',
+    primaryForeground: '#120d14',
+    secondaryForeground: '#120d14',
+    muted: '#272229',
+    mutedForeground: '#c9c0cc',
+    accentForeground: '#120d14',
+    destructive: '#ff5c7a',
+    destructiveForeground: '#ffffff',
+    input: '#592045',
+    radius: 12,
+    overlay: '#120d14b8',
+  },
+  chromeGoddess: {
+    name: 'chromeGoddess',
+    displayName: 'Chrome Goddess',
+    background: '#0e0e10',
+    surface: '#1a1a1b',
+    card: '#232325',
+    primary: '#e8e8ee',
+    secondary: '#9a9aa6',
+    accent: '#ffffff',
+    text: '#ffffff',
+    textMuted: '#b8b8c2',
+    border: '#4f4f52',
+    tint: '#e8e8ee',
+    foreground: '#ffffff',
+    cardForeground: '#ffffff',
+    primaryForeground: '#0e0e10',
+    secondaryForeground: '#0e0e10',
+    muted: '#232325',
+    mutedForeground: '#b8b8c2',
+    accentForeground: '#0e0e10',
+    destructive: '#ff5c7a',
+    destructiveForeground: '#ffffff',
+    input: '#4f4f52',
+    radius: 12,
+    overlay: '#0e0e10bb',
+  },
+  goldenGoddess: {
+    name: 'goldenGoddess',
+    displayName: 'Golden Goddess',
+    background: '#1a1206',
+    surface: '#251d12',
+    card: '#2e271c',
+    primary: '#ffcc4d',
+    secondary: '#f5e1a4',
+    accent: '#ffa62b',
+    text: '#ffffff',
+    textMuted: '#e0cfa8',
+    border: '#5e491b',
+    tint: '#ffcc4d',
+    foreground: '#ffffff',
+    cardForeground: '#ffffff',
+    primaryForeground: '#1a1206',
+    secondaryForeground: '#1a1206',
+    muted: '#2e271c',
+    mutedForeground: '#e0cfa8',
+    accentForeground: '#1a1206',
+    destructive: '#ff5c7a',
+    destructiveForeground: '#ffffff',
+    input: '#5e491b',
+    radius: 12,
+    overlay: '#1a1206bf',
+  },
+  roseGoldGoddess: {
+    name: 'roseGoldGoddess',
+    displayName: 'Rose Gold Goddess',
+    background: '#1e0f12',
+    surface: '#291b1d',
+    card: '#322427',
+    primary: '#f7a8b8',
+    secondary: '#e8b48f',
+    accent: '#ff7aa8',
+    text: '#ffffff',
+    textMuted: '#e6c8cc',
+    border: '#5f3c43',
+    tint: '#f7a8b8',
+    foreground: '#ffffff',
+    cardForeground: '#ffffff',
+    primaryForeground: '#1e0f12',
+    secondaryForeground: '#1e0f12',
+    muted: '#322427',
+    mutedForeground: '#e6c8cc',
+    accentForeground: '#1e0f12',
+    destructive: '#ff5c7a',
+    destructiveForeground: '#ffffff',
+    input: '#5f3c43',
+    radius: 12,
+    overlay: '#1e0f12bf',
+  },
+  anarchyGoddess: {
+    name: 'anarchyGoddess',
+    displayName: 'Anarchy Goddess',
+    background: '#160506',
+    surface: '#211112',
+    card: '#2a1b1c',
+    primary: '#ff2e3c',
+    secondary: '#ff8a7a',
+    accent: '#ffd0d0',
+    text: '#ffffff',
+    textMuted: '#d9aaaa',
+    border: '#5b1116',
+    tint: '#ff2e3c',
+    foreground: '#ffffff',
+    cardForeground: '#ffffff',
+    primaryForeground: '#160506',
+    secondaryForeground: '#160506',
+    muted: '#2a1b1c',
+    mutedForeground: '#d9aaaa',
+    accentForeground: '#160506',
+    destructive: '#ff5c7a',
+    destructiveForeground: '#ffffff',
+    input: '#5b1116',
+    radius: 12,
+    overlay: '#160506a8',
+  },
 };
 
 export const defaultTheme: ThemeKey = 'cyberpunk';
@@ -419,6 +554,15 @@ export const EXPANSION_THEME_KEYS: ThemeKey[] = [
   'grittyComic',
 ];
 
+/** Theme Expansion Pack Two (IAP app.middlemain.bridge.themes.expansion2). */
+export const EXPANSION2_THEME_KEYS: ThemeKey[] = [
+  'cyberpunkGoddess',
+  'chromeGoddess',
+  'goldenGoddess',
+  'roseGoldGoddess',
+  'anarchyGoddess',
+];
+
 export function isExpansionTheme(key: ThemeKey): boolean {
-  return EXPANSION_THEME_KEYS.includes(key);
+  return EXPANSION_THEME_KEYS.includes(key) || EXPANSION2_THEME_KEYS.includes(key);
 }

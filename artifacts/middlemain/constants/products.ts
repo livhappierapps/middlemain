@@ -24,11 +24,13 @@ export const SUBSCRIPTION_SKUS = SUBSCRIPTION_PLANS.map((p) => p.sku);
 
 export const REMOVE_ADS_SKU = 'app.middlemain.bridge.removeads';
 export const THEME_EXPANSION_SKU = 'app.middlemain.bridge.themes.expansion1';
-export const ONE_TIME_SKUS = [REMOVE_ADS_SKU, THEME_EXPANSION_SKU];
+export const THEME_EXPANSION2_SKU = 'app.middlemain.bridge.themes.expansion2';
+export const ONE_TIME_SKUS = [REMOVE_ADS_SKU, THEME_EXPANSION_SKU, THEME_EXPANSION2_SKU];
 
 export const ONE_TIME_FALLBACK_PRICE: Record<string, string> = {
   [REMOVE_ADS_SKU]: '$1.99',
   [THEME_EXPANSION_SKU]: '$1.99',
+  [THEME_EXPANSION2_SKU]: '$1.99',
 };
 
 export const TERMS_OF_USE_URL = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';

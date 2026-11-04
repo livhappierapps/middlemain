@@ -14,8 +14,9 @@ import {
   SubscriptionPlanId,
   TERMS_OF_USE_URL,
   THEME_EXPANSION_SKU,
+  THEME_EXPANSION2_SKU,
 } from '@/constants/products';
-import { EXPANSION_THEME_KEYS, themes } from '@/constants/themes';
+import { EXPANSION2_THEME_KEYS, EXPANSION_THEME_KEYS, themes } from '@/constants/themes';
 import { themeBackgrounds } from '@/constants/backgrounds';
 import { BillingIssueBanner } from '@/components/BillingIssueBanner';
 import { PENDING_APPROVAL_MESSAGE, usePurchase } from '@/context/PurchaseContext';
@@ -31,14 +32,15 @@ export default function PaywallScreen() {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const {
-    tier, isPro, hasRemovedAds, hasThemeExpansion, busySku, pendingApprovalSku, priceFor,
-    purchaseSubscription, purchaseAdRemoval, purchaseThemeExpansion, restorePurchases, manageSubscriptions,
+    tier, isPro, hasRemovedAds, hasThemeExpansion, hasThemeExpansion2, busySku, pendingApprovalSku, priceFor,
+    purchaseSubscription, purchaseAdRemoval, purchaseThemeExpansion, purchaseThemeExpansion2, restorePurchases, manageSubscriptions,
   } = usePurchase();
   const [selected, setSelected] = useState<SubscriptionPlanId>('yearly');
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
   const selectedPlan = SUBSCRIPTION_PLANS.find((p) => p.id === selected)!;
   const busy = busySku !== null;
   const themePackReady = EXPANSION_THEME_KEYS.length > 0;
+  const themePack2Ready = EXPANSION2_THEME_KEYS.length > 0;
 
   const subscribe = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -157,6 +159,34 @@ export default function PaywallScreen() {
                     <Image source={themeBackgrounds[k]!} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
                   )}
                   {!hasThemeExpansion && (
+                    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#00000066', justifyContent: 'center', alignItems: 'center' }}>
+                      <Feather name="lock" size={18} color="#FFFFFF" />
+                    </View>
+                  )}
+                </View>
+                <Text style={{ color: theme.textMuted, fontSize: 10, fontFamily: 'Inter_600SemiBold', textAlign: 'center' }} numberOfLines={2}>{themes[k].displayName}</Text>
+              </View>
+            ))}
+          </ScrollView>
+        )}
+        <OneTimeRow
+          icon="star"
+          title="Theme Expansion Pack Two"
+          subtitle={hasThemeExpansion2 ? 'Purchased' : themePack2Ready ? `One-time · ${priceFor(THEME_EXPANSION2_SKU)}` : 'Coming soon'}
+          owned={hasThemeExpansion2}
+          busy={busySku === THEME_EXPANSION2_SKU}
+          disabled={busy || hasThemeExpansion2 || !themePack2Ready}
+          onPress={purchaseThemeExpansion2}
+        />
+        {themePack2Ready && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingVertical: 10 }}>
+            {EXPANSION2_THEME_KEYS.map((k) => (
+              <View key={k} style={{ width: 84, alignItems: 'center', gap: 4 }}>
+                <View style={{ width: 84, height: 126, borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: themes[k].primary }}>
+                  {themeBackgrounds[k] != null && (
+                    <Image source={themeBackgrounds[k]!} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                  )}
+                  {!hasThemeExpansion2 && (
                     <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#00000066', justifyContent: 'center', alignItems: 'center' }}>
                       <Feather name="lock" size={18} color="#FFFFFF" />
                     </View>

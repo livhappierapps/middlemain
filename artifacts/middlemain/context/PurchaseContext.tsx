@@ -9,6 +9,7 @@ import {
   SUBSCRIPTION_SKUS,
   SubscriptionPlanId,
   THEME_EXPANSION_SKU,
+  THEME_EXPANSION2_SKU,
 } from '@/constants/products';
 import { useTheme } from '@/context/ThemeContext';
 
@@ -44,6 +45,7 @@ interface PurchaseContextValue {
   /** True when ads should be hidden (Pro or Remove Ads). */
   hasRemovedAds: boolean;
   hasThemeExpansion: boolean;
+  hasThemeExpansion2: boolean;
   purchasesAvailable: boolean;
   loading: boolean;
   busySku: string | null;
@@ -56,6 +58,7 @@ interface PurchaseContextValue {
   purchaseSubscription: (plan: SubscriptionPlanId) => Promise<void>;
   purchaseAdRemoval: () => Promise<void>;
   purchaseThemeExpansion: () => Promise<void>;
+  purchaseThemeExpansion2: () => Promise<void>;
   restorePurchases: () => Promise<void>;
   manageSubscriptions: () => Promise<void>;
 }
@@ -119,6 +122,7 @@ const PurchaseContext = createContext<PurchaseContextValue>({
   isPro: false,
   hasRemovedAds: false,
   hasThemeExpansion: false,
+  hasThemeExpansion2: false,
   purchasesAvailable: false,
   loading: false,
   busySku: null,
@@ -128,6 +132,7 @@ const PurchaseContext = createContext<PurchaseContextValue>({
   purchaseSubscription: notAvailable,
   purchaseAdRemoval: notAvailable,
   purchaseThemeExpansion: notAvailable,
+  purchaseThemeExpansion2: notAvailable,
   restorePurchases: notAvailable,
   manageSubscriptions: notAvailable,
 });
@@ -147,8 +152,13 @@ export function PurchaseProvider({ children }: { children: React.ReactNode }) {
   const [prices, setPrices] = useState<Record<string, string>>({});
   const mounted = useRef(true);
   const storeChecked = useRef(false);
-  const { setExpansionUnlocked } = useTheme();
+  const { setExpansionUnlocked, setExpansion2Unlocked } = useTheme();
   const themePackOwned = owned.has(THEME_EXPANSION_SKU);
+  const themePack2Owned = owned.has(THEME_EXPANSION2_SKU);
+
+  useEffect(() => {
+    setExpansion2Unlocked(themePack2Owned);
+  }, [themePack2Owned, setExpansion2Unlocked]);
 
   useEffect(() => {
     setExpansionUnlocked(themePackOwned);
@@ -393,6 +403,7 @@ export function PurchaseProvider({ children }: { children: React.ReactNode }) {
   }, [buy]);
   const purchaseAdRemoval = useCallback(() => buy(REMOVE_ADS_SKU, 'in-app'), [buy]);
   const purchaseThemeExpansion = useCallback(() => buy(THEME_EXPANSION_SKU, 'in-app'), [buy]);
+  const purchaseThemeExpansion2 = useCallback(() => buy(THEME_EXPANSION2_SKU, 'in-app'), [buy]);
 
   const restorePurchases = useCallback(async () => {
     if (!IAP) return notAvailable();
@@ -443,6 +454,7 @@ export function PurchaseProvider({ children }: { children: React.ReactNode }) {
       isPro,
       hasRemovedAds: isPro || owned.has(REMOVE_ADS_SKU),
       hasThemeExpansion: owned.has(THEME_EXPANSION_SKU),
+      hasThemeExpansion2: owned.has(THEME_EXPANSION2_SKU),
       purchasesAvailable: !!IAP && connected,
       loading,
       busySku,
@@ -452,10 +464,11 @@ export function PurchaseProvider({ children }: { children: React.ReactNode }) {
       purchaseSubscription,
       purchaseAdRemoval,
       purchaseThemeExpansion,
+      purchaseThemeExpansion2,
       restorePurchases,
       manageSubscriptions,
     };
-  }, [owned, connected, loading, busySku, pendingApprovalSku, billingIssue, prices, purchaseSubscription, purchaseAdRemoval, purchaseThemeExpansion, restorePurchases, manageSubscriptions]);
+  }, [owned, connected, loading, busySku, pendingApprovalSku, billingIssue, prices, purchaseSubscription, purchaseAdRemoval, purchaseThemeExpansion, purchaseThemeExpansion2, restorePurchases, manageSubscriptions]);
 
   return <PurchaseContext.Provider value={value}>{children}</PurchaseContext.Provider>;
 }

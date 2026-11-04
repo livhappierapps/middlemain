@@ -73,7 +73,7 @@ function SettingRow({ icon, label, value, onPress, accent }: { icon: string; lab
 
 export default function SettingsScreen() {
   const { theme } = useTheme();
-  const { tier, isPro, hasRemovedAds, hasThemeExpansion, restorePurchases, manageSubscriptions, busySku } = usePurchase();
+  const { tier, isPro, hasRemovedAds, hasThemeExpansion, hasThemeExpansion2, restorePurchases, manageSubscriptions, busySku } = usePurchase();
   const { webhookUrl, setWebhookUrl, testWebhook, historyLimit, setHistoryLimit, apiUrl, setApiUrl } = useCouncil();
   const { refreshServerGrokStatus } = useAI();
   const insets = useSafeAreaInsets();
@@ -233,7 +233,7 @@ export default function SettingsScreen() {
                 {isPro ? 'Active. Tap to change plan.' : 'Weekly, monthly, 6-month or yearly plans'}
               </Text>
               <Text style={{ color: theme.textMuted, fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 2 }}>
-                {`Remove Ads: ${hasRemovedAds ? 'owned' : 'not owned'} · Theme Pack: ${hasThemeExpansion ? 'owned' : 'not owned'}`}
+                {`Remove Ads: ${hasRemovedAds ? 'owned' : 'not owned'} · Theme Pack 1: ${hasThemeExpansion ? 'owned' : 'not owned'} · Theme Pack 2: ${hasThemeExpansion2 ? 'owned' : 'not owned'}`}
               </Text>
             </View>
             <Text style={{ color: theme.primary, fontSize: 13, fontFamily: 'Inter_600SemiBold', textShadowColor: theme.primary, textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 6 }}>

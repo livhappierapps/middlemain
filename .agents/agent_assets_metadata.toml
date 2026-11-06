@@ -67,3 +67,17 @@ mtime_ms = 1793981667777
 storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:c619b4d5-e3ec-47d4-a952-2fd41395511e/0dd3e2b8-8dd9-4a11-9fbb-bd38671a891a/d983a92e-4d02-453d-881a-edd8ce0a4019"
 storage_version_token = "1793981682205126"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "iQOzEe_JX9VZ3IX04AJbE"
+uri = "file://docs/ais-and-ears-built-in-research.md"
+type = "text"
+title = "AIs & Ears integration research"
+description = "Read-only findings on the verified capture pipeline, three likely failure points, Render endpoint and auth boundary, and subscription/metering gates. No app code changed."
+logical_id = "267a0f41-e574-42df-8dc7-8622d5eab4ff"
+content_hash = "sha256:9e89b8a527fcc0bc1b7dd2ae281a74be671771ff2486f67c4090eeeb09912280"
+size = 9370
+mtime_ms = 1793982637540
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:c619b4d5-e3ec-47d4-a952-2fd41395511e/267a0f41-e574-42df-8dc7-8622d5eab4ff/cf77d77b-94eb-4d32-8bbd-6154d1a0b734"
+storage_version_token = "1793982659425648"
+content_type = "text/markdown"

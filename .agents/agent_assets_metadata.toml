@@ -81,3 +81,17 @@ mtime_ms = 1793982637540
 storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:c619b4d5-e3ec-47d4-a952-2fd41395511e/267a0f41-e574-42df-8dc7-8622d5eab4ff/cf77d77b-94eb-4d32-8bbd-6154d1a0b734"
 storage_version_token = "1793982659425648"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "dDPo-Bh6XUX8wemDcLjFw"
+uri = "file://artifacts/middlemain/docs/human-hands-connector-status.md"
+type = "text"
+title = "Human Hands connector status"
+description = "Research-only report: no connector plugins or public Replit Secrets CRUD endpoints were found; documents current local vault behavior and a proposed interface. No app code changed."
+logical_id = "e833d2b3-9795-43c9-97bf-a839a8e79a52"
+content_hash = "sha256:b7a3094e9e9e1c091dd488d2cfa9e3f0a286b4d1ba4067176d5d6e9ecccd14d0"
+size = 7268
+mtime_ms = 1793982789976
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:c619b4d5-e3ec-47d4-a952-2fd41395511e/e833d2b3-9795-43c9-97bf-a839a8e79a52/5b34b013-66f2-469f-a7fd-e53f3f1f1051"
+storage_version_token = "1793983523573586"
+content_type = "text/markdown"

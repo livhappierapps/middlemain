@@ -53,3 +53,17 @@ mtime_ms = 1791849952959
 storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:c619b4d5-e3ec-47d4-a952-2fd41395511e/ca274ca2-d822-4abb-8e52-470b0d6088e1/221ad59c-3fdf-4bd1-8daa-d2adb6ce8fb0"
 storage_version_token = "1791849960378112"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "kGqxVj2yLpmSEl32JPblA"
+uri = "file://docs/final-bug-fix-before-shipping-report.md"
+type = "text"
+title = "Final bug fix before shipping report"
+description = "Sourced findings, implemented fixes, verification results, and remaining release blockers."
+logical_id = "0dd3e2b8-8dd9-4a11-9fbb-bd38671a891a"
+content_hash = "sha256:f0ff5657865aed24dc27a693fd8b0bef8fbdae1bd1ed580b10e6e3151bf43b7a"
+size = 16963
+mtime_ms = 1793981667777
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:c619b4d5-e3ec-47d4-a952-2fd41395511e/0dd3e2b8-8dd9-4a11-9fbb-bd38671a891a/d983a92e-4d02-453d-881a-edd8ce0a4019"
+storage_version_token = "1793981682205126"
+content_type = "text/markdown"

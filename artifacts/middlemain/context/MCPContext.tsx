@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
+import { createMemoryTransport } from '@/utils/memoryTransport';
 import {
   createCredentialStore,
   parseMCPCredentialMetadata,
@@ -56,24 +57,9 @@ export function useMCP() {
   return ctx;
 }
 
-async function mcpRequest(url: string, token: string, method: string, params?: any): Promise<any> {
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ jsonrpc: '2.0', method, params: params ?? {}, id: 1 }),
-  });
-  if (!resp.ok) {
-    throw new Error(`MCP request failed with HTTP ${resp.status}.`);
-  }
-  const json = await resp.json();
-  if (json.error) throw new Error('Memory Machine returned a JSON-RPC error.');
-  return json.result;
-}
-
 export function MCPProvider({ children }: { children: React.ReactNode }) {
+  const transportRef = useRef<ReturnType<typeof createMemoryTransport> | null>(null);
+  const connectionGeneration = useRef(0);
   const [config, setConfigState] = useState<MCPConfig>({ url: '', token: '', credentialState: 'cleared' });
   const configRef = useRef<MCPConfig>({ url: '', token: '', credentialState: 'cleared' });
   const [status, setStatus] = useState<MCPStatus>('idle');
@@ -133,6 +119,10 @@ export function MCPProvider({ children }: { children: React.ReactNode }) {
 
   const updateConfig = useCallback((patch: Partial<MCPConfig>) => {
     if (!credentialStorageReady) return;
+    connectionGeneration.current++;
+    transportRef.current = null;
+    setStatus('idle');
+    setTools([]);
     const previous = configRef.current;
     const next: MCPConfig = {
       ...previous,
@@ -181,8 +171,13 @@ export function MCPProvider({ children }: { children: React.ReactNode }) {
     if (!token) { setErrorMsg('Enter the MCP token first.'); setStatus('error'); return; }
     setStatus('connecting');
     setErrorMsg(null);
+    const generation = ++connectionGeneration.current;
     try {
-      const result = await mcpRequest(url, token, 'tools/list');
+      const transport = createMemoryTransport(url, token);
+      const result = await transport.call('tools/list');
+      if (generation !== connectionGeneration.current) return;
+      if (!Array.isArray(result?.tools)) throw new Error('Memory Machine did not return a tool list.');
+      transportRef.current = transport;
       const toolList: MCPTool[] = (result?.tools ?? []).map((t: any) => ({
         name: t.name,
         description: t.description ?? '',
@@ -191,12 +186,16 @@ export function MCPProvider({ children }: { children: React.ReactNode }) {
       setTools(toolList);
       setStatus('connected');
     } catch (err: any) {
+      if (generation !== connectionGeneration.current) return;
+      transportRef.current = null;
       setStatus('error');
       setErrorMsg(err.message ?? 'Connection failed');
     }
   }, [credentialStorageReady]);
 
   const disconnect = useCallback(() => {
+    connectionGeneration.current++;
+    transportRef.current = null;
     setStatus('idle');
     setErrorMsg(null);
     setTools([]);
@@ -206,10 +205,9 @@ export function MCPProvider({ children }: { children: React.ReactNode }) {
     if (!credentialStorageReady) throw new Error('Memory Machine settings are still being secured.');
     await persistenceQueue.current;
     if (credentialStorageErrorRef.current) throw new Error(MCP_CREDENTIAL_STORAGE_ERROR);
-    const current = configRef.current;
-    const url = current.url.trim().replace(/\/$/, '');
-    const token = current.token.trim().replace(/^Bearer\s+/i, '');
-    const result = await mcpRequest(url, token, 'tools/call', { name, arguments: args });
+    const transport = transportRef.current;
+    if (!transport) throw new Error('Connect Memory Machine before using its tools.');
+    const result = await transport.call('tools/call', { name, arguments: args });
     if (Array.isArray(result?.content)) {
       return result.content.map((c: any) => (c.text ?? JSON.stringify(c))).join('\n');
     }

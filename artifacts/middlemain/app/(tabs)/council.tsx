@@ -38,6 +38,7 @@ import {
 import { AIProvider, PROVIDER_DEFAULTS } from '@/context/AIContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useMCP } from '@/context/MCPContext';
+import { councilApiBase } from '@/utils/councilHistory';
 
 const VISION_INTERVAL_MS = 3000;
 
@@ -721,10 +722,7 @@ async function persistLiveRoomToken(roomId: string, token: string | null, kind: 
 // Prefers the user-configured URL from context (AsyncStorage-backed), falls
 // back to the baked-in env var, then to a relative path as a last resort.
 function resolveApiBase(stored: string): string {
-  if (stored) return stored;
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-  if (domain) return `https://${domain}/api`;
-  return '/api';
+  return councilApiBase(stored, process.env.EXPO_PUBLIC_DOMAIN, Platform.OS);
 }
 
 function resolveMcpServerUrl(apiBase: string): string {
@@ -1315,7 +1313,7 @@ export default function CouncilScreen() {
     injectSystemMessage('🧠 Recalling saved memories…');
     try {
       const result = await callTool('search_memories', { query: 'Middlemain council agents tasks directives' });
-      injectSystemMessage(`🧠 SAVED MEMORIES:\n\n${result}`);
+      injectSystemMessage(`🧠 SAVED MEMORIES:\n\n${result}`, true);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (err: any) {
       injectSystemMessage(`⚠️ Memory recall failed: ${err?.message ?? 'Unknown error'}`);

@@ -5,7 +5,7 @@ description: Owner-requested release ordering, Crash Pad assistant, Council part
 
 Keep the owner-only developer edition separate from public Middlemain. The owner now requests preparing it under the name “MainInTheMiddle,” with its own private GitHub repository and private iOS/Android distribution.
 
-**Why:** The owner explicitly named the personal edition and requires its conversation-handoff features to stay out of the public release.
+**Why:** The owner explicitly named the personal edition and requires its personal data and developer privileges to stay private. On 2026-11-06 the owner also requested research into conversation handoff for public Middlemain; that feature is no longer categorically private-only.
 
 **How to apply:** Do not rename the public app, change its identifiers, or put personal credentials or private conversation data into either repository. Use separate application identity and authorization for the private edition. Hosting and native builds still require advance cost notice and approval.
 

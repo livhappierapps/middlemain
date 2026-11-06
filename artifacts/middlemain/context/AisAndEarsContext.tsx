@@ -6,6 +6,7 @@ import { Platform } from 'react-native';
 import { resilientFetch } from '@/utils/resilientFetch';
 import { fetch } from 'expo/fetch';
 import { deliverVisionFrame } from '@/utils/bridgeVision';
+import { wavToBridgePcm, BridgeAudioFormatError } from '@/utils/bridgeAudio';
 import { createCredentialStore, readOrMigrateCredential, type CredentialState } from '@/utils/secureCredentialStore';
 
 const WS_PING_INTERVAL_MS = 15_000;
@@ -260,8 +261,11 @@ export function AisAndEarsProvider({ children }: { children: React.ReactNode }) 
           if (wsPingTimeoutRef.current) { clearTimeout(wsPingTimeoutRef.current); wsPingTimeoutRef.current = null; }
           return;
         }
-        if (msg.type === 'response.audio_transcript.done' && msg.transcript) {
+        if (['response.audio_transcript.done', 'response.output_audio_transcript.done',
+          'conversation.item.input_audio_transcription.completed'].includes(msg.type) && typeof msg.transcript === 'string') {
           emit({ type: 'transcript', content: msg.transcript });
+        } else if (msg.type === 'error') {
+          emit({ type: 'bridge_error', content: 'The media service rejected a request. Check the audio format, session expiry, and provider quota. No request was replayed.' });
         }
       } catch {}
     };
@@ -333,7 +337,8 @@ export function AisAndEarsProvider({ children }: { children: React.ReactNode }) 
             durationMinutes: config.durationMinutes,
           }),
         },
-        { timeoutMs: 12_000, retries: 3, retryBaseMs: 1_000 },
+        // Creating a session may be billable; never replay an uncertain POST.
+        { timeoutMs: 12_000, retries: 0 },
       );
       if (!res.ok) throw new Error(`Session failed: ${res.status}`);
       const data: Session = await res.json();
@@ -404,16 +409,16 @@ export function AisAndEarsProvider({ children }: { children: React.ReactNode }) 
             await FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
             return;
           }
-          wsRef.current.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: base64 }));
+          wsRef.current.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: wavToBridgePcm(base64) }));
           try { await FileSystem.deleteAsync(uri, { idempotent: true }); } catch {}
         }
-      } catch {
+      } catch (error) {
         try { await rec.stopAndUnloadAsync(); } catch {}
         if (generation !== audioGenerationRef.current) return;
         recordingRef.current = null;
         await stopAudio();
         setHearingOn(false);
-        emit({ type: 'bridge_error', content: 'Microphone recording or delivery failed. Hearing has stopped; check permissions and the bridge connection before testing again.' });
+        emit({ type: 'bridge_error', content: error instanceof BridgeAudioFormatError ? error.message : 'Microphone recording or delivery failed. Hearing has stopped; check permissions and the bridge connection before testing again.' });
       } finally {
         if (recordingRef.current === rec) recordingRef.current = null;
         const uri = rec.getURI();
@@ -434,7 +439,7 @@ export function AisAndEarsProvider({ children }: { children: React.ReactNode }) 
       emit({ type: 'bridge_status', content: '🎤 Hearing off.' });
     } else {
       setHearingOn(true);
-      emit({ type: 'bridge_status', content: '🎤 Microphone on — audio is being sent to the selected AI.' });
+      emit({ type: 'bridge_status', content: 'Microphone requested for AIs & Ears. This is a separate service from the selected chat AI; a returned transcript confirms processing.' });
       try {
         if (!await startAudioChunks()) setHearingOn(false);
       } catch {
@@ -458,7 +463,7 @@ export function AisAndEarsProvider({ children }: { children: React.ReactNode }) 
     if (!session) { emit({ type: 'bridge_error', content: 'Connect to AIs & Ears first.' }); return; }
     setScreenOn((v) => {
       const next = !v;
-      emit({ type: 'bridge_status', content: next ? '🖥 Screen share on — the selected AI can view your screen.' : '🖥 Screen share off.' });
+      emit({ type: 'bridge_status', content: next ? 'App-screen snapshots enabled for AIs & Ears. This does not share other apps or automatically give the selected chat AI access.' : 'Screen sharing off.' });
       return next;
     });
   }, [session, emit]);

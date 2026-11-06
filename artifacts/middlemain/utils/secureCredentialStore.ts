@@ -1,5 +1,5 @@
 export type ExpoSecureStoreModule = typeof import('expo-secure-store');
-export type CredentialNamespace = 'ai-connection' | 'ais-and-ears-bridge' | 'memory-mcp';
+export type CredentialNamespace = 'ai-connection' | 'ais-and-ears-bridge' | 'memory-mcp' | 'council-participant';
 export type CredentialState = 'secure' | 'cleared';
 
 export interface MCPCredentialMetadata {

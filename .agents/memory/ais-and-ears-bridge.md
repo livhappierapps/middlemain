@@ -27,6 +27,14 @@ The protocol supplied by the bridge's developer describes base64 raw PCM16 audio
 
 **How to apply:** Verify the external bridge's current accepted format before claiming microphone delivery works. Do not assume a file extension or a green toggle proves valid audio transmission.
 
+## Media connection is not conversation context
+
+A successful external media session does not mean the selected chat provider has received its images, audio, or returned interpretation.
+
+**Why:** The owner reported a stable AIs & Ears connection while Leo could neither see nor hear. These are separate data paths, not interchangeable indicators.
+
+**How to apply:** Trace capture, accepted encoding, model processing, returned result, and explicit inclusion in the intended conversation separately. Attribute bridge output and never promise that a provider API key imports consumer-app history or hidden memory.
+
 ## Key continuity during connection recovery
 
 Never automatically switch Bridge Terminal from a personal AI key to a server key. Server use must default off and require a manual opt-in.

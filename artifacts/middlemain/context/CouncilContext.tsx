@@ -3,7 +3,11 @@ import { serverAuthHeaders } from '@/utils/serverAuth';
 import { streamSSE } from '@/utils/streamSSE';
 import { appHelpContext } from '@/utils/appHelp';
 import { Audio } from 'expo-av';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
+import { councilHistory } from '@/utils/councilHistory';
+import { wavToBridgePcm, BridgeAudioFormatError } from '@/utils/bridgeAudio';
+import { Platform } from 'react-native';
+import { createCredentialStore, readOrMigrateCredential, type CredentialState } from '@/utils/secureCredentialStore';
 import * as Haptics from 'expo-haptics';
 import React, {
   createContext,
@@ -25,6 +29,7 @@ const STORAGE_MANUAL_PARTICIPANTS_KEY = 'council_manual_participants_v1';
 const STORAGE_WEBHOOK_URL_KEY = 'council_webhook_url_v1';
 const STORAGE_HISTORY_LIMIT_KEY = 'council_history_limit_v1';
 const STORAGE_API_URL_KEY = '@middlemain/apiUrl';
+const councilCredentials = createCredentialStore(Platform.OS, () => import('expo-secure-store'));
 
 // Module-level cache kept in sync by CouncilProvider so async callbacks
 // (which capture stale closures) always see the current API base URL.
@@ -42,6 +47,7 @@ interface PersistedParticipant {
   displayName: string;
   provider: AIProvider;
   apiKey: string;
+  credentialState?: CredentialState;
   model: string;
   baseUrl?: string;
   systemPrompt: string;
@@ -90,6 +96,7 @@ export interface CouncilMessage {
   timestamp: string;
   streaming?: boolean;
   replyToId?: string;
+  sharedContext?: boolean;
 }
 
 interface CouncilContextValue {
@@ -120,7 +127,7 @@ interface CouncilContextValue {
   setApiUrl: (url: string) => Promise<void>;
   clearMessages: () => void;
   /** Inject a system message directly into the council feed (no AI response triggered). */
-  injectSystemMessage: (content: string) => void;
+  injectSystemMessage: (content: string, sharedContext?: boolean) => void;
 }
 
 const CouncilCtx = createContext<CouncilContextValue | null>(null);
@@ -195,23 +202,7 @@ function buildAutonomousHistory(
   round: number,
   allParticipants: CouncilParticipant[],
 ): ChatMessage[] {
-  const raw: ChatMessage[] = [];
-
-  for (const m of allMessages) {
-    if (m.role === 'system') continue;
-    if (m.streaming) continue;
-    if (!m.content.trim()) continue;
-
-    if (m.role === 'user') {
-      raw.push({ role: 'user', content: m.content });
-    } else if (m.role === 'ai') {
-      if (m.participantId === participant.id) {
-        raw.push({ role: 'assistant', content: m.content });
-      } else {
-        raw.push({ role: 'user', content: `[${m.participantName ?? 'Agent'}]: ${m.content}` });
-      }
-    }
-  }
+  const raw: ChatMessage[] = councilHistory(participant.id, allMessages);
 
   const otherNames = allParticipants
     .filter((p) => p.id !== participant.id)
@@ -323,12 +314,14 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
   // Tracks whether we've finished loading from AsyncStorage; gates saves so
   // we don't overwrite stored data before hydration completes.
   const hydratedRef = useRef(false);
+  const credentialQueue = useRef<Promise<void>>(Promise.resolve());
 
   // Counts completed AI exchanges since the last webhook digest was fired
   const exchangeCountRef = useRef(0);
 
   const wsMap = useRef<Map<string, WebSocket>>(new Map());
   const recordingRef = useRef<Audio.Recording | null>(null);
+  const audioGeneration = useRef(0);
   const hearingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const autoStopRef = useRef(false);
 
@@ -372,9 +365,19 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
         if (storedParticipants) {
           const persisted: PersistedParticipant[] = JSON.parse(storedParticipants);
           if (persisted.length > 0) {
+            const secured = await Promise.all(persisted.map(async p => {
+              const credential = await readOrMigrateCredential(
+                councilCredentials, 'council-participant', p.id, p.apiKey ?? '', p.credentialState,
+              );
+              return { ...p, apiKey: credential.value, credentialState: credential.state };
+            }));
+            // Only erase legacy plaintext after every key has been secured successfully.
+            await AsyncStorage.setItem(STORAGE_MANUAL_PARTICIPANTS_KEY,
+              JSON.stringify(secured.map(p => ({ ...p, apiKey: '' }))));
+            if (cancelled) return;
             setParticipants((prev) => {
               const autoLoaded = prev.filter((p) => p.isAutoLoaded);
-              const restored: CouncilParticipant[] = persisted.map((p) => ({
+              const restored: CouncilParticipant[] = secured.map((p) => ({
                 ...p,
                 isAutoLoaded: false,
                 session: null,
@@ -401,7 +404,14 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
           _cachedApiUrl = storedApiUrl;
           setApiUrlState(storedApiUrl);
         }
-      } catch {}
+      } catch {
+        if (!cancelled) setMessages(prev => [...prev, {
+          id: genId(), role: 'system',
+          content: 'Council settings could not be restored securely. Existing saved data was preserved; do not uninstall the app. Restart and try again.',
+          timestamp: new Date().toLocaleTimeString(),
+        }]);
+        return;
+      }
       if (!cancelled) {
         hydratedRef.current = true;
       }
@@ -448,7 +458,20 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
     const toSave: PersistedParticipant[] = manualParticipants.map(({ id, connectionId, displayName, provider, apiKey, model, baseUrl, systemPrompt, color }) => ({
       id, connectionId, displayName, provider, apiKey, model, baseUrl, systemPrompt, color,
     }));
-    AsyncStorage.setItem(STORAGE_MANUAL_PARTICIPANTS_KEY, JSON.stringify(toSave)).catch(() => {});
+    credentialQueue.current = credentialQueue.current.then(async () => {
+      for (const participant of toSave) {
+        await councilCredentials.set('council-participant', participant.id, participant.apiKey);
+      }
+      await AsyncStorage.setItem(STORAGE_MANUAL_PARTICIPANTS_KEY, JSON.stringify(toSave.map(p => ({
+        ...p, apiKey: '', credentialState: p.apiKey ? 'secure' : 'cleared',
+      }))));
+    }).catch(() => {
+      setMessages(prev => [...prev, {
+        id: genId(), role: 'system',
+        content: 'Council could not securely save participant credentials. Keep the app installed and retry; keys were not written to ordinary preferences.',
+        timestamp: new Date().toLocaleTimeString(),
+      }]);
+    });
   }, [participants]);
 
   // cancelReconnect is declared here (before the auto-load effect) so the effect
@@ -606,6 +629,23 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
     const ws = new WebSocket(wsUrl);
 
     ws.onerror = () => {};
+    ws.onmessage = event => {
+      try {
+        const message = JSON.parse(String(event.data));
+        if (['response.audio_transcript.done', 'response.output_audio_transcript.done',
+          'conversation.item.input_audio_transcription.completed'].includes(message.type)
+          && typeof message.transcript === 'string' && message.transcript.trim()) {
+          setMessages(prev => [...prev, {
+            id: genId(), role: 'system', sharedContext: true,
+            content: `[AIs & Ears transcript for ${participantsRef.current.find(p => p.id === participantId)?.displayName ?? 'participant'}]\n${message.transcript}`,
+            timestamp: new Date().toLocaleTimeString(),
+          }]);
+        } else if (message.type === 'error') {
+          setParticipants(prev => prev.map(p => p.id === participantId
+            ? { ...p, sessionError: 'The media service rejected audio. Check its format, session, and quota.' } : p));
+        }
+      } catch { /* Ignore non-JSON control frames; never echo service credentials. */ }
+    };
 
     ws.onclose = () => {
       wsMap.current.delete(participantId);
@@ -741,6 +781,7 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
 
   // ── Audio (shared recording, distributed) ──────────────────────────────
   const stopAudio = useCallback(async () => {
+    audioGeneration.current++;
     if (hearingIntervalRef.current) {
       clearInterval(hearingIntervalRef.current);
       hearingIntervalRef.current = null;
@@ -752,22 +793,31 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const startSharedAudio = useCallback(async (activeParticipants: CouncilParticipant[]) => {
+    const generation = audioGeneration.current;
     const { status } = await Audio.requestPermissionsAsync();
-    if (status !== 'granted') return;
+    if (generation !== audioGeneration.current) return;
+    if (status !== 'granted') {
+      setParticipants(prev => prev.map(p => ({ ...p, hearingOn: false, sessionError: 'Microphone permission denied. Enable it in device Settings.' })));
+      return;
+    }
     await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
 
     const recordChunk = async () => {
+      if (generation !== audioGeneration.current || recordingRef.current) return;
       const openWs = activeParticipants
         .map((p) => wsMap.current.get(p.id))
         .filter((ws): ws is WebSocket => !!ws && ws.readyState === WebSocket.OPEN);
       if (openWs.length === 0) return;
 
       const rec = new Audio.Recording();
+      recordingRef.current = rec;
       try {
         await rec.prepareToRecordAsync(RECORDING_OPTIONS);
+        if (generation !== audioGeneration.current) { await rec.stopAndUnloadAsync(); return; }
         await rec.startAsync();
         recordingRef.current = rec;
         await new Promise((r) => setTimeout(r, CHUNK_MS));
+        if (generation !== audioGeneration.current) return;
         await rec.stopAndUnloadAsync();
         recordingRef.current = null;
         const uri = rec.getURI();
@@ -775,21 +825,34 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
           const base64 = await FileSystem.readAsStringAsync(uri, {
             encoding: 'base64',
           });
+          const pcm = wavToBridgePcm(base64);
+          if (generation !== audioGeneration.current) return;
           openWs.forEach((ws) => {
             if (ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: base64 }));
+              ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: pcm }));
             }
           });
           try { await FileSystem.deleteAsync(uri, { idempotent: true }); } catch {}
         }
-      } catch {
-        recordingRef.current = null;
+      } catch (error) {
+        try { await rec.stopAndUnloadAsync(); } catch {}
+        if (generation !== audioGeneration.current) return;
+        await stopAudio();
+        setParticipants(prev => prev.map(p => ({ ...p, hearingOn: false })));
+        setMessages(prev => [...prev, {
+          id: genId(), role: 'system', timestamp: new Date().toLocaleTimeString(),
+          content: error instanceof BridgeAudioFormatError ? error.message : 'Council microphone failed. Hearing stopped; check permission and the bridge connection.',
+        }]);
+      } finally {
+        if (recordingRef.current === rec) recordingRef.current = null;
+        const uri = rec.getURI();
+        if (uri) await FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
       }
     };
 
     recordChunk();
     hearingIntervalRef.current = setInterval(recordChunk, CHUNK_MS + 200);
-  }, []);
+  }, [stopAudio]);
 
   const restartAudioIfNeeded = useCallback(async (nextParticipants: CouncilParticipant[]) => {
     const hearingOnes = nextParticipants.filter((p) => p.hearingOn);
@@ -937,13 +1000,7 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
           },
         ]);
 
-        const historyMessages: ChatMessage[] = messages
-          .filter((m) => m.role === 'user' || (m.role === 'ai' && m.participantId === participant.id))
-          .map((m) => ({
-            role: m.role === 'user' ? 'user' : 'assistant',
-            content: m.content,
-          }));
-        historyMessages.push({ role: 'user', content: text.trim() });
+        const historyMessages: ChatMessage[] = councilHistory(participant.id, [...messages, userMsg]);
 
         let accumulated = '';
 
@@ -1171,12 +1228,13 @@ export function CouncilProvider({ children }: { children: React.ReactNode }) {
     AsyncStorage.setItem(STORAGE_MESSAGES_KEY, JSON.stringify(cleared)).catch(() => {});
   }, []);
 
-  const injectSystemMessage = useCallback((content: string) => {
+  const injectSystemMessage = useCallback((content: string, sharedContext = false) => {
     setMessages((prev) => [
       ...prev,
       {
         id: genId(),
         role: 'system',
+        sharedContext,
         content,
         timestamp: new Date().toLocaleTimeString(),
       },

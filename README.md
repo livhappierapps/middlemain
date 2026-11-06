@@ -5,6 +5,7 @@ Middlemain is a mobile-first development companion built with Expo. It connects 
 ## Start here
 
 - **[Developer index](docs/DEVELOPER_INDEX.md)** — code map, commands, security boundaries, and release checklist.
+- **[Final bug fix before shipping report](docs/final-bug-fix-before-shipping-report.md)** — sourced findings, verified fixes, unsuccessful approaches, and open release gates.
 - [User guide](docs/middlemain-user-guide.md) — app controls, privacy, and provider-cost behavior.
 - [Repository debugging](docs/repository-debugging.md) — GitHub authorization and bounded source checks.
 - [Security status](docs/security-status.md) and [threat model](threat_model.md).

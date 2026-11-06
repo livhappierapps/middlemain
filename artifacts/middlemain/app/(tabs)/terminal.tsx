@@ -58,6 +58,8 @@ const CURSOR_CONTROL_SYSTEM_PROMPT = `You are Middlemain's screen-control assist
 Where x (0=left, 1=right) and y (0=top, 1=bottom) are relative positions. Set "tap": true to show a tap ripple. Keep your response concise — it appears in a terminal.`;
 
 export default function TerminalScreen() {
+  const conversationRef = useRef(new Map<string, { key: string; messages: ChatMessage[] }>());
+  const conversationGeneration = useRef(0);
   const { theme } = useTheme();
   const { connections, activeConnection, sendMessage, sendMessageWithTools } = useAI();
   const { status: mcpStatus, tools: mcpTools, callTool: mcpCallTool } = useMCP();
@@ -75,7 +77,7 @@ export default function TerminalScreen() {
   const [lines, setLines] = useState<TerminalLine[]>([
     {
       id: genId(), type: 'system',
-      content: '>>> MIDDLEMAIN BRIDGE TERMINAL v0.1\n>>> Vision · Skills · Real-time AI streaming\n>>> Select a skill and AI, then execute.',
+      content: '>>> MIDDLEMAIN BRIDGE TERMINAL\n>>> Select a skill and AI, then execute.\n>>> Each connection keeps up to 40 text messages during this session. Clear resets context; closing the app does not save it.',
       timestamp: new Date().toLocaleTimeString(),
     },
   ]);
@@ -300,7 +302,11 @@ export default function TerminalScreen() {
     setIsStreaming(true);
     setStreamingLine('');
 
-    const messages: ChatMessage[] = [{ role: 'user', content: fullText }];
+    const identity = `${selectedConn.id}:${selectedConn.model}`;
+    const prior = conversationRef.current.get(identity);
+    const history = prior?.key === selectedConn.apiKey ? prior.messages : [];
+    const generation = conversationGeneration.current;
+    const messages: ChatMessage[] = [...history, { role: 'user', content: fullText }];
     let accumulated = '';
 
     const connWithSkill = skill
@@ -330,6 +336,15 @@ export default function TerminalScreen() {
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: false }), 20);
     };
     const onDone = () => {
+      if (generation === conversationGeneration.current && accumulated.trim()) {
+        const completed: ChatMessage[] = [
+          ...history,
+          { role: 'user', content: fullText + (capturedImage ? '\n[An image was attached to this turn; it is not reattached in subsequent turns.]' : '') },
+          { role: 'assistant', content: accumulated },
+        ];
+        conversationRef.current.set(identity, { key: selectedConn.apiKey, messages: completed.slice(-40) });
+        if (completed.length > 40) appendLine({ type: 'system', content: '>>> Conversation context limited to the latest 40 text messages. Earlier image attachments are not resent.' });
+      }
       setIsStreaming(false);
       setStreamingLine('');
       appendLine({ type: 'output', content: accumulated });
@@ -369,6 +384,8 @@ export default function TerminalScreen() {
   };
 
   const clearTerminal = () => {
+    conversationGeneration.current++;
+    conversationRef.current.clear();
     setLines([{ id: genId(), type: 'system', content: '>>> Terminal cleared.', timestamp: new Date().toLocaleTimeString() }]);
     setAttachedImage(null);
   };

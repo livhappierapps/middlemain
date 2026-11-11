@@ -42,7 +42,7 @@ test('canonical guide includes all main surfaces and offline answers make no req
   }
   assert.match(help.getOfflineHelpAnswer('private GitHub sign-in'), /registered.*GitHub App/);
   assert.match(help.getOfflineHelpAnswer('memory bridge advertised MCP tools'), /advertised tools/);
-  assert.match(help.getOfflineHelpAnswer('monthly purchases restore'), /not connected to StoreKit/);
+  assert.match(help.getOfflineHelpAnswer('monthly purchases restore'), /Apple In-App Purchase \(StoreKit\)/);
   assert.match(help.getOfflineHelpAnswer('Middlemain privacy data collected'), /Live Council rooms store/);
   assert.equal(calls, 0);
 });
@@ -53,7 +53,7 @@ test('AI retrieval is relevant, bounded, and absent for unrelated paid prompts',
   const context = help.appHelpContext('How do I use Middlemain private GitHub sign-in?');
   assert.match(context, /read-only Contents/);
   assert.ok(context.length < 7_500);
-  assert.match(help.appHelpContext('how do purchases work', true), /not connected to StoreKit/);
+  assert.match(help.appHelpContext('how do purchases work', true), /Apple In-App Purchase \(StoreKit\)/);
 });
 
 test('owner key goes only to the trusted API, and unsafe URLs fail', async () => {

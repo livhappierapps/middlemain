@@ -1,3 +1,4 @@
+import { DEFAULT_AIS_AND_EARS_URL } from '@/constants/demoEndpoints';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -99,11 +100,11 @@ const RECORDING_OPTIONS: Audio.RecordingOptions = {
 
 export function AisAndEarsProvider({ children }: { children: React.ReactNode }) {
   const [config, setConfigState] = useState<Config>({
-    domain: '',
+    domain: DEFAULT_AIS_AND_EARS_URL,
     apiKey: '',
     durationMinutes: 30,
   });
-  const configRef = useRef<Config>({ domain: '', apiKey: '', durationMinutes: 30 });
+  const configRef = useRef<Config>({ domain: DEFAULT_AIS_AND_EARS_URL, apiKey: '', durationMinutes: 30 });
   const [credentialStorageReady, setCredentialStorageReady] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
   const [status, setStatus] = useState<BridgeStatus>('idle');
@@ -147,7 +148,7 @@ export function AisAndEarsProvider({ children }: { children: React.ReactNode }) 
     let cancelled = false;
     queueCredentialStorage(async () => {
       const raw = await AsyncStorage.getItem(CONFIG_KEY);
-      let stored: Config = { domain: '', apiKey: '', durationMinutes: 30 };
+      let stored: Config = { domain: DEFAULT_AIS_AND_EARS_URL, apiKey: '', durationMinutes: 30 };
       if (raw) {
         const parsed: unknown = JSON.parse(raw);
         if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
@@ -155,7 +156,7 @@ export function AisAndEarsProvider({ children }: { children: React.ReactNode }) 
         }
         const saved = parsed as Partial<Config>;
         stored = {
-          domain: typeof saved.domain === 'string' ? saved.domain : '',
+          domain: typeof saved.domain === 'string' && saved.domain.trim() ? saved.domain : DEFAULT_AIS_AND_EARS_URL,
           apiKey: typeof saved.apiKey === 'string' ? saved.apiKey.trim() : '',
           durationMinutes: typeof saved.durationMinutes === 'number'
             && [15, 30, 60].includes(saved.durationMinutes)

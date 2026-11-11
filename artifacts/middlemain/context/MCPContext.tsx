@@ -1,3 +1,4 @@
+import { DEFAULT_MEMORY_MACHINE_URL } from '@/constants/demoEndpoints';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
@@ -60,8 +61,8 @@ export function useMCP() {
 export function MCPProvider({ children }: { children: React.ReactNode }) {
   const transportRef = useRef<ReturnType<typeof createMemoryTransport> | null>(null);
   const connectionGeneration = useRef(0);
-  const [config, setConfigState] = useState<MCPConfig>({ url: '', token: '', credentialState: 'cleared' });
-  const configRef = useRef<MCPConfig>({ url: '', token: '', credentialState: 'cleared' });
+  const [config, setConfigState] = useState<MCPConfig>({ url: DEFAULT_MEMORY_MACHINE_URL, token: '', credentialState: 'cleared' });
+  const configRef = useRef<MCPConfig>({ url: DEFAULT_MEMORY_MACHINE_URL, token: '', credentialState: 'cleared' });
   const [status, setStatus] = useState<MCPStatus>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [credentialStorageReady, setCredentialStorageReady] = useState(false);
@@ -96,7 +97,7 @@ export function MCPProvider({ children }: { children: React.ReactNode }) {
         saved.credentialState,
       );
       const hydrated: MCPConfig = {
-        url: saved.url,
+        url: saved.url?.trim() ? saved.url : DEFAULT_MEMORY_MACHINE_URL,
         token: credential.value,
         credentialState: credential.state,
       };

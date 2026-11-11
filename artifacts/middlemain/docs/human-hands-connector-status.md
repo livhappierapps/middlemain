@@ -50,6 +50,12 @@ GitHub has separate device authorization and repository-reading code (`artifacts
 
 This is a **local phone vault**, not a remote service-credential manager: values do not sync between devices or automatically enter websites, and the UI says they are not sent to AI (`HumanHandsVault.tsx:219,270-279`). Retrieving a value copies it to the system clipboard, which can expose it to other apps (`:228-248`). The separate generic credential store is also device-based and names only AI, AIs & Ears, Memory MCP, and Council credentials (`artifacts/middlemain/utils/secureCredentialStore.ts:1-3,38-88`); it is not a provider plugin layer.
 
+### App Store Connect `.p8` keys
+
+Do not use the phone vault for the private key used to sign App Store Connect requests. Human Hands can draft the steps, but it must not collect or upload the key. For this app's build pipeline, the private key, key ID, and issuer ID belong in the build project's secret manager as `ASC_PRIVATE_KEY`, `ASC_KEY_ID`, and `ASC_ISSUER_ID`; the build scripts create a permission-restricted temporary `.p8` file and remove it after use (`artifacts/middlemain/scripts/configure-ios-signing.mjs:23-53`, `artifacts/middlemain/scripts/submit-ios.sh:23-53`).
+
+Apple says the private key download is available only once and Apple does not retain a copy. If the local download is missing, first check whether a valid secure copy is already in the build secret manager; do not rotate a working key unnecessarily. If a replacement is needed, create a new Team API key in App Store Connect and store it directly in the build secret manager. Revoke the old key only when it is confirmed compromised or no longer needed. See Apple's [key creation guide](https://developer.apple.com/documentation/appstoreconnectapi/creating-api-keys-for-app-store-connect-api) and [revocation guide](https://developer.apple.com/documentation/appstoreconnectapi/revoking-api-keys).
+
 ## 4. Replit key-management blocker and actual endpoints
 
 The official [Replit Admin API reference](https://api.replit.com/docs) describes an Enterprise account-scoped API at `https://api.replit.com/v1`. Its documented resources include workspaces, projects, deployments, members, usage, budgets, and approval requests. Examples include `GET /workspaces`, `GET /workspaces/{workspaceId}`, and `GET /projects`. Authentication uses an account API key; the reference describes Enterprise account administration.

@@ -136,7 +136,7 @@ export function AisAndEarsBridgeCard() {
             value={config.domain}
             editable={credentialStorageReady}
             onChangeText={(v) => updateConfig({ domain: v })}
-            placeholder="https://your-ais-and-ears.replit.app"
+            placeholder="https://aisandears.onrender.com"
             placeholderTextColor={theme.textMuted}
             autoCapitalize="none"
             autoCorrect={false}

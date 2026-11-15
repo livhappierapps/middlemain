@@ -270,7 +270,7 @@ export default function SettingsScreen() {
           <TextInput
             value={apiUrlInput}
             onChangeText={setApiUrlInput}
-            placeholder="https://your-repl.replit.dev/api"
+            placeholder="https://middlemain-api.onrender.com/api"
             placeholderTextColor={theme.textMuted}
             autoCapitalize="none"
             autoCorrect={false}

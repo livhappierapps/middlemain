@@ -71,11 +71,12 @@ function respondMemoryUnavailable(
   });
 }
 
+/**
+ * Memory Machine MCP endpoint. Comes only from LEO_MEMORY_MACHINE_URL — there
+ * is no hardcoded default, because the old Replit deployment is gone.
+ */
 function getMcpUrl(): string {
-  return (
-    process.env["LEO_MEMORY_MACHINE_URL"] ||
-    "https://the-memory-machine.replit.app/api/mcp"
-  );
+  return (process.env["LEO_MEMORY_MACHINE_URL"] ?? "").trim();
 }
 
 /** Calls an MCP tool on Leo's Memory Machine. */
@@ -85,8 +86,10 @@ async function mcpToolCall(
 ): Promise<string> {
   const token = process.env["LEO_MEMORY_TOKEN"];
   if (!token) throw new MemoryAuthUnavailableError("Memory Machine token not configured");
+  const mcpUrl = getMcpUrl();
+  if (!mcpUrl) throw new MemoryAuthUnavailableError("Memory Machine URL not configured");
 
-  const resp = await fetch(getMcpUrl(), {
+  const resp = await fetch(mcpUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -151,8 +154,9 @@ executiveRouter.get("/executive/status", (req: Request, res: Response) => {
   if (!checkExecutiveKey(req, res)) return;
   res.json({
     status: "online",
-    memoryMachineUrl: getMcpUrl(),
-    memoryConfigured: !!process.env["LEO_MEMORY_TOKEN"] && !memoryAuthFailureLogged,
+    memoryMachineUrl: getMcpUrl() || null,
+    memoryConfigured:
+      !!getMcpUrl() && !!process.env["LEO_MEMORY_TOKEN"] && !memoryAuthFailureLogged,
     grokConfigured: hasXaiKey(),
     capabilities: ["chat", "memory/search", "memory/save", "memory/recent"],
   });

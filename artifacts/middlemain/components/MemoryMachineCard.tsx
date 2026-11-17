@@ -200,7 +200,7 @@ export function MemoryMachineCard() {
             value={config.url}
             onChangeText={(v) => updateConfig({ url: v })}
             editable={!storageBlocked}
-            placeholder="https://your-memory-machine.replit.app/api/mcp"
+            placeholder="https://your-memory-machine.example.com/api/mcp"
             placeholderTextColor={theme.textMuted}
             autoCapitalize="none"
             autoCorrect={false}

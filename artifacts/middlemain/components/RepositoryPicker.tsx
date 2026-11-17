@@ -14,6 +14,8 @@ export function RepositoryPicker({ onSelect, onReset, onBusyChange }: { onSelect
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [report, setReport] = useState<RepoPreflightReport | null>(null);
+  const [showBranch, setShowBranch] = useState(false);
+  const [showFiles, setShowFiles] = useState(false);
   const abort = useRef<AbortController | null>(null);
   const mounted = useRef(true);
   const token = session && session.expiresAt > Date.now() ? session.token : '';
@@ -34,23 +36,18 @@ export function RepositoryPicker({ onSelect, onReset, onBusyChange }: { onSelect
   const text = { color: theme.text, fontSize: 13, lineHeight: 20 };
   const button = { padding: 12, minHeight: 44, justifyContent: 'center' as const, borderRadius: theme.radius, backgroundColor: theme.primary + '22' };
   const input = { ...text, padding: 12, borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius, backgroundColor: theme.surface };
-  function reset() { setListing(null); setReport(null); setError(''); onReset(); }
-  async function load(file?: RepoFile) {
-    if (busy) return;
+  function reset() { setListing(null); setReport(null); setError(''); setShowFiles(false); onReset(); }
+  async function load(file: RepoFile) {
+    if (busy || !listing) return;
     setBusy(true); setError('');
     const controller = new AbortController();
     abort.current = controller;
     const timer = setTimeout(() => controller.abort(), 30_000);
     try {
-      if (file && listing) {
-        const code = await loadRepoFile(listing, file, token, controller.signal);
-        if (mounted.current) onSelect(code, `${listing.owner}/${listing.repo} · ${listing.branch} · ${file.path} · ${listing.commit.slice(0, 7)}`);
-      } else {
-        const result = await listRepo(url, branch, token, controller.signal);
-        if (mounted.current) { setListing(result); setReport(null); onReset(); }
-      }
+      const code = await loadRepoFile(listing, file, token, controller.signal);
+      if (mounted.current) onSelect(code, `${listing.owner}/${listing.repo} · ${listing.branch} · ${file.path} · ${listing.commit.slice(0, 7)}`);
     } catch (e: any) {
-      if (mounted.current) { setError(controller.signal.aborted ? 'GitHub request stopped or timed out. No retry was sent.' : e.message); if (!file) setListing(null); }
+      if (mounted.current) setError(controller.signal.aborted ? 'GitHub request stopped or timed out. No retry was sent.' : e.message);
     } finally { clearTimeout(timer); if (mounted.current) setBusy(false); abort.current = null; }
   }
   async function signIn() {
@@ -68,13 +65,18 @@ export function RepositoryPicker({ onSelect, onReset, onBusyChange }: { onSelect
     finally { if (mounted.current) setBusy(false); abort.current = null; }
   }
   async function preflight() {
-    if (busy || !listing) return;
+    if (busy || !url.trim()) return;
     setBusy(true); setError(''); setReport(null);
     const controller = new AbortController();
     abort.current = controller;
     const timer = setTimeout(() => controller.abort(), 60_000);
     try {
-      const snapshot = await loadRepoSnapshot(listing, token, controller.signal);
+      const selectedRepo = listing ?? await listRepo(url, branch, token, controller.signal);
+      if (mounted.current) {
+        setListing(selectedRepo);
+        onReset();
+      }
+      const snapshot = await loadRepoSnapshot(selectedRepo, token, controller.signal);
       const result = await requestRepoPreflight(snapshot, controller.signal);
       if (mounted.current) setReport(result);
     } catch (error: any) {

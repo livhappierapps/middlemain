@@ -25,6 +25,7 @@ After a guide edit, run `pnpm run guide:sync` and `pnpm run guide:check`. Do not
 
 ## Engineering constraints
 
+- Every feature must be user-friendly and include a clearly visible, detailed how-to.
 - Keep `app.json` static for Expo Launch; do not replace it with an app.config file.
 - Native streaming must use `expo/fetch`, including shared network wrappers—not just the calling component. Node fetch mocks cannot prove native streaming works.
 - Keep `ThemeProvider` above `ErrorBoundary`; preserve theme keys in `constants/themes.ts`.

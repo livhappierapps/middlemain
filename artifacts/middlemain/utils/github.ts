@@ -64,7 +64,7 @@ async function githubGet(path: string, token: string, signal: AbortSignal, raw =
     signal,
   });
   if (!response.ok) {
-    if (response.status === 404) throw new Error('Repository or branch not found, or GitHub has not granted access. For a private repo, sign in and install the read-only app on that repository.');
+    if (response.status === 404) throw new Error('Could not open that repository or branch. Check the link and branch. If it is private, connect GitHub and grant access to that repository, then try again.');
     if (response.status === 401) throw new Error('GitHub authorization expired or was revoked. Disconnect and sign in again.');
     if (response.status === 403 || response.status === 429) throw new Error('GitHub denied access or rate-limited this request. Check repository permissions or try later.');
     throw new Error(`GitHub request failed (${response.status}).`);

@@ -122,7 +122,7 @@ interface CouncilContextValue {
   sendVisionFrameToAll: (imageData: string, source: 'camera' | 'screen', participantIds?: string[]) => Promise<void>;
   historyLimit: number;
   setHistoryLimit: (limit: number) => Promise<void>;
-  /** The base API URL (e.g. https://xxx.replit.dev/api). Persisted in AsyncStorage. */
+  /** The base API URL (e.g. https://middlemain-api.onrender.com/api). Persisted in AsyncStorage. */
   apiUrl: string;
   setApiUrl: (url: string) => Promise<void>;
   clearMessages: () => void;

@@ -37,6 +37,19 @@ export function RepositoryPicker({ onSelect, onReset, onBusyChange }: { onSelect
   const button = { padding: 12, minHeight: 44, justifyContent: 'center' as const, borderRadius: theme.radius, backgroundColor: theme.primary + '22' };
   const input = { ...text, padding: 12, borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius, backgroundColor: theme.surface };
   function reset() { setListing(null); setReport(null); setError(''); setShowFiles(false); onReset(); }
+  async function loadListing() {
+    if (busy || !url.trim()) return;
+    setBusy(true); setError(''); setReport(null);
+    const controller = new AbortController();
+    abort.current = controller;
+    const timer = setTimeout(() => controller.abort(), 30_000);
+    try {
+      const result = await listRepo(url, branch, token, controller.signal);
+      if (mounted.current) { setListing(result); setReport(null); setShowFiles(true); onReset(); }
+    } catch (e: any) {
+      if (mounted.current) { setError(controller.signal.aborted ? 'GitHub request stopped or timed out. No retry was sent.' : e.message); setListing(null); }
+    } finally { clearTimeout(timer); if (mounted.current) setBusy(false); abort.current = null; }
+  }
   async function load(file: RepoFile) {
     if (busy || !listing) return;
     setBusy(true); setError('');
@@ -91,7 +104,7 @@ export function RepositoryPicker({ onSelect, onReset, onBusyChange }: { onSelect
     <TextInput accessibilityLabel="GitHub repository URL" editable={!busy} value={url} onChangeText={v => { setUrl(v); reset(); }} autoCapitalize="none" autoCorrect={false} keyboardType="url" placeholder="https://github.com/owner/repository" placeholderTextColor={theme.textMuted} style={input} />
     <TextInput accessibilityLabel="GitHub branch, optional" editable={!busy} value={branch} onChangeText={v => { setBranch(v); reset(); }} autoCapitalize="none" autoCorrect={false} placeholder="Branch (leave blank for default)" placeholderTextColor={theme.textMuted} style={input} />
     <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-      <TouchableOpacity accessibilityRole="button" disabled={busy || !url.trim()} onPress={() => load()} style={button}><Text style={{ color: theme.primary }}>Load repo files</Text></TouchableOpacity>
+      <TouchableOpacity accessibilityRole="button" disabled={busy || !url.trim()} onPress={() => loadListing()} style={button}><Text style={{ color: theme.primary }}>Load repo files</Text></TouchableOpacity>
       <TouchableOpacity accessibilityRole="button" disabled={busy} onPress={() => token ? (setSession(null), reset()) : signIn()} style={button}>
         <Text style={{ color: theme.primary }}>{token ? 'Disconnect GitHub' : 'Sign in for private repos'}</Text>
       </TouchableOpacity>

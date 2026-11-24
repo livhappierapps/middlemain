@@ -1,52 +1,83 @@
-name: EAS iOS Production Build
+# Manual only. Requires the EXPO_TOKEN repository secret (do not commit it).
+# Default profile is ios-device (internal distribution to a registered iPhone).
+# production is for a later App Store / TestFlight submission and is not
+# approved from this workflow alone. First-time iOS credentials may need an
+# interactive Apple sign-in (`eas credentials` or a one-time local
+# `eas build --platform ios --profile ios-device`); --non-interactive will
+# fail until those credentials exist on the livhappierapps Expo account.
+name: EAS Build
 
 on:
   workflow_dispatch:
     inputs:
       platform:
-        description: 'Platform to build'
+        description: Platform to build
         required: true
-        default: 'ios'
+        default: ios
         type: choice
         options:
           - ios
           - android
           - all
+      profile:
+        description: EAS build profile
+        required: true
+        default: ios-device
+        type: choice
+        options:
+          - ios-device
+          - preview
+          - production
 
 jobs:
   build:
+    name: EAS ${{ inputs.platform }} (${{ inputs.profile }})
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: artifacts/middlemain
+    timeout-minutes: 30
+    env:
+      CI: "1"
+      EXPO_NO_TELEMETRY: "1"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24.13.0'
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 10.26.1
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.13.0"
+          cache: pnpm
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Install EAS CLI
-        run: npm install -g eas-cli
-
-      - name: EAS Build (iOS)
-        if: inputs.platform == 'ios' || inputs.platform == 'all'
-        run: eas build --platform ios --profile production --non-interactive
+      - name: Require EXPO_TOKEN
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "EXPO_TOKEN secret is not set on this repository."
+            echo "Add it under Settings → Secrets and variables → Actions, then re-run."
+            exit 1
+          fi
 
-      - name: EAS Build (Android)
-        if: inputs.platform == 'android' || inputs.platform == 'all'
-        run: eas build --platform android --profile production --non-interactive
+      - name: EAS Build
+        working-directory: artifacts/middlemain
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: >
+          eas build
+          --platform ${{ inputs.platform }}
+          --profile ${{ inputs.profile }}
+          --non-interactive
+          --no-wait

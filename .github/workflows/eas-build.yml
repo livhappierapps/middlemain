@@ -43,10 +43,10 @@ jobs:
         if: inputs.platform == 'ios' || inputs.platform == 'all'
         run: eas build --platform ios --profile production --non-interactive
         env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
       - name: EAS Build (Android)
         if: inputs.platform == 'android' || inputs.platform == 'all'
         run: eas build --platform android --profile production --non-interactive
         env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}

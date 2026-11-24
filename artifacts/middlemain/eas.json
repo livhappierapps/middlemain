@@ -34,6 +34,24 @@
         "buildType": "apk"
       }
     },
+    "ios-device": {
+      "node": "24.13.0",
+      "pnpm": "10.26.1",
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_DOMAIN": "middlemain-api.onrender.com",
+        "EXPO_PUBLIC_GITHUB_APP_CLIENT_ID": "Iv23lizWSqwgviRUzGYF"
+      },
+      "ios": {
+        "simulator": false,
+        "buildConfiguration": "Release",
+        "image": "sdk-54"
+      },
+      "android": {
+        "image": "sdk-54",
+        "buildType": "apk"
+      }
+    },
     "production": {
       "node": "24.13.0",
       "pnpm": "10.26.1",

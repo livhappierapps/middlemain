@@ -24,6 +24,7 @@ import { ThemedBackground } from '@/components/ThemedBackground';
 import { ThemeSelector } from '@/components/ThemeSelector';
 import { SUBSCRIPTION_PLANS, TERMS_OF_USE_URL } from '@/constants/products';
 import { BillingIssueBanner } from '@/components/BillingIssueBanner';
+import { MemoryMachineSettingsCard } from '@/components/MemoryMachineSettingsCard';
 import { usePurchase } from '@/context/PurchaseContext';
 import { useCouncil } from '@/context/CouncilContext';
 import { useAI } from '@/context/AIContext';
@@ -309,6 +310,10 @@ export default function SettingsScreen() {
             </Text>
           )}
         </NeonCard>
+
+        {/* Memory Machine: automatic memory for server Grok */}
+        <SectionHeader title="MEMORY MACHINE" />
+        <MemoryMachineSettingsCard />
 
         {/* Council History Limit */}
         <SectionHeader title="COUNCIL HISTORY" />

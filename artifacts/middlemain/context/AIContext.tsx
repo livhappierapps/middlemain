@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { resilientFetch } from '@/utils/resilientFetch';
 import { serverAuthHeaders } from '@/utils/serverAuth';
+import { memoryTokenHeader } from '@/utils/memoryToken';
 import { createCredentialStore, readOrMigrateCredential, type CredentialState } from '@/utils/secureCredentialStore';
 import { streamSSE } from '@/utils/streamSSE';
 import { appHelpContext } from '@/utils/appHelp';
@@ -253,7 +254,7 @@ async function callServerProxy(
     `${base}/grok/chat`,
     {
       method: 'POST',
-      headers: await serverAuthHeaders(base, conn.apiKey),
+      headers: { ...(await serverAuthHeaders(base, conn.apiKey)), ...(await memoryTokenHeader()) },
       body: JSON.stringify({
         model: imageBase64 ? (conn.visionModel || 'grok-2-vision-1212') : (conn.model || 'grok-3'),
         messages: [...messages.slice(0, -1), buildUserMessage(

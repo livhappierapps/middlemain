@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { logger } from "../lib/logger";
 import { getXaiKey, hasXaiKey } from "../lib/xaiKey";
 import { checkExecutiveKey } from "../lib/security";
+import { lastUserText, memoryTokenFrom, withMemoryContext } from "../lib/memoryContext";
 
 const grokRouter = Router();
 const XAI_BASE = "https://api.x.ai/v1";
@@ -61,8 +62,19 @@ grokRouter.post("/grok/chat", async (req: Request, res: Response) => {
     return;
   }
 
+  // Pre-call hook: baseline profile + "Relevant memories" from Memory Machine.
+  // Bounded (~1.5 s) and silent: on any failure the prompt is used unchanged.
+  const memory = await withMemoryContext(
+    systemPrompt || "You are a helpful AI development assistant.",
+    lastUserText(messages),
+    memoryTokenFrom(req),
+  );
+  if (!res.headersSent) {
+    res.setHeader("X-Memory-Context", `profile=${memory.profileIncluded ? 1 : 0};memories=${memory.memories.length}`);
+  }
+
   const fullMessages: ChatMessage[] = [
-    { role: "system", content: systemPrompt || "You are a helpful AI development assistant." },
+    { role: "system", content: memory.systemPrompt },
     ...messages,
   ];
 

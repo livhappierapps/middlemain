@@ -26,7 +26,8 @@
       },
       "privacyManifests": {
         "NSPrivacyAccessedAPITypes": []
-      }
+      },
+      "usesAppleSignIn": true
     },
     "android": {
       "package": "app.middlemain.bridge",
@@ -73,7 +74,8 @@
         }
       ],
       "expo-secure-store",
-      "expo-iap"
+      "expo-iap",
+      "expo-apple-authentication"
     ],
     "experiments": {
       "typedRoutes": true,

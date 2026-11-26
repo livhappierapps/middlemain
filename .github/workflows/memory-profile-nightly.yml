@@ -1,0 +1,42 @@
+name: Memory profile (nightly)
+
+# Free scheduler for the Memory Machine standing-profile rebuild.
+# Calls middlemain-api's owner-only endpoint; the rebuild is incremental, so a
+# night with no new memories makes zero xAI calls.
+# Needs repo secrets MIDDLEMAIN_API_URL (e.g. https://middlemain-api.onrender.com/api)
+# and LEO_EXECUTIVE_KEY. Skips cleanly when they are not set.
+# Scheduled workflows only run from the default branch (after merge).
+
+on:
+  schedule:
+    - cron: "0 9 * * *" # 09:00 UTC = 3:00 AM America/Chicago (CST)
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Full rebuild (ignore last build cursor)"
+        type: boolean
+        default: false
+
+permissions: {}
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Rebuild standing profile
+        env:
+          API_URL: ${{ secrets.MIDDLEMAIN_API_URL }}
+          EXEC_KEY: ${{ secrets.LEO_EXECUTIVE_KEY }}
+          FORCE: ${{ inputs.force && 'true' || 'false' }}
+        run: |
+          if [ -z "$API_URL" ] || [ -z "$EXEC_KEY" ]; then
+            echo "MIDDLEMAIN_API_URL / LEO_EXECUTIVE_KEY secrets not set; skipping."
+            exit 0
+          fi
+          # Free Render instances sleep; wake it first (cold start can take ~1 min).
+          curl -fsS --retry 6 --retry-delay 15 --retry-all-errors --max-time 90 "${API_URL%/}/healthz" > /dev/null || true
+          curl -fsS --max-time 300 -X POST "${API_URL%/}/memory/profile/rebuild" \
+            -H "content-type: application/json" \
+            -H "x-executive-key: ${EXEC_KEY}" \
+            -d "{\"force\": ${FORCE}}"

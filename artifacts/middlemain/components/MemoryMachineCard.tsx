@@ -8,6 +8,8 @@ import { useTheme } from '@/context/ThemeContext';
 const MEMORY_COLOR = '#a78bfa';
 const MEMORY_DIM = '#a78bfa33';
 const MEMORY_GLOW = '#a78bfa66';
+// Brand lock: purple is always paired with gold.
+const MEMORY_GOLD = '#FFC83D';
 
 type ToolInputProperty = {
   type?: string;
@@ -113,7 +115,7 @@ export function MemoryMachineCard() {
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: MEMORY_DIM, alignItems: 'center', justifyContent: 'center' }}>
-            <Feather name="database" size={16} color={MEMORY_COLOR} />
+            <Feather name="database" size={16} color={MEMORY_GOLD} />
           </View>
           <View>
             <Text style={{ color: theme.text, fontSize: 14, fontFamily: 'Inter_600SemiBold' }}>
@@ -144,6 +146,11 @@ export function MemoryMachineCard() {
           </TouchableOpacity>
         )}
       </View>
+
+      <Text style={{ color: theme.textMuted, fontSize: 11, fontFamily: 'Inter_400Regular', lineHeight: 16, marginTop: 6 }}>
+        This card connects Memory Machine's MCP tools to chats. Automatic memory for server Grok (your profile plus relevant
+        memories in every reply) is set up in <Text style={{ color: MEMORY_GOLD, fontFamily: 'Inter_600SemiBold' }}>Settings → Memory Machine</Text>.
+      </Text>
 
       {/* Tool chips when connected */}
       {status === 'connected' && tools.length > 0 && (

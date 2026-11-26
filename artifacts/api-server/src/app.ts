@@ -43,6 +43,7 @@ const requireOwner: import("express").RequestHandler = (req, res, next) => {
 };
 app.use("/api/grok/chat", requireOwner, createRateLimiter(20));
 app.use("/api/executive", requireOwner, createRateLimiter(60));
+app.use("/api/memory", requireOwner, createRateLimiter(30));
 const roomCreationLimiter = createRateLimiter(10);
 app.use("/api/council/rooms", (req, res, next) => {
   if (req.method === "POST" && req.path === "/") {

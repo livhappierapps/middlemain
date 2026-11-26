@@ -16,6 +16,7 @@ import { AIProvider } from "@/context/AIContext";
 import { AisAndEarsProvider } from "@/context/AisAndEarsContext";
 import { CouncilProvider } from "@/context/CouncilContext";
 import { MCPProvider } from "@/context/MCPContext";
+import { MemoryAuthProvider } from "@/context/MemoryAuthContext";
 import { NetworkProvider } from "@/context/NetworkContext";
 import { PurchaseProvider } from "@/context/PurchaseContext";
 import { SkillsProvider } from "@/context/SkillsContext";
@@ -68,19 +69,21 @@ export default function RootLayout() {
             <GestureHandlerRootView style={{ flex: 1 }}>
               <KeyboardProvider>
                 <NetworkProvider>
-                  <AIProvider>
-                    <MCPProvider>
-                      <AisAndEarsProvider>
-                        <CouncilProvider>
-                          <SkillsProvider>
-                            <PurchaseProvider>
-                              <RootLayoutNav />
-                            </PurchaseProvider>
-                          </SkillsProvider>
-                        </CouncilProvider>
-                      </AisAndEarsProvider>
-                    </MCPProvider>
-                  </AIProvider>
+                  <MemoryAuthProvider>
+                    <AIProvider>
+                      <MCPProvider>
+                        <AisAndEarsProvider>
+                          <CouncilProvider>
+                            <SkillsProvider>
+                              <PurchaseProvider>
+                                <RootLayoutNav />
+                              </PurchaseProvider>
+                            </SkillsProvider>
+                          </CouncilProvider>
+                        </AisAndEarsProvider>
+                      </MCPProvider>
+                    </AIProvider>
+                  </MemoryAuthProvider>
                 </NetworkProvider>
               </KeyboardProvider>
             </GestureHandlerRootView>

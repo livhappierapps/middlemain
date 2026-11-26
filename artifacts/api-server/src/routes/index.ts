@@ -6,6 +6,7 @@ import debugRouter from "./debug";
 import { councilRoomRouter } from "./councilRoom";
 import downloadRouter from "./download";
 import mcpRouter from "./mcp";
+import memoryRouter from "./memory";
 
 const router: IRouter = Router();
 
@@ -15,6 +16,7 @@ router.use(executiveRouter);
 router.use(debugRouter);
 router.use(councilRoomRouter);
 router.use(mcpRouter);
+router.use(memoryRouter);
 router.use(downloadRouter);
 
 export default router;

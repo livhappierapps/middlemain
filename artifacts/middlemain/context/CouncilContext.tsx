@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { serverAuthHeaders } from '@/utils/serverAuth';
+import { memoryTokenHeader } from '@/utils/memoryToken';
 import { streamSSE } from '@/utils/streamSSE';
 import { appHelpContext } from '@/utils/appHelp';
 import { Audio } from 'expo-av';
@@ -259,7 +260,7 @@ async function callParticipantAI(
     const base = participant.baseUrl || getServerBase();
     return fetch(`${base}/grok/chat`, {
       method: 'POST',
-      headers: await serverAuthHeaders(base, participant.apiKey),
+      headers: { ...(await serverAuthHeaders(base, participant.apiKey)), ...(await memoryTokenHeader()) },
       body: JSON.stringify({
         model: participant.model || 'grok-3',
         messages: [
